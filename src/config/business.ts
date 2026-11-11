@@ -13,6 +13,8 @@ export interface VerifiableFact<T> {
   source: string;
 }
 
+export type SocialPlatform = "instagram" | "tiktok" | "facebook" | "whatsapp";
+
 const LISTING_SOURCE = "Public Google Places listing mirror (ranked.ng), record fetched 14 Sep 2026";
 
 export const business = {
@@ -60,7 +62,17 @@ export const business = {
   },
   /** No salon-written description, social links, or policies were supplied. */
   description: null as string | null,
-  socialLinks: [] as { label: string; href: string }[],
+  /**
+   * Social profiles. NONE were supplied, so every href is null and the footer
+   * shows these as inactive placeholders (preview only). Add the owner's real
+   * profile URLs here; never guess a handle.
+   */
+  socialLinks: [
+    { platform: "instagram", label: "Instagram", href: null },
+    { platform: "tiktok", label: "TikTok", href: null },
+    { platform: "facebook", label: "Facebook", href: null },
+    { platform: "whatsapp", label: "WhatsApp", href: null },
+  ] as { platform: SocialPlatform; label: string; href: string | null }[],
   policies: [] as { label: string; href: string }[],
 } as const;
 

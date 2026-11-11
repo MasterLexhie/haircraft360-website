@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FlaskConical, MapPin, Phone } from "lucide-react";
 import { business, fullAddress, PREVIEW_MODE } from "@/config/business";
 import { LogoLockup } from "./brand";
+import { SocialIcon } from "./social-icons";
 
 /** Discreet banner shown in preview builds. */
 export function PreviewNotice() {
@@ -30,6 +31,7 @@ export function SiteFooter() {
           <p className="mt-5 max-w-xs font-display text-xl font-light leading-snug text-on-night">
             Loc care in Ibadan. <em className="text-lilac">Book online</em>, pay a small deposit, settle the rest after your appointment.
           </p>
+          <SocialLinks />
         </div>
 
         <div>
@@ -69,5 +71,50 @@ export function SiteFooter() {
         </div>
       </div>
     </footer>
+  );
+}
+
+/**
+ * Social icons. Only links the owner has supplied are live. In preview builds
+ * the missing ones show as inactive placeholders so the layout can be reviewed;
+ * outside preview they are hidden until a real URL is added in business.ts.
+ */
+function SocialLinks() {
+  const live = business.socialLinks.filter((s) => s.href);
+  const shown = PREVIEW_MODE ? business.socialLinks : live;
+  if (shown.length === 0) return null;
+  const pending = shown.length - live.length;
+  const base = "grid size-11 place-items-center rounded-full border transition-colors";
+  return (
+    <div className="mt-7">
+      <h2 className="type-caps text-[0.72rem] text-lilac">Follow</h2>
+      <ul className="mt-3 flex flex-wrap gap-2.5">
+        {shown.map((s) => (
+          <li key={s.platform}>
+            {s.href ? (
+              <a
+                href={s.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Haircraft360 on ${s.label} (opens in a new tab)`}
+                className={`${base} border-on-night/30 text-on-night hover:border-lilac hover:bg-lilac hover:text-night`}
+              >
+                <SocialIcon platform={s.platform} className="size-[18px]" />
+              </a>
+            ) : (
+              <span
+                role="img"
+                aria-label={`${s.label}: link not added yet`}
+                title={`${s.label}: link not added yet`}
+                className={`${base} cursor-not-allowed border-dashed border-on-night/30 text-on-night-2/70`}
+              >
+                <SocialIcon platform={s.platform} className="size-[18px]" />
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+      {pending > 0 && <p className="mt-3 text-xs text-on-night-2">Social profiles will be linked once the owner supplies them.</p>}
+    </div>
   );
 }
