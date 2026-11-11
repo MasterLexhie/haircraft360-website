@@ -6,7 +6,8 @@ import { ArrowRight, Check, Plus } from "lucide-react";
 import type { Service } from "@/domain/types";
 import { ServiceDemoTag, ServiceMeta } from "@/components/booking/service-bits";
 import { Button, ButtonLink, cx } from "@/components/ui/primitives";
-import { PhotoPlaceholder } from "@/components/site/brand";
+import { PhotoPlaceholder, StockPhoto } from "@/components/site/brand";
+import { SERVICE_PHOTOS } from "@/config/stock-photos";
 
 /** Service cards on the home page. Customers can pick several, then carry them into booking. */
 export function HomeServices({ services, defaultDuration }: { services: Service[]; defaultDuration: number }) {
@@ -30,7 +31,11 @@ export function HomeServices({ services, defaultDuration }: { services: Service[
                 <h3 className="type-caps flex min-h-16 items-center justify-center bg-sand-2 px-5 py-4 text-center text-[0.85rem] leading-snug text-accent-text sm:text-[0.95rem]">
                   {s.name}
                 </h3>
-                <PhotoPlaceholder label="service photo" ratio="16/9" className="rounded-none" />
+                {SERVICE_PHOTOS[s.id] ? (
+                  <StockPhoto photo={SERVICE_PHOTOS[s.id]} ratio="16/9" sizes="(min-width: 640px) 50vw, 100vw" className="rounded-none" />
+                ) : (
+                  <PhotoPlaceholder label="service photo" ratio="16/9" className="rounded-none" />
+                )}
                 <div className="flex flex-1 flex-col px-5 pb-6 pt-5 sm:px-7">
                   <div className="flex items-center justify-between gap-3">
                     <span className="font-display text-lg italic text-accent-text tabular">{String(i + 1).padStart(2, "0")}</span>

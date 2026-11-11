@@ -70,7 +70,7 @@ export const OWNER_CHECKLIST: ChecklistItem[] = [
   { id: "staffing", label: "Staffing and service sequencing", detail: "Demo assumes one chair and services done back-to-back.", done: false },
   { id: "window", label: "Booking horizon and unpaid-slot hold", detail: "Demo uses sample values; owner must choose.", done: false },
   { id: "rating", label: "Rating snapshot display", detail: "5.0 from 50 Google reviews (mirror, 14 Sep 2026). Hidden on the public site until approved.", done: false },
-  { id: "content", label: "Description, photos and social links", detail: "None supplied. Placeholders are shown in the prototype.", done: false },
+  { id: "content", label: "Description, photos and social links", detail: "None supplied. The prototype shows captioned Unsplash stock stand-ins (public/stock/CREDITS.md) that must be replaced with Haircraft360 photos.", done: false },
   { id: "notifications", label: "Notifications", detail: "Decide whether launch needs email/SMS/WhatsApp confirmations.", done: false },
   { id: "manual", label: "Manual/offline payment methods", detail: "Confirm which methods the owner may record and for which payments.", done: false },
 ];

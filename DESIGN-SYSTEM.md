@@ -93,6 +93,7 @@ Status colours (`success`, `warning`, `danger`, `info` and their `-soft` version
   5. price and duration
   6. a full-width secondary button, which turns primary when selected
 - **Photo placeholder:** a hatched blush panel with a caption saying "Photo placeholder · …". Its aspect ratio is reserved so a real photo causes no layout shift.
+- **Stock stand-in** (`StockPhoto`): a real, freely licensed photo in the same ratio-locked frame, always captioned "Stock stand-in" so it is never read as Haircraft360's work. Replace it with owner-approved photos (`src/config/stock-photos.ts`).
 - **Promo band:** a full-width plum strip with tracked caps and a lilac underlined link. It must state only true facts; offers need owner approval.
 - **Arch intro** (`.arch-top`): a blush backdrop with a curved bottom behind a centred caps headline.
 - **Header:**

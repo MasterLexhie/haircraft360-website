@@ -5,7 +5,8 @@ import { ArrowRight, CalendarCheck, Clock, CreditCard, ExternalLink, MapPin, Nav
 import { business, fullAddress, PREVIEW_MODE } from "@/config/business";
 import { getActiveServices, getPublicSettings } from "@/server/queries";
 import { HomeServices } from "@/components/site/home-services";
-import { PhotoPlaceholder } from "@/components/site/brand";
+import { StockPhoto } from "@/components/site/brand";
+import { GALLERY_PAIRS, HERO_PHOTO } from "@/config/stock-photos";
 import { ButtonLink, DemoTag, SectionHeading, Skeleton } from "@/components/ui/primitives";
 import { formatHHMM, WEEKDAYS } from "@/lib/time";
 import type { DayKey } from "@/domain/types";
@@ -72,7 +73,14 @@ function Hero() {
         </div>
 
         <div className="relative mx-auto w-full max-w-md self-stretch md:max-w-none">
-          <PhotoPlaceholder label="owner-approved loc portrait" ratio="4/5" className="h-full w-full md:min-h-[34rem] md:rounded-none" />
+          <StockPhoto
+            photo={HERO_PHOTO}
+            label="replace with a Haircraft360 client portrait"
+            ratio="4/5"
+            sizes="(min-width: 768px) 50vw, 448px"
+            priority
+            className="h-full w-full md:min-h-[34rem] md:rounded-none"
+          />
           <div className="absolute right-4 top-4 rounded-full bg-surface p-1.5 shadow-[var(--shadow-md)] md:right-auto md:top-auto md:bottom-14 md:-left-10 md:p-2">
             <Image
               src="/brand/logo-pink-full.webp"
@@ -175,17 +183,18 @@ function Gallery() {
     <section aria-labelledby="gallery-title" className="bg-sand py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeading id="gallery-title" align="center" title={<>Loc work, <em>before &amp; after</em></>}>
-          A before-and-after gallery will go here once Haircraft360 supplies and approves photos.
+          Stock photos show the kind of shots this gallery needs. Each pair is two different people, not a real
+          before and after. They will be replaced with Haircraft360 clients once photos are supplied and approved.
         </SectionHeading>
         <ul className="mt-12 grid gap-6 md:grid-cols-3">
-          {["Starter locs", "Retwist", "Styling"].map((label) => (
+          {GALLERY_PAIRS.map(({ label, before, after }) => (
             <li key={label} className="bg-surface shadow-[var(--shadow-sm)]">
               <p className="type-caps flex items-center justify-center gap-2 bg-sand-2 px-4 py-4 text-center text-[0.8rem] text-accent-text">
-                {label} <DemoTag>Placeholder</DemoTag>
+                {label} <DemoTag>Stock stand-in</DemoTag>
               </p>
               <div className="grid grid-cols-2 gap-1 p-1">
-                <PhotoPlaceholder label="before" ratio="3/4" className="rounded-none" />
-                <PhotoPlaceholder label="after" ratio="3/4" className="rounded-none" />
+                <StockPhoto photo={before} label="before" ratio="3/4" sizes="(min-width: 768px) 17vw, 50vw" className="rounded-none" />
+                <StockPhoto photo={after} label="after" ratio="3/4" sizes="(min-width: 768px) 17vw, 50vw" className="rounded-none" />
               </div>
             </li>
           ))}

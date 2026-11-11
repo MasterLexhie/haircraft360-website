@@ -76,7 +76,9 @@ Nothing below is a confirmed business decision. Tracked in **Admin → Settings 
 - **Deposit**: 30 % of the estimate, min ₦2,000 — demo. Cancellation, refund, reschedule and late-arrival
   terms are **not shown** because none are approved.
 - **Booking status names**, manual payment methods, notifications, staffing/sequencing — open PRD decisions.
-- **Content**: no salon description, photos or social links were supplied; placeholders are labelled.
+- **Content**: no salon description, photos or social links were supplied. The hero, service cards and
+  gallery use **Unsplash stock stand-ins** (captioned “Stock stand-in”, credits in `public/stock/CREDITS.md`,
+  wired in `src/config/stock-photos.ts`). They are not Haircraft360 work and must be replaced before launch.
 - **Credentials**: demo admin login and the demo session secret (`DEMO_SESSION_SECRET` env override).
 - Logo files are the supplied raster artwork (`public/brand`); the SVGs wrap rasters, not vector paths.
 

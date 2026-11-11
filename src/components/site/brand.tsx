@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ImageIcon } from "lucide-react";
 import { cx } from "@/components/ui/primitives";
+import type { StockPhoto as StockPhotoData } from "@/config/stock-photos";
 
 /**
  * Header lock-up: the supplied pink/black badge (unaltered) + a typeset
@@ -16,6 +17,36 @@ export function LogoLockup({ className, href = "/", tone = "light" }: { classNam
         <span className={cx("font-display text-xl italic", tone === "dark" && "text-lilac")}>360</span>
       </span>
     </Link>
+  );
+}
+
+/**
+ * A real stock photograph standing in for owner-approved photography. Always
+ * captioned "Stock stand-in" so it is never mistaken for Haircraft360's work.
+ * Same ratio contract as PhotoPlaceholder, so swapping in the real photo causes no layout shift.
+ */
+export function StockPhoto({
+  photo,
+  label,
+  ratio,
+  sizes,
+  priority = false,
+  className,
+}: {
+  photo: StockPhotoData;
+  label?: string;
+  ratio: string;
+  sizes: string;
+  priority?: boolean;
+  className?: string;
+}) {
+  return (
+    <figure className={cx("relative overflow-hidden rounded-[var(--radius)] bg-sand", className)} style={{ aspectRatio: ratio }}>
+      <Image src={photo.src} alt={photo.alt} fill sizes={sizes} priority={priority} className="object-cover" />
+      <figcaption className="absolute bottom-0 right-0 m-2 max-w-[calc(100%-1rem)] rounded-[var(--radius-control)] bg-surface/90 px-2 py-1 text-[0.68rem] font-semibold leading-tight text-ink-2">
+        Stock stand-in{label ? ` · ${label}` : ""}
+      </figcaption>
+    </figure>
   );
 }
 
