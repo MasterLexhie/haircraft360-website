@@ -1,27 +1,35 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { ClipboardCheck, Clock, Scissors } from "lucide-react";
 import { Suspense } from "react";
 import { requireAdmin } from "@/server/auth";
 import { getAdminData } from "@/server/queries";
 import { business } from "@/config/business";
-import { formatNaira } from "@/lib/money";
-import { formatDuration } from "@/lib/time";
 import { PageHeader, Panel } from "@/components/admin/bits";
-import { AvailabilityForm, OwnerChecklist, ResetDemoButton, ServiceForm } from "@/components/admin/settings-forms";
-import { Badge, DemoTag, Skeleton } from "@/components/ui/primitives";
+import { AvailabilityForm, OwnerChecklist, ResetDemoButton, ServicesManager } from "@/components/admin/settings-forms";
+import { Badge, Skeleton, cx } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default function SettingsPage() {
+const TABS = [
+  { id: "services", label: "Services", icon: Scissors },
+  { id: "availability", label: "Availability & deposit", icon: Clock },
+  { id: "owner", label: "Needs owner confirmation", icon: ClipboardCheck },
+] as const;
+type TabId = (typeof TABS)[number]["id"];
+
+export default function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <SettingsView />
+      <SettingsView searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function SettingsView() {
+async function SettingsView({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requireAdmin();
-  const db = await getAdminData();
+  const [db, sp] = await Promise.all([getAdminData(), searchParams]);
+  const tab: TabId = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "services";
   const done = db.settings.checklist.filter((c) => c.done).length;
   const facts = [
     { label: "Listing title", value: business.listingTitle.value, verified: business.listingTitle.verified },
@@ -39,44 +47,47 @@ async function SettingsView() {
     <>
       <PageHeader title="Settings" description="Every value here is demo data until the owner confirms it." actions={<ResetDemoButton />} />
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <div className="space-y-6">
-          <Panel title={<span className="flex items-center gap-2">Services <DemoTag>All demo</DemoTag></span>}>
-            <ul className="space-y-3">
-              {[...db.services].sort((a, b) => a.sortOrder - b.sortOrder).map((s) => (
-                <li key={s.id}>
-                  <details className="rounded-[var(--radius)] border border-line">
-                    <summary className="flex min-h-12 flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
-                      <span className="font-semibold">{s.name}</span>
-                      <span className="tabular text-sm text-ink-2">{s.priceKobo === null ? "Price TBC" : formatNaira(s.priceKobo)} · {s.durationMinutes ? formatDuration(s.durationMinutes) : "default duration"}</span>
-                      <span className="ml-auto flex gap-1.5">
-                        {s.status === "demo" && <DemoTag>Demo</DemoTag>}
-                        <Badge tone={s.active ? "success" : "neutral"}>{s.active ? "Bookable" : "Hidden"}</Badge>
-                      </span>
-                    </summary>
-                    <div className="border-t border-line p-4"><ServiceForm service={s} /></div>
-                  </details>
-                </li>
-              ))}
-            </ul>
-            <details className="mt-4 rounded-[var(--radius)] border border-dashed border-line-strong">
-              <summary className="min-h-12 px-4 py-3 font-semibold">+ Add a service</summary>
-              <div className="border-t border-line p-4"><ServiceForm /></div>
-            </details>
-            <p className="mt-3 text-xs text-ink-3">Editing a service never changes past bookings — each booking keeps a snapshot of name, price and duration.</p>
-          </Panel>
+      <nav aria-label="Settings sections" className="-mx-4 mb-6 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0">
+        <ul className="flex min-w-max gap-1">
+          {TABS.map((t) => {
+            const active = t.id === tab;
+            const count = t.id === "owner" ? `${done}/${db.settings.checklist.length}` : null;
+            return (
+              <li key={t.id}>
+                <Link
+                  href={t.id === "services" ? "/admin/settings" : `/admin/settings?tab=${t.id}`}
+                  aria-current={active ? "page" : undefined}
+                  scroll={false}
+                  className={cx(
+                    "-mb-px flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-semibold transition-colors",
+                    active ? "border-accent text-accent-text" : "border-transparent text-ink-3 hover:border-line-strong hover:text-ink",
+                  )}
+                >
+                  <t.icon aria-hidden className="size-4" />
+                  {t.label}
+                  {count && (
+                    <span className={cx("rounded-full px-2 py-0.5 text-xs tabular", active ? "bg-accent text-on-accent" : "bg-sand-2 text-ink-2")}>{count}</span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
 
-          <Panel title={<span className="flex items-center gap-2">Availability &amp; deposit <DemoTag>Demo values</DemoTag></span>}>
-            <AvailabilityForm settings={db.settings} />
-          </Panel>
-        </div>
+      {tab === "services" && <ServicesManager services={db.services} defaultDuration={db.settings.availability.defaultDurationMinutes} />}
 
-        <div className="space-y-6">
+      {tab === "availability" && (
+        <AvailabilityForm settings={db.settings} />
+      )}
+
+      {tab === "owner" && (
+        <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
           <Panel title={`Needs owner confirmation (${done}/${db.settings.checklist.length})`}>
             <OwnerChecklist items={db.settings.checklist} />
             <p className="mt-3 text-xs text-ink-3">Ticking an item only tracks progress here. Update the matching config before launch.</p>
           </Panel>
-          <Panel title="Business facts on the public site">
+          <Panel title="Business facts on the public site" className="lg:sticky lg:top-6">
             <ul className="space-y-3 text-sm">
               {facts.map((f) => (
                 <li key={f.label}>
@@ -91,7 +102,7 @@ async function SettingsView() {
             <p className="mt-4 text-xs text-ink-3">Source: {business.address.source}. Edit <code>src/config/business.ts</code> once confirmed.</p>
           </Panel>
         </div>
-      </div>
+      )}
     </>
   );
 }

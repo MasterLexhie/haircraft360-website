@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { AlertCircle, ArrowRight, CalendarClock, CalendarDays, Hourglass, Wallet } from "lucide-react";
+import { AlertCircle, ArrowRight, Banknote, CalendarClock, CalendarDays, Hourglass, Wallet } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { getAdminData, joinBooking, requestNow } from "@/server/queries";
 import { balanceDue } from "@/domain/pricing";
 import { formatNaira } from "@/lib/money";
-import { addDays, formatDateTime, formatShortDate, formatTime, lagosDateKey } from "@/lib/time";
+import { SALON_TZ, addDays, dayOfWeek, formatDateKey, formatDateTime, formatShortDate, formatTime, lagosDateKey, lagosToUtcMs } from "@/lib/time";
+import type { Payment } from "@/domain/types";
 import { BookingStatusBadge, PageHeader, Panel, PaymentStateBadge } from "@/components/admin/bits";
+import { ActivityFeed } from "@/components/admin/activity-feed";
 import { EmptyState, Skeleton } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Admin dashboard" };
@@ -35,7 +37,8 @@ async function Dashboard() {
   const unpaidSum = unpaid.reduce((s, r) => s + (balanceDue(r.booking, r.payments) ?? 0), 0);
   const toComplete = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.endAt) < nowMs);
   const nextUp = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.startAt) > nowMs).sort((a, b) => a.booking.startAt.localeCompare(b.booking.startAt)).slice(0, 5);
-  const activity = [...db.audit].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 8);
+  const takings = takingsFor(db.payments, today);
+  const activity = [...db.audit].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30);
 
   const stats = [
     { label: "Today", value: todays.length, sub: "appointments", icon: CalendarDays, href: `/admin/bookings?from=${today}&to=${today}` },
@@ -47,6 +50,29 @@ async function Dashboard() {
   return (
     <>
       <PageHeader title="Dashboard" description={`Counts below come from the demo records · ${formatDateTime(nowMs)} (Ibadan time)`} />
+
+      <section aria-labelledby="takings-title" className="mb-6">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 id="takings-title" className="type-caps text-[0.78rem] text-accent-text">Money received</h2>
+          <p className="text-xs text-ink-3">Successful demo payments (deposits, balances and manual entries) by the date they were received. No real money.</p>
+        </div>
+        <ul className="grid gap-3 sm:grid-cols-3">
+          {takings.map((t, i) => (
+            <li
+              key={t.label}
+              className={i === 0 ? "on-night rounded-[var(--radius)] bg-accent p-4 text-on-accent" : "rounded-[var(--radius)] border border-line bg-surface p-4"}
+            >
+              <span className={`flex items-center justify-between text-xs font-semibold uppercase tracking-[0.1em] ${i === 0 ? "text-on-night-2" : "text-ink-3"}`}>
+                {t.label} <Banknote aria-hidden className="size-4" />
+              </span>
+              <span className={`mt-2 block tabular font-display text-3xl ${i === 0 ? "text-on-accent" : "text-accent-text"}`}>{formatNaira(t.totalKobo)}</span>
+              <span className={`text-xs ${i === 0 ? "text-on-night-2" : "text-ink-2"}`}>
+                {t.count} payment{t.count === 1 ? "" : "s"} · {t.range}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
@@ -102,19 +128,44 @@ async function Dashboard() {
           )}
         </div>
 
-        <Panel title="Recent activity">
-          <ol className="space-y-3">
-            {activity.map((e) => (
-              <li key={e.id} className="text-sm">
-                <p className="text-ink">{e.summary}</p>
-                <p className="text-xs text-ink-3">{formatDateTime(e.at)} · {e.actor}</p>
-              </li>
-            ))}
-          </ol>
+        {/* Stretches to the height of the stacked panels on the left (desktop); the list scrolls inside. */}
+        <Panel title="Recent activity" className="flex flex-col" bodyClassName="relative flex-1 lg:min-h-80">
+          {activity.length === 0 ? (
+            <div className="p-4 sm:p-5">
+              <EmptyState title="No activity yet">Bookings, payments and changes will appear here.</EmptyState>
+            </div>
+          ) : (
+            <div
+              tabIndex={0}
+              aria-label="Recent activity list"
+              className="max-h-[30rem] overflow-y-auto overscroll-contain p-4 sm:p-5 lg:absolute lg:inset-0 lg:max-h-none"
+            >
+              <ActivityFeed events={activity} today={today} bookingRefs={new Map(db.bookings.map((b) => [b.id, b.reference]))} />
+            </div>
+          )}
         </Panel>
       </div>
     </>
   );
+}
+
+/** Sums successful payments received today, this week (Mon–Sun) and this month, in Ibadan time. */
+function takingsFor(payments: Payment[], today: string) {
+  const weekStart = addDays(today, -((dayOfWeek(today) + 6) % 7));
+  const monthStart = `${today.slice(0, 8)}01`;
+  const received = payments
+    .filter((p) => p.state === "success")
+    .map((p) => ({ day: lagosDateKey(p.resolvedAt ?? p.createdAt), amount: p.amountKobo }));
+  const sum = (from: string) => {
+    const hits = received.filter((p) => p.day >= from && p.day <= today);
+    return { totalKobo: hits.reduce((s, p) => s + p.amount, 0), count: hits.length };
+  };
+  const monthName = new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric", timeZone: SALON_TZ }).format(lagosToUtcMs(today, 12 * 60));
+  return [
+    { label: "Today", range: formatDateKey(today), ...sum(today) },
+    { label: "This week", range: `from ${formatDateKey(weekStart)}`, ...sum(weekStart) },
+    { label: "This month", range: monthName, ...sum(monthStart) },
+  ];
 }
 
 function ScheduleList({ rows, showDate }: { rows: ReturnType<typeof joinBooking>[]; showDate?: boolean }) {

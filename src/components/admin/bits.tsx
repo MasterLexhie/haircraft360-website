@@ -32,7 +32,20 @@ export function PageHeader({ title, description, actions, back }: { title: React
   );
 }
 
-export function Panel({ title, action, children, className }: { title?: ReactNode; action?: ReactNode; children: ReactNode; className?: string }) {
+export function Panel({
+  title,
+  action,
+  children,
+  className,
+  bodyClassName,
+}: {
+  title?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+  /** Replaces the default body padding. */
+  bodyClassName?: string;
+}) {
   return (
     <section className={cx("rounded-[var(--radius)] border border-line bg-surface", className)}>
       {title && (
@@ -41,7 +54,7 @@ export function Panel({ title, action, children, className }: { title?: ReactNod
           {action}
         </div>
       )}
-      <div className="p-4 sm:p-5">{children}</div>
+      <div className={bodyClassName ?? "p-4 sm:p-5"}>{children}</div>
     </section>
   );
 }

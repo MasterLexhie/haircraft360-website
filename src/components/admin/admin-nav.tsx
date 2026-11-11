@@ -13,11 +13,20 @@ const ITEMS = [
 ];
 
 /** Pathname-aware nav. Must render inside <Suspense> (dynamic routes). */
-export function AdminNav({ orientation }: { orientation: "vertical" | "horizontal" }) {
-  return <AdminNavList orientation={orientation} pathname={usePathname()} />;
+export function AdminNav({ orientation, collapsed = false }: { orientation: "vertical" | "horizontal"; collapsed?: boolean }) {
+  return <AdminNavList orientation={orientation} pathname={usePathname()} collapsed={collapsed} />;
 }
 
-export function AdminNavList({ orientation, pathname }: { orientation: "vertical" | "horizontal"; pathname: string | null }) {
+export function AdminNavList({
+  orientation,
+  pathname,
+  collapsed = false,
+}: {
+  orientation: "vertical" | "horizontal";
+  pathname: string | null;
+  /** Vertical only: icon rail with the label kept for screen readers and as a tooltip. */
+  collapsed?: boolean;
+}) {
   return (
     <nav aria-label="Admin">
       <ul className={orientation === "vertical" ? "space-y-1" : "grid grid-cols-4 gap-1"}>
@@ -28,14 +37,15 @@ export function AdminNavList({ orientation, pathname }: { orientation: "vertical
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
+                title={collapsed ? item.label : undefined}
                 className={cx(
                   "flex items-center rounded-[var(--radius)] font-medium transition-colors",
-                  orientation === "vertical" ? "min-h-11 gap-3 px-3 text-sm" : "min-h-12 flex-col justify-center gap-0.5 px-1 text-[0.7rem]",
+                  orientation === "vertical" ? cx("min-h-11 gap-3 text-sm", collapsed ? "justify-center px-0" : "px-3") : "min-h-12 flex-col justify-center gap-0.5 px-1 text-[0.7rem]",
                   active ? "bg-accent text-on-accent" : "text-ink-2 hover:bg-sand hover:text-ink",
                 )}
               >
-                <item.icon aria-hidden className={orientation === "vertical" ? "size-4" : "size-5"} />
-                {item.label}
+                <item.icon aria-hidden className={cx("shrink-0", orientation === "vertical" ? "size-4" : "size-5")} />
+                <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
               </Link>
             </li>
           );

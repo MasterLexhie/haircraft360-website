@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ComponentProps, ReactNode } from "react";
-import { AlertTriangle, CheckCircle2, Info, XCircle } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info, X, XCircle } from "lucide-react";
 import type { Tone } from "@/domain/labels";
 
 export function cx(...parts: (string | false | null | undefined)[]) {
@@ -109,12 +109,15 @@ export function Alert({
   children,
   className,
   role,
+  onDismiss,
 }: {
   tone?: "info" | "success" | "warning" | "danger";
   title?: ReactNode;
   children?: ReactNode;
   className?: string;
   role?: "alert" | "status";
+  /** Shows a close button (client components only). */
+  onDismiss?: () => void;
 }) {
   const Icon = alertIcon[tone];
   return (
@@ -124,6 +127,16 @@ export function Alert({
         {title && <p className="font-semibold">{title}</p>}
         {children && <div className="text-ink-2 [&_a]:font-semibold [&_a]:text-ink [&_a]:underline">{children}</div>}
       </div>
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss message"
+          className="-m-2 ml-auto grid size-9 shrink-0 place-items-center self-start rounded-[var(--radius-control)] text-ink-3 hover:bg-surface/70 hover:text-ink"
+        >
+          <X aria-hidden className="size-4" />
+        </button>
+      )}
     </div>
   );
 }

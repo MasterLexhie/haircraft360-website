@@ -13,14 +13,10 @@ import {
   setStatusAction,
   type ActionState,
 } from "@/app/admin/actions";
-import { Alert, Button, Field, cx, inputClass } from "@/components/ui/primitives";
+import { ActionFeedback } from "@/components/admin/action-feedback";
+import { Button, Field, cx, inputClass } from "@/components/ui/primitives";
 
-function Feedback({ state }: { state: ActionState }) {
-  if (!state) return null;
-  if (state.error) return <Alert tone="danger" role="alert" title={state.error} />;
-  if (state.ok) return <Alert tone="success" role="status" title={state.message} />;
-  return null;
-}
+const Feedback = ActionFeedback;
 
 /* ───────────── Completion: delivered services, extras, actual total ───────────── */
 
