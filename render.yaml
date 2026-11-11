@@ -1,0 +1,38 @@
+# Render Blueprint for the Haircraft360 prototype.
+# Deploy: Render dashboard → New → Blueprint → pick this repo.
+#
+# Free plan notes:
+# - The service sleeps after ~15 min without traffic; the next visit takes
+#   30–60 s to wake it.
+# - The disk is not persistent. Demo data (.data/haircraft360-demo-db.json)
+#   is re-seeded after every sleep, restart or deploy. That is fine for a
+#   prototype; a paid plan + persistent disk (see below) keeps it.
+services:
+  - type: web
+    name: haircraft360-prototype
+    runtime: node
+    plan: free
+    # region: frankfurt   # optional; pick the region closest to Nigeria you have access to
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Signs the demo admin session cookie. Generated once by Render.
+      - key: DEMO_SESSION_SECRET
+        generateValue: true
+      # Keep preview banners and demo labels on. Only set "false" once every
+      # business fact has been verified by the owner (see README).
+      - key: NEXT_PUBLIC_PREVIEW_MODE
+        value: "true"
+    # To keep demo data across restarts (paid plans only), uncomment and set
+    # DEMO_DATA_DIR to the mount path:
+    # disk:
+    #   name: demo-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # and add under envVars:
+    #   - key: DEMO_DATA_DIR
+    #     value: /var/data

@@ -14,7 +14,9 @@ import { buildSeed, DB_VERSION } from "@/mock/seed";
  * with a transaction + row lock or exclusion constraint on (chair, time range).
  */
 
-const DATA_DIR = path.join(process.cwd(), ".data");
+// DEMO_DATA_DIR lets a host point this at a persistent disk (e.g. Render's
+// /var/data). Defaults to .data/ in the project folder.
+const DATA_DIR = process.env.DEMO_DATA_DIR || path.join(process.cwd(), ".data");
 const DB_FILE = path.join(DATA_DIR, "haircraft360-demo-db.json");
 
 const g = globalThis as unknown as { __hc360db?: Database };
