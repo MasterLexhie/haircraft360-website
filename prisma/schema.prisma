@@ -1,0 +1,513 @@
+// Haircraft 360 data model. See docs/BUILD_SPEC.md Section 5 and docs/FINAL_PLAN.md.
+//
+// Conventions:
+// - Money is integer kobo (NGN x 100). Never floats.
+// - Every timestamp is timestamptz, stored in UTC. The UI shows Africa/Lagos time.
+// - Secrets handed to customers or admins (booking links, payment links, sessions)
+//   are stored only as SHA-256 hashes.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ───────────────────────────── Enums ─────────────────────────────
+
+enum BookingStatus {
+  pending_payment
+  confirmed
+  completed
+  cancelled
+  no_show
+  expired
+  needs_attention
+}
+
+enum BookingItemKind {
+  main // the main service picked by the customer
+  add_on // an extra picked by the customer when booking
+  extra // added by the salon on the day
+}
+
+enum PaymentType {
+  deposit
+  balance_online
+  manual
+  adjustment
+}
+
+enum PaymentMethod {
+  card
+  transfer
+  cash
+  other
+}
+
+enum PaymentStatus {
+  success
+  failed
+}
+
+enum PaymentAttemptStatus {
+  initialized
+  success
+  failed
+  abandoned
+}
+
+enum PaymentAttemptPurpose {
+  deposit
+  balance_online
+}
+
+enum PaymentLinkPurpose {
+  balance
+}
+
+enum WebhookEventStatus {
+  received
+  processed
+  ignored
+  failed
+}
+
+enum NotificationType {
+  confirmation
+  reminder
+  owner_alert
+  owner_daily_summary
+}
+
+enum NotificationChannel {
+  email
+  whatsapp_manual
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  delivered
+  failed
+  skipped
+  bounced
+}
+
+enum DepositType {
+  fixed
+  percent
+}
+
+enum DepositScope {
+  main_only
+  full_total
+}
+
+// ───────────────────────────── Customers ─────────────────────────────
+
+model Customer {
+  id                 String    @id @default(cuid())
+  displayName        String
+  notes              String    @default("")
+  tags               String[]  @default([])
+  marketingConsent   Boolean   @default(false)
+  marketingConsentAt DateTime? @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+
+  phones       CustomerPhone[]
+  emails       CustomerEmail[]
+  nameVariants CustomerNameVariant[]
+  bookings     Booking[]
+}
+
+/// Phones are stored in E.164 (for example +2348031234567) and are unique across customers.
+model CustomerPhone {
+  id         String   @id @default(cuid())
+  customerId String
+  e164       String   @unique
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+}
+
+/// Emails are trimmed and lowercased, unique across customers.
+/// Placeholders (generated from the phone for Paystack) and bounced addresses are never emailed.
+model CustomerEmail {
+  id            String    @id @default(cuid())
+  customerId    String
+  value         String    @unique
+  isPlaceholder Boolean   @default(false)
+  bouncedAt     DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+}
+
+/// Every name a customer has typed. Kept for the record, never used for matching.
+model CustomerNameVariant {
+  id         String   @id @default(cuid())
+  customerId String
+  name       String
+  firstUsed  DateTime @default(now()) @db.Timestamptz(3)
+  lastUsed   DateTime @default(now()) @db.Timestamptz(3)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, name])
+}
+
+// ───────────────────────────── Services ─────────────────────────────
+
+model Service {
+  id                   String   @id @default(cuid())
+  name                 String
+  description          String   @default("")
+  priceKobo            Int
+  durationMinutes      Int
+  bookableAlone        Boolean  @default(true)
+  availableAsAddOn     Boolean  @default(false)
+  /// Price and duration when sold as an add-on. Falls back to priceKobo and durationMinutes.
+  addOnPriceKobo       Int?
+  addOnDurationMinutes Int?
+  active               Boolean  @default(true)
+  sortOrder            Int      @default(0)
+  createdAt            DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+
+  addOns       ServiceAddOn[] @relation("MainService")
+  addOnFor     ServiceAddOn[] @relation("AddOnService")
+  bookingItems BookingItem[]
+}
+
+/// Which add-ons each main service offers.
+model ServiceAddOn {
+  mainServiceId  String
+  addOnServiceId String
+
+  mainService  Service @relation("MainService", fields: [mainServiceId], references: [id], onDelete: Cascade)
+  addOnService Service @relation("AddOnService", fields: [addOnServiceId], references: [id], onDelete: Cascade)
+
+  @@id([mainServiceId, addOnServiceId])
+}
+
+// ───────────────────────────── Bookings ─────────────────────────────
+
+model Booking {
+  id              String        @id @default(cuid())
+  /// Short human reference shown to customers, for example HC-7KQ2M.
+  reference       String        @unique
+  /// SHA-256 of the customer's booking link token.
+  accessTokenHash String        @unique
+  accessExpiresAt DateTime      @db.Timestamptz(3)
+  customerId      String
+  /// What the customer typed for this booking. Customer pages show only these, never the stored profile.
+  contactName     String
+  contactPhone    String
+  contactEmail    String?
+  startAt         DateTime      @db.Timestamptz(3)
+  /// Includes every item's duration. The buffer is added at availability time, not stored here.
+  endAt           DateTime      @db.Timestamptz(3)
+  status          BookingStatus @default(pending_payment)
+  holdExpiresAt   DateTime?     @db.Timestamptz(3)
+  totalKobo       Int
+  depositDueKobo  Int
+  customerNote    String        @default("")
+  privateNote     String        @default("")
+  completedAt     DateTime?     @db.Timestamptz(3)
+  cancelledAt     DateTime?     @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items           BookingItem[]
+  payments        Payment[]
+  paymentAttempts PaymentAttempt[]
+  paymentLinks    PaymentLink[]
+  notifications   Notification[]
+
+  @@index([startAt])
+  @@index([status, startAt])
+  @@index([customerId])
+}
+
+/// One row per main service, add-on or on-the-day extra. Price and duration are copied at the time.
+model BookingItem {
+  id              String          @id @default(cuid())
+  bookingId       String
+  serviceId       String?
+  kind            BookingItemKind
+  name            String
+  priceKobo       Int
+  durationMinutes Int
+  note            String          @default("")
+  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+
+  booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+}
+
+// ───────────────────────────── Payments ─────────────────────────────
+
+/// Append-only ledger of money received. Rows are never edited or deleted;
+/// corrections are new `adjustment` rows (negative amounts allowed only there).
+/// Balance owed = booking total minus the sum of successful payments.
+model Payment {
+  id                String        @id @default(cuid())
+  bookingId         String
+  type              PaymentType
+  method            PaymentMethod
+  amountKobo        Int
+  status            PaymentStatus @default(success)
+  /// Unique when present, so a replayed webhook can never record the same charge twice.
+  paystackReference String?       @unique
+  recordedById      String?
+  note              String        @default("")
+  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+
+  booking    Booking    @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  recordedBy AdminUser? @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([createdAt])
+}
+
+/// One row per Paystack transaction we initialise. Mutable working state; the ledger is `Payment`.
+model PaymentAttempt {
+  id            String                @id @default(cuid())
+  bookingId     String
+  purpose       PaymentAttemptPurpose
+  reference     String                @unique
+  amountKobo    Int
+  accessCode    String?
+  status        PaymentAttemptStatus  @default(initialized)
+  paymentLinkId String?
+  createdAt     DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime              @updatedAt @db.Timestamptz(3)
+
+  booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  paymentLink PaymentLink? @relation(fields: [paymentLinkId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+}
+
+/// Customer-facing payment link. URLs carry the token; only its hash is stored.
+model PaymentLink {
+  id          String             @id @default(cuid())
+  tokenHash   String             @unique
+  bookingId   String
+  purpose     PaymentLinkPurpose
+  expiresAt   DateTime           @db.Timestamptz(3)
+  usedAt      DateTime?          @db.Timestamptz(3)
+  createdById String?
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+
+  booking   Booking          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
+  createdBy AdminUser?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  attempts  PaymentAttempt[]
+
+  @@index([bookingId])
+}
+
+/// Every incoming Paystack event, kept for idempotency and as evidence in disputes.
+model WebhookEvent {
+  id             String             @id @default(cuid())
+  provider       String             @default("paystack")
+  eventType      String
+  reference      String?
+  payload        Json
+  signatureValid Boolean
+  sourceIp       String?
+  status         WebhookEventStatus @default(received)
+  error          String?
+  receivedAt     DateTime           @default(now()) @db.Timestamptz(3)
+  processedAt    DateTime?          @db.Timestamptz(3)
+
+  @@index([reference])
+  @@index([status, receivedAt])
+}
+
+// ───────────────────────────── Notifications ─────────────────────────────
+
+/// Messages to send. Created in the same transaction as the event that causes them;
+/// sent later by the scheduler. `dedupeKey` (for example `reminder:<bookingId>` or
+/// `summary:2026-12-01`) guarantees one row per message.
+model Notification {
+  id                String              @id @default(cuid())
+  dedupeKey         String              @unique
+  bookingId         String?
+  customerId        String?
+  type              NotificationType
+  channel           NotificationChannel
+  status            NotificationStatus  @default(pending)
+  dueAt             DateTime            @db.Timestamptz(3)
+  attempts          Int                 @default(0)
+  lastError         String?
+  providerMessageId String?
+  sentAt            DateTime?           @db.Timestamptz(3)
+  /// Free-form content for owner alerts (booking-related types render from the booking).
+  payload           Json?
+  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+
+  booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  @@index([status, dueAt])
+  @@index([bookingId])
+}
+
+// ───────────────────────────── Settings and blocks ─────────────────────────────
+
+/// Single row (id = 1). JSON columns are validated with Zod in src/domain/settings.ts.
+model Settings {
+  id                  Int          @id @default(1)
+  timezone            String       @default("Africa/Lagos")
+  slotIntervalMinutes Int          @default(30)
+  bufferMinutes       Int          @default(0)
+  holdMinutes         Int          @default(15)
+  minimumLeadMinutes  Int          @default(120)
+  bookingHorizonDays  Int          @default(60)
+  /// { "0": null | { "open": "09:00", "close": "18:00" }, ... "6": ... } with 0 = Sunday.
+  weeklyHours         Json
+  /// { "0": 0, "1": 2, ... "6": 2 }: customers served at once, per weekday.
+  capacityByWeekday   Json
+  depositType         DepositType  @default(percent)
+  depositFixedKobo    Int          @default(0)
+  depositPercent      Int          @default(30)
+  depositScope        DepositScope @default(full_total)
+  /// Optional floor for percentage deposits. Null means no minimum.
+  depositMinimumKobo  Int?
+  messageTemplates    Json
+  salonDetails        Json
+  schedulerHeartbeat  DateTime?    @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
+}
+
+/// Admin-created period that reduces capacity (or closes the salon when capacityReduction is null).
+model Block {
+  id                String     @id @default(cuid())
+  startAt           DateTime   @db.Timestamptz(3)
+  endAt             DateTime   @db.Timestamptz(3)
+  capacityReduction Int?
+  reason            String     @default("")
+  createdById       String?
+  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
+
+  createdBy AdminUser? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([startAt, endAt])
+}
+
+// ───────────────────────────── Finances ─────────────────────────────
+
+model ExpenseCategory {
+  id        String    @id @default(cuid())
+  name      String    @unique
+  sortOrder Int       @default(0)
+  active    Boolean   @default(true)
+  expenses  Expense[]
+}
+
+model Expense {
+  id          String        @id @default(cuid())
+  /// Calendar day in Lagos time.
+  date        DateTime      @db.Date
+  amountKobo  Int
+  categoryId  String
+  method      PaymentMethod
+  note        String        @default("")
+  createdById String?
+  deletedAt   DateTime?     @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+
+  category  ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdBy AdminUser?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([date])
+}
+
+// ───────────────────────────── Admin, security and audit ─────────────────────────────
+
+model AdminUser {
+  id                String    @id @default(cuid())
+  email             String    @unique
+  displayName       String
+  /// PBKDF2 hash in the form pbkdf2-sha256$<iterations>$<salt b64url>$<hash b64url>.
+  passwordHash      String
+  passwordChangedAt DateTime  @default(now()) @db.Timestamptz(3)
+  /// Base32 TOTP secret. Null until 2FA setup is finished.
+  totpSecret        String?
+  totpEnabledAt     DateTime? @db.Timestamptz(3)
+  /// SHA-256 hashes of unused one-time backup codes.
+  backupCodeHashes  String[]  @default([])
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+
+  sessions     AdminSession[]
+  payments     Payment[]
+  paymentLinks PaymentLink[]
+  blocks       Block[]
+  expenses     Expense[]
+  auditLogs    AuditLog[]
+}
+
+model AdminSession {
+  id          String   @id @default(cuid())
+  /// SHA-256 of the session cookie value.
+  tokenHash   String   @unique
+  adminUserId String
+  /// False between a correct password and a correct 2FA code.
+  mfaVerified Boolean  @default(false)
+  ip          String?
+  userAgent   String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  lastSeenAt  DateTime @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime @db.Timestamptz(3)
+
+  adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+
+  @@index([adminUserId])
+}
+
+/// Fixed-window counters for rate limiting, shared by every server instance.
+model RateLimitBucket {
+  key         String
+  windowStart DateTime @db.Timestamptz(3)
+  count       Int      @default(0)
+  expiresAt   DateTime @db.Timestamptz(3)
+
+  @@id([key, windowStart])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  /// "Customer", "System", "Paystack" or the admin's display name.
+  actorLabel String
+  action     String
+  entityType String
+  entityId   String?
+  bookingId  String?
+  customerId String?
+  summary    String
+  data       Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  actor AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([bookingId])
+  @@index([customerId])
+  @@index([createdAt])
+}
