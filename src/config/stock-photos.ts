@@ -27,9 +27,9 @@ export const HERO_PHOTO: StockPhoto = {
   credit: { name: "Jabari Timothy", url: unsplash("c9GxZcR07j8") },
 };
 
-/** Keyed by service id from the demo config. Unknown services fall back to a placeholder. */
+/** Stand-in photos keyed by the sample service ids in prisma/seed.ts. Unknown services fall back to a placeholder. */
 export const SERVICE_PHOTOS: Record<string, StockPhoto> = {
-  svc_starter_locs: {
+  seed_svc_starter: {
     src: "/stock/service-starter-locs.webp",
     alt: "Stock photo: short, freshly started locs seen from above",
     width: 960,
@@ -37,7 +37,7 @@ export const SERVICE_PHOTOS: Record<string, StockPhoto> = {
     brief: "Fresh starter locs with clean parts",
     credit: { name: "Larry George II", url: unsplash("7Lb9KCfvA1w") },
   },
-  svc_retwist: {
+  seed_svc_retwist: {
     src: "/stock/service-retwist.webp",
     alt: "Stock photo: neatly retwisted locs with defined parting",
     width: 960,
@@ -45,7 +45,7 @@ export const SERVICE_PHOTOS: Record<string, StockPhoto> = {
     brief: "Neat roots and parting straight after a retwist",
     credit: { name: "Romina Farías", url: unsplash("NhTBT45OkBE") },
   },
-  svc_custom: {
+  seed_svc_style: {
     src: "/stock/service-custom-styling.webp",
     alt: "Stock photo: locs styled with purple beads",
     width: 960,
@@ -53,7 +53,7 @@ export const SERVICE_PHOTOS: Record<string, StockPhoto> = {
     brief: "A finished loc style, with any accessories used",
     credit: { name: "Superr", url: unsplash("1E1U0-HvyvM") },
   },
-  svc_consult: {
+  seed_svc_consult: {
     src: "/stock/service-consultation.webp",
     alt: "Stock photo: a stylist placing a cape on a smiling client in a salon chair",
     width: 960,

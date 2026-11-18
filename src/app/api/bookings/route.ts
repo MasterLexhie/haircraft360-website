@@ -1,6 +1,7 @@
 import { BookingError, createPendingBooking } from "@/server/booking-service";
+import { isMockCheckoutEnabled, startMockCheckout } from "@/server/payments/mock";
 
-/** POST /api/bookings — hold a slot and open a demo deposit checkout. */
+/** POST /api/bookings: hold a time and record the booking awaiting its deposit. */
 export async function POST(request: Request) {
   let body: Record<string, unknown>;
   try {
@@ -9,18 +10,23 @@ export async function POST(request: Request) {
     return Response.json({ error: { code: "VALIDATION", message: "Invalid request." } }, { status: 400 });
   }
   try {
-    const result = createPendingBooking({
-      serviceIds: Array.isArray(body.serviceIds) ? body.serviceIds.map(String) : [],
+    const result = await createPendingBooking({
+      mainServiceId: String(body.mainServiceId ?? ""),
+      addOnIds: Array.isArray(body.addOnIds) ? body.addOnIds.map(String) : [],
       startAt: String(body.startAt ?? ""),
       name: String(body.name ?? ""),
       phone: String(body.phone ?? ""),
       email: String(body.email ?? ""),
+      noEmail: body.noEmail === true,
+      marketingConsent: body.marketingConsent === true,
       customerNote: String(body.customerNote ?? ""),
     });
-    return Response.json(result, { status: 201 });
+    // Until Paystack is connected (Milestone 4), local development pays through the mock checkout.
+    const checkout = isMockCheckoutEnabled() ? await startMockCheckout(result.reference, result.accessToken, "deposit") : null;
+    return Response.json({ reference: result.reference, accessToken: result.accessToken, checkoutReference: checkout?.checkoutReference ?? null }, { status: 201 });
   } catch (err) {
     if (err instanceof BookingError) {
-      const status = err.code === "SLOT_TAKEN" ? 409 : 400;
+      const status = err.code === "SLOT_TAKEN" ? 409 : err.code === "TOO_MANY_HOLDS" ? 429 : 400;
       return Response.json({ error: { code: err.code, message: err.message, fieldErrors: err.fieldErrors } }, { status });
     }
     throw err;

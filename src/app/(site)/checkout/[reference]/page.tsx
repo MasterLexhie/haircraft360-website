@@ -1,35 +1,39 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { getCheckout } from "@/server/queries";
+import { connection } from "next/server";
+import { getMockCheckout } from "@/server/payments/mock";
 import { MockCheckout } from "@/components/booking/mock-checkout";
 import { Skeleton } from "@/components/ui/primitives";
 
-export const metadata: Metadata = { title: "Demo checkout" };
+export const metadata: Metadata = { title: "Checkout", robots: { index: false, follow: false } };
 
-export default function CheckoutPage({ params }: { params: Promise<{ reference: string }> }) {
+type Props = { params: Promise<{ reference: string }>; searchParams: Promise<{ t?: string }> };
+
+/** DEVELOPMENT ONLY mock checkout (ENABLE_MOCK_CHECKOUT). Replaced by the Paystack popup in Milestone 4. */
+export default function CheckoutPage(props: Props) {
   return (
     <Suspense fallback={<div className="mx-auto max-w-lg px-4 py-16"><Skeleton className="h-96" /></div>}>
-      <Checkout params={params} />
+      <Checkout {...props} />
     </Suspense>
   );
 }
 
-async function Checkout({ params }: { params: Promise<{ reference: string }> }) {
-  const { reference } = await params;
-  const data = await getCheckout(reference);
+async function Checkout({ params, searchParams }: Props) {
+  await connection();
+  const [{ reference }, { t }] = await Promise.all([params, searchParams]);
+  const data = await getMockCheckout(reference, t ?? "");
   if (!data) notFound();
-  const { payment, booking, accessToken } = data;
-  const expired = payment.purpose === "deposit" && booking.status === "expired";
+  const expired = data.purpose === "deposit" && data.bookingStatus === "expired";
   return (
     <MockCheckout
-      reference={payment.reference}
-      amountKobo={payment.amountKobo}
-      purpose={payment.purpose}
-      state={expired ? "abandoned" : payment.state}
-      bookingReference={booking.reference}
-      accessToken={accessToken}
-      holdExpiresAt={payment.purpose === "deposit" ? booking.holdExpiresAt : null}
+      reference={data.reference}
+      amountKobo={data.amountKobo}
+      purpose={data.purpose}
+      state={expired ? "abandoned" : data.status}
+      bookingReference={data.bookingReference}
+      accessToken={t!}
+      holdExpiresAt={data.purpose === "deposit" ? data.holdExpiresAt : null}
     />
   );
 }

@@ -5,7 +5,7 @@ import { useState } from "react";
 import { CreditCard } from "lucide-react";
 import { Alert, Button } from "@/components/ui/primitives";
 
-/** Opens (or reuses) a demo checkout for the deposit or the outstanding balance. */
+/** Starts a payment for the deposit or the outstanding balance. Each press opens a fresh attempt. */
 export function PayButton({ reference, token, purpose, label }: { reference: string; token: string; purpose: "deposit" | "balance"; label: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -25,7 +25,7 @@ export function PayButton({ reference, token, purpose, label }: { reference: str
         router.refresh();
         return;
       }
-      router.push(`/checkout/${data.checkoutReference}`);
+      router.push(`/checkout/${data.checkoutReference}?t=${encodeURIComponent(token)}`);
     } catch {
       setError("We couldn't reach the checkout service. Please try again.");
     } finally {

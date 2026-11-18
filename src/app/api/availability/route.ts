@@ -1,12 +1,12 @@
 import type { NextRequest } from "next/server";
 import { dateOptions, slotsForDate } from "@/domain/availability";
 import { isValidDateKey } from "@/lib/time";
-import { readDb } from "@/server/store";
+import { db } from "@/server/db";
+import { loadSettings } from "@/server/settings";
 
 /**
  * GET /api/availability?duration=150&date=2026-11-12
- * Returns the date strip (with available-slot counts) and, when `date` is
- * given, that day's slots. Based on demo opening hours + existing bookings.
+ * The date strip (with available-slot counts) and, when `date` is given, that day's free slots.
  */
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
@@ -18,9 +18,15 @@ export async function GET(request: NextRequest) {
   if (date && !isValidDateKey(date)) {
     return Response.json({ error: "Invalid date." }, { status: 400 });
   }
-  const db = readDb();
   const nowMs = Date.now();
-  const base = { durationMinutes: duration, config: db.settings.availability, bookings: db.bookings, nowMs };
+  const settings = await loadSettings();
+  const horizonEnd = new Date(nowMs + (settings.availability.bookingHorizonDays + 2) * 86_400_000);
+  const rows = await db.booking.findMany({
+    where: { status: { in: ["confirmed", "completed", "pending_payment"] }, endAt: { gt: new Date(nowMs - 86_400_000) }, startAt: { lt: horizonEnd } },
+    select: { id: true, status: true, startAt: true, endAt: true, holdExpiresAt: true },
+  });
+  const bookings = rows.map((r) => ({ id: r.id, status: r.status, startAt: r.startAt.toISOString(), endAt: r.endAt.toISOString(), holdExpiresAt: r.holdExpiresAt?.toISOString() ?? null }));
+  const base = { durationMinutes: duration, config: settings.availability, bookings, nowMs };
   const dates = dateOptions(base);
   const day = date ? slotsForDate({ ...base, dateKey: date }) : null;
   return Response.json(

@@ -1,38 +1,28 @@
 import "server-only";
-import type {
-  AuditEvent,
-  Booking,
-  BookingServiceLine,
-  BookingStatus,
-  Customer,
-  Database,
-  Kobo,
-  Payment,
-  Service,
-  Settings,
-} from "@/domain/types";
+import type { BookingStatus, Kobo, PaymentMethod, Settings } from "@/domain/types";
 import { isSlotBookable } from "@/domain/availability";
-import { balanceDue, depositFor, estimateServices } from "@/domain/pricing";
-import { normalizeNigerianPhone, validateContact } from "@/domain/validation";
+import { depositDue } from "@/domain/deposit";
+import { addOnTerms, balanceDue, itemsDuration, itemsTotal } from "@/domain/pricing";
+import { normalizeEmail, normalizePhone, placeholderEmailFor } from "@/domain/phone";
+import { validateContact } from "@/domain/validation";
 import { formatNaira } from "@/lib/money";
-import { transaction } from "./store";
-import { newAccessToken, newBookingReference, newId } from "./ids";
-import { initializeCheckout, resolveCheckout } from "./payments/mock-checkout-adapter";
+import { addDays, lagosDateKey, lagosToUtcMs } from "@/lib/time";
+import { randomToken, sha256Hex } from "@/lib/crypto";
+import { db, type Tx } from "./db";
+import { audit } from "./audit";
+import { matchOrCreateCustomer } from "./customers";
+import { loadSettings } from "./settings";
+import { newBookingReference } from "./ids";
+import { toBooking } from "./mappers";
 
 /**
- * Booking rules and orchestration. Every mutation goes through
- * `transaction()` so checks and writes happen atomically.
+ * Booking rules and orchestration. Every change runs in one database transaction,
+ * so checks and writes commit together or not at all.
  */
 
 export class BookingError extends Error {
   constructor(
-    public code:
-      | "VALIDATION"
-      | "SLOT_TAKEN"
-      | "NOT_FOUND"
-      | "HOLD_EXPIRED"
-      | "NOT_ALLOWED"
-      | "NOTHING_DUE",
+    public code: "VALIDATION" | "SLOT_TAKEN" | "NOT_FOUND" | "HOLD_EXPIRED" | "NOT_ALLOWED" | "NOTHING_DUE" | "TOO_MANY_HOLDS",
     message: string,
     public fieldErrors?: Record<string, string>,
   ) {
@@ -40,404 +30,443 @@ export class BookingError extends Error {
   }
 }
 
-function audit(db: Database, e: Omit<AuditEvent, "id" | "at"> & { at?: string }): void {
-  db.audit.push({ id: newId("aud"), at: e.at ?? new Date().toISOString(), ...e });
+/** How long a customer's booking link keeps working after the appointment. */
+const ACCESS_DAYS_AFTER_APPOINTMENT = 30;
+/** One unpaid hold per phone number at a time (stops calendar blocking). */
+const MAX_ACTIVE_HOLDS_PER_PHONE = 1;
+const DAY_MS = 86_400_000;
+
+/* ───────────────────────────── Locking and capacity ───────────────────────────── */
+
+/**
+ * Serialises every change that could affect capacity on one salon day.
+ * Transaction-level, so it is released on commit or rollback and works through
+ * Supabase's transaction-mode pooler.
+ */
+export async function lockSalonDay(tx: Tx, dateKey: string): Promise<void> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`salon-day:${dateKey}`}))`;
 }
 
-/** Lazily release unpaid holds whose time has passed. */
-export function sweepExpiredHolds(db: Database, nowMs: number): void {
-  for (const b of db.bookings) {
-    if (b.status === "awaiting_deposit" && b.holdExpiresAt && Date.parse(b.holdExpiresAt) <= nowMs) {
-      b.status = "expired";
-      for (const p of db.payments) {
-        if (p.bookingId === b.id && p.state === "pending") {
-          p.state = "abandoned";
-          p.resolvedAt = new Date(nowMs).toISOString();
-        }
-      }
-      audit(db, { bookingId: b.id, customerId: b.customerId, action: "booking.expired", actor: "System", summary: `Unpaid hold on ${b.reference} ended; slot released` });
-    }
-  }
+/** Bookings that could overlap a day (with a day of margin either side for long bookings and buffers). */
+async function bookingsAround(tx: Tx, dateKey: string) {
+  const from = new Date(lagosToUtcMs(addDays(dateKey, -1), 0));
+  const to = new Date(lagosToUtcMs(addDays(dateKey, 2), 0));
+  const rows = await tx.booking.findMany({
+    where: { startAt: { lt: to }, endAt: { gt: from }, status: { in: ["confirmed", "completed", "pending_payment"] } },
+    select: { id: true, status: true, startAt: true, endAt: true, holdExpiresAt: true },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    status: r.status,
+    startAt: r.startAt.toISOString(),
+    endAt: r.endAt.toISOString(),
+    holdExpiresAt: r.holdExpiresAt?.toISOString() ?? null,
+  }));
 }
 
-function findOrCreateCustomer(db: Database, name: string, phone: string | null, email: string | null, nowIso: string): Customer {
-  const existing = db.customers.find(
-    (c) => (phone && c.phone === phone) || (email && c.email && c.email.toLowerCase() === email.toLowerCase()),
-  );
-  if (existing) {
-    // Fill in any newly provided contact method; keep the stored name.
-    if (phone && !existing.phone) existing.phone = phone;
-    if (email && !existing.email) existing.email = email;
-    return existing;
-  }
-  const customer: Customer = { id: newId("cus"), name, phone, email, createdAt: nowIso, privateNotes: "", isDemo: true };
-  db.customers.push(customer);
-  return customer;
+/** True when the booking's own time still fits (it is excluded from the count). Caller holds the day lock. */
+async function timeStillFree(tx: Tx, settings: Settings, booking: { id: string; startAt: Date; endAt: Date }, nowMs: number): Promise<boolean> {
+  const dateKey = lagosDateKey(booking.startAt);
+  const durationMinutes = Math.round((booking.endAt.getTime() - booking.startAt.getTime()) / 60_000);
+  return isSlotBookable({
+    startAt: booking.startAt.toISOString(),
+    durationMinutes,
+    config: { ...settings.availability, minimumLeadMinutes: 0 },
+    bookings: await bookingsAround(tx, dateKey),
+    nowMs,
+    excludeBookingId: booking.id,
+  });
 }
 
-function snapshotLine(service: Service, settings: Settings): BookingServiceLine {
-  return {
-    id: newId("line"),
-    serviceId: service.id,
-    kind: "booked",
-    name: service.name,
-    serviceStatus: service.status,
-    estimatedPriceKobo: service.priceKobo,
-    estimatedDurationMinutes: service.durationMinutes ?? settings.availability.defaultDurationMinutes,
-    delivered: false,
-    actualPriceKobo: null,
-    addOnNote: "",
-  };
-}
+/* ───────────────────────────── Create (customer) ───────────────────────────── */
 
 export interface CreateBookingInput {
-  serviceIds: string[];
+  mainServiceId: string;
+  addOnIds: string[];
   startAt: string;
   name: string;
   phone: string;
   email: string;
+  noEmail: boolean;
+  marketingConsent: boolean;
   customerNote: string;
 }
 
-/** Re-checks the slot, holds it, and opens a deposit checkout — atomically. */
-export function createPendingBooking(input: CreateBookingInput) {
+export interface CreatedBooking {
+  reference: string;
+  /** Raw token for the customer's link. Only its hash is stored; it is never shown again. */
+  accessToken: string;
+  depositDueKobo: Kobo;
+}
+
+/** Validates, re-checks the time under the day lock, holds it and records the booking. */
+export async function createPendingBooking(input: CreateBookingInput): Promise<CreatedBooking> {
   const fieldErrors = validateContact(input);
   if (Object.keys(fieldErrors).length) {
     throw new BookingError("VALIDATION", "Please check your details.", fieldErrors as Record<string, string>);
   }
-  if (!Array.isArray(input.serviceIds) || input.serviceIds.length === 0) {
-    throw new BookingError("VALIDATION", "Choose at least one service.");
-  }
-  if (Number.isNaN(Date.parse(input.startAt))) {
-    throw new BookingError("VALIDATION", "Choose an appointment time.");
+  if (Number.isNaN(Date.parse(input.startAt))) throw new BookingError("VALIDATION", "Choose an appointment time.");
+  const phone = normalizePhone(input.phone)!;
+  const domain = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost").hostname;
+  const email = input.noEmail ? placeholderEmailFor(phone, domain) : normalizeEmail(input.email);
+  const name = input.name.trim().replace(/\s+/g, " ");
+  const addOnIds = [...new Set(input.addOnIds)];
+
+  const main = await db.service.findFirst({ where: { id: input.mainServiceId, active: true, bookableAlone: true }, include: { addOns: true } });
+  if (!main) throw new BookingError("VALIDATION", "That service is no longer available. Please choose again.");
+  const allowed = new Set(main.addOns.map((a) => a.addOnServiceId));
+  const addOns = await db.service.findMany({ where: { id: { in: addOnIds }, active: true, availableAsAddOn: true } });
+  if (addOns.length !== addOnIds.length || addOns.some((a) => !allowed.has(a.id))) {
+    throw new BookingError("VALIDATION", "One of the extras is no longer available with this service. Please review your choice.");
   }
 
-  return transaction((db) => {
+  // Prices come from the database, never from the browser.
+  const items = [
+    { kind: "main" as const, serviceId: main.id, name: main.name, priceKobo: main.priceKobo, durationMinutes: main.durationMinutes },
+    ...addOnIds.map((id) => {
+      const a = addOns.find((x) => x.id === id)!;
+      return { kind: "add_on" as const, serviceId: a.id, name: a.name, ...addOnTerms(a) };
+    }),
+  ];
+  const totalKobo = itemsTotal(items);
+  const duration = itemsDuration(items);
+  const startAt = new Date(input.startAt);
+  const endAt = new Date(startAt.getTime() + duration * 60_000);
+  const accessToken = randomToken();
+  const accessTokenHash = await sha256Hex(accessToken);
+
+  return db.$transaction(async (tx) => {
     const nowMs = Date.now();
-    const nowIso = new Date(nowMs).toISOString();
-    sweepExpiredHolds(db, nowMs);
+    const now = new Date(nowMs);
+    const settings = await loadSettings(tx);
+    const dateKey = lagosDateKey(startAt);
+    await lockSalonDay(tx, dateKey);
 
-    const services = [...new Set(input.serviceIds)]
-      .map((id) => db.services.find((s) => s.id === id && s.active))
-      .filter((s): s is Service => Boolean(s));
-    if (services.length !== new Set(input.serviceIds).size) {
-      throw new BookingError("VALIDATION", "One of the selected services is no longer available. Please review your selection.");
+    const holds = await tx.booking.count({ where: { contactPhone: phone, status: "pending_payment", holdExpiresAt: { gt: now } } });
+    if (holds >= MAX_ACTIVE_HOLDS_PER_PHONE) {
+      throw new BookingError("TOO_MANY_HOLDS", "You already have a booking waiting for its deposit. Please finish that payment first, or wait a few minutes for it to expire.");
     }
 
-    const { availability, deposit } = db.settings;
-    const est = estimateServices(services, availability.defaultDurationMinutes);
-    if (!isSlotBookable({ startAt: input.startAt, durationMinutes: est.durationMinutes, config: availability, bookings: db.bookings, nowMs })) {
-      throw new BookingError("SLOT_TAKEN", "Sorry — that time has just been taken or is no longer available. Please choose another time.");
-    }
+    const bookable = isSlotBookable({ startAt: startAt.toISOString(), durationMinutes: duration, config: settings.availability, bookings: await bookingsAround(tx, dateKey), nowMs });
+    if (!bookable) throw new BookingError("SLOT_TAKEN", "Sorry, that time was just taken or is no longer available. Please choose another time.");
 
-    const phone = input.phone.trim() ? normalizeNigerianPhone(input.phone) : null;
-    const email = input.email.trim() ? input.email.trim().toLowerCase() : null;
-    const customer = findOrCreateCustomer(db, input.name.trim(), phone, email, nowIso);
+    const match = await matchOrCreateCustomer(tx, { name, phone, email, emailIsPlaceholder: input.noEmail, marketingConsent: input.marketingConsent }, now);
 
     let reference = newBookingReference();
-    while (db.bookings.some((b) => b.reference === reference)) reference = newBookingReference();
+    while (await tx.booking.findUnique({ where: { reference }, select: { id: true } })) reference = newBookingReference();
 
-    const startMs = Date.parse(input.startAt);
-    const booking: Booking = {
-      id: newId("bkg"),
-      reference,
-      accessToken: newAccessToken(),
-      customerId: customer.id,
-      startAt: new Date(startMs).toISOString(),
-      endAt: new Date(startMs + est.durationMinutes * 60_000).toISOString(),
-      status: "awaiting_deposit",
-      createdAt: nowIso,
-      holdExpiresAt: new Date(nowMs + availability.pendingHoldMinutes * 60_000).toISOString(),
-      estimatedTotalKobo: est.totalKobo,
-      hasUnpricedItems: est.hasUnpricedItems,
-      depositDueKobo: depositFor(est.totalKobo, deposit),
-      actualTotalKobo: null,
-      lines: services.map((s) => snapshotLine(s, db.settings)),
-      customerNote: input.customerNote.trim().slice(0, 500),
-      completionNote: "",
-      privateNote: "",
-      completedAt: null,
-      isDemo: true,
-    };
-    db.bookings.push(booking);
-    audit(db, { bookingId: booking.id, customerId: customer.id, action: "booking.created", actor: "Customer", summary: `Booking ${reference} created; slot held for ${availability.pendingHoldMinutes} min awaiting deposit` });
-
-    const payment = initializeCheckout(db, { booking, purpose: "deposit", amountKobo: booking.depositDueKobo, nowIso });
-    audit(db, { bookingId: booking.id, customerId: customer.id, action: "payment.deposit.initialized", actor: "System", summary: `Demo deposit checkout ${payment.reference} opened` });
-
-    return { reference: booking.reference, accessToken: booking.accessToken, checkoutReference: payment.reference };
+    const depositDueKobo = depositDue({ mainServiceKobo: main.priceKobo, totalKobo }, settings.deposit);
+    const booking = await tx.booking.create({
+      data: {
+        reference,
+        accessTokenHash,
+        accessExpiresAt: new Date(endAt.getTime() + ACCESS_DAYS_AFTER_APPOINTMENT * DAY_MS),
+        customerId: match.customerId,
+        contactName: name,
+        contactPhone: phone,
+        contactEmail: input.noEmail ? null : email,
+        startAt,
+        endAt,
+        status: "pending_payment",
+        holdExpiresAt: new Date(nowMs + settings.availability.holdMinutes * 60_000),
+        totalKobo,
+        depositDueKobo,
+        customerNote: input.customerNote.trim().slice(0, 500),
+        items: { create: items },
+      },
+    });
+    await audit(tx, {
+      action: "booking.created",
+      actorLabel: "Customer",
+      entityType: "Booking",
+      entityId: booking.id,
+      bookingId: booking.id,
+      customerId: match.customerId,
+      summary: `Booking ${reference} created; time held for ${settings.availability.holdMinutes} min awaiting the deposit${match.emailConflictCustomerId ? ". The email belongs to another customer record (possible duplicate)" : ""}`,
+      data: match.emailConflictCustomerId ? { emailConflictCustomerId: match.emailConflictCustomerId } : undefined,
+    });
+    return { reference, accessToken, depositDueKobo };
   });
 }
 
-export type CheckoutResult =
-  | { status: "success" | "failed"; alreadyResolved: boolean; bookingReference: string; accessToken: string }
-  | { status: "expired"; bookingReference: string; accessToken: string };
+/* ───────────────────────────── Confirm after payment ───────────────────────────── */
 
-/** Applies a simulated gateway outcome. Safe to call repeatedly with the same reference. */
-export function completeMockCheckout(checkoutReference: string, outcome: "success" | "failed"): CheckoutResult {
-  return transaction((db) => {
-    const nowMs = Date.now();
-    const nowIso = new Date(nowMs).toISOString();
-    const payment = db.payments.find((p) => p.reference === checkoutReference);
-    if (!payment) throw new BookingError("NOT_FOUND", "We couldn't find that checkout.");
-    const booking = db.bookings.find((b) => b.id === payment.bookingId)!;
-
-    // A deposit checkout cannot succeed after its hold has ended.
-    if (payment.state === "pending" && payment.purpose === "deposit") {
-      sweepExpiredHolds(db, nowMs);
-      if (booking.status === "expired") {
-        return { status: "expired", bookingReference: booking.reference, accessToken: booking.accessToken };
-      }
-      if (booking.status !== "awaiting_deposit") {
-        // Deposit already settled another way (or booking cancelled): never take it twice.
-        payment.state = "abandoned";
-        payment.resolvedAt = nowIso;
-        throw new BookingError("NOT_ALLOWED", "This deposit checkout is no longer needed for this booking.");
-      }
-    }
-
-    const result = resolveCheckout(db, checkoutReference, outcome, nowIso);
-    if (!result) throw new BookingError("NOT_FOUND", "We couldn't find that checkout.");
-    const { payment: p, alreadyResolved } = result;
-    if (p.state === "abandoned") {
-      return { status: "expired", bookingReference: booking.reference, accessToken: booking.accessToken };
-    }
-
-    if (!alreadyResolved) {
-      const label = p.purpose === "deposit" ? "deposit" : "balance";
-      audit(db, {
-        bookingId: booking.id,
-        customerId: booking.customerId,
-        action: `payment.${p.purpose}.${p.state}`,
-        actor: "Mock checkout",
-        summary: p.state === "success" ? `Demo ${label} payment ${p.reference} succeeded` : `Demo ${label} payment ${p.reference} failed`,
-      });
-      if (p.state === "success" && p.purpose === "deposit" && booking.status === "awaiting_deposit") {
-        booking.status = "confirmed";
-        booking.holdExpiresAt = null;
-        audit(db, { bookingId: booking.id, customerId: booking.customerId, action: "booking.confirmed", actor: "System", summary: `Booking ${booking.reference} confirmed after demo deposit` });
-      }
-    }
-    return { status: p.state as "success" | "failed", alreadyResolved, bookingReference: booking.reference, accessToken: booking.accessToken };
-  });
+export interface ReceivedPayment {
+  type: "deposit" | "balance_online";
+  method: PaymentMethod;
+  amountKobo: Kobo;
+  paystackReference: string;
+  actorLabel: string;
 }
 
-/** Opens (or reuses) a checkout for the deposit or the outstanding balance. */
-export function startCheckout(bookingReference: string, accessToken: string | null, purpose: "deposit" | "balance", actor = "Customer") {
-  return transaction((db) => {
-    const nowMs = Date.now();
-    const nowIso = new Date(nowMs).toISOString();
-    sweepExpiredHolds(db, nowMs);
-    const booking = db.bookings.find((b) => b.reference === bookingReference);
-    if (!booking || (accessToken !== null && booking.accessToken !== accessToken)) {
-      throw new BookingError("NOT_FOUND", "We couldn't find that booking.");
-    }
-    const payments = db.payments.filter((p) => p.bookingId === booking.id);
+/**
+ * Records money received online and, for a deposit, confirms the booking.
+ * Runs inside the caller's transaction. Idempotent: a reference already in the
+ * ledger changes nothing (the unique index makes a duplicate impossible).
+ *
+ * Late payment (hold expired): confirms if the time is still free, otherwise
+ * `needs_attention` so the owner can move the booking (the salon does not refund deposits).
+ */
+export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: ReceivedPayment): Promise<{ duplicate: boolean; status: BookingStatus }> {
+  const existing = await tx.payment.findUnique({ where: { paystackReference: payment.paystackReference } });
+  const booking = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+  if (existing) return { duplicate: true, status: booking.status };
 
-    let amount: Kobo;
-    if (purpose === "deposit") {
-      if (booking.status === "expired") throw new BookingError("HOLD_EXPIRED", "The hold on this time has ended. Please book again.");
-      if (booking.status !== "awaiting_deposit") throw new BookingError("NOT_ALLOWED", "The deposit for this booking is already settled.");
-      amount = booking.depositDueKobo;
-    } else {
-      const due = balanceDue(booking, payments);
-      if (due === null) throw new BookingError("NOT_ALLOWED", "The salon hasn't recorded the final total yet.");
-      if (due === 0) throw new BookingError("NOTHING_DUE", "Nothing is owed on this booking.");
-      amount = due;
-    }
-
-    // Reuse an open checkout for the same purpose and amount rather than piling up references.
-    const open = payments.find((p) => p.state === "pending" && p.purpose === purpose && p.amountKobo === amount);
-    if (open) return { checkoutReference: open.reference };
-
-    // Close any stale pending checkout for this purpose (amount changed).
-    for (const p of payments) {
-      if (p.state === "pending" && p.purpose === purpose) {
-        p.state = "abandoned";
-        p.resolvedAt = nowIso;
-      }
-    }
-    const payment = initializeCheckout(db, { booking, purpose, amountKobo: amount, nowIso });
-    audit(db, { bookingId: booking.id, customerId: booking.customerId, action: `payment.${purpose}.initialized`, actor, summary: `Demo ${purpose} checkout ${payment.reference} opened` });
-    return { checkoutReference: payment.reference };
+  await lockSalonDay(tx, lagosDateKey(booking.startAt));
+  const nowMs = Date.now();
+  await tx.payment.create({
+    data: { bookingId, type: payment.type, method: payment.method, amountKobo: payment.amountKobo, paystackReference: payment.paystackReference },
   });
+
+  let status = booking.status;
+  if (payment.type === "deposit" && (booking.status === "pending_payment" || booking.status === "expired")) {
+    const holdLive = booking.status === "pending_payment" && booking.holdExpiresAt !== null && booking.holdExpiresAt.getTime() > nowMs;
+    const settings = await loadSettings(tx);
+    status = holdLive || (await timeStillFree(tx, settings, booking, nowMs)) ? "confirmed" : "needs_attention";
+    await tx.booking.update({ where: { id: bookingId }, data: { status, holdExpiresAt: null } });
+    if (status === "confirmed") await createBookingNotifications(tx, bookingId);
+  }
+  await audit(tx, {
+    action: `payment.${payment.type}.received`,
+    actorLabel: payment.actorLabel,
+    entityType: "Booking",
+    entityId: bookingId,
+    bookingId,
+    customerId: booking.customerId,
+    summary: `${payment.type === "deposit" ? "Deposit" : "Balance"} of ${formatNaira(payment.amountKobo)} received (${payment.paystackReference})${status === "needs_attention" ? ". Paid after the time was taken: the booking needs a new time" : status === "confirmed" && booking.status !== "confirmed" ? ". Booking confirmed" : ""}`,
+  });
+  return { duplicate: false, status };
+}
+
+/** Confirmation and reminder rows, created with the confirmation. Sending happens later (scheduler). */
+export async function createBookingNotifications(tx: Tx, bookingId: string): Promise<void> {
+  const booking = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
+  const emailUsable = booking.contactEmail !== null;
+  const channel = emailUsable ? "email" : "whatsapp_manual";
+  const now = new Date();
+  const rows = [
+    { dedupeKey: `confirmation:${booking.id}`, type: "confirmation" as const, dueAt: now },
+    { dedupeKey: `reminder:${booking.id}`, type: "reminder" as const, dueAt: new Date(booking.startAt.getTime() - DAY_MS) },
+  ];
+  for (const r of rows) {
+    await tx.notification.upsert({
+      where: { dedupeKey: r.dedupeKey },
+      create: { ...r, bookingId: booking.id, customerId: booking.customerId, channel },
+      update: {},
+    });
+  }
 }
 
 /* ───────────────────────────── Admin actions ───────────────────────────── */
 
-const ADMIN = "Owner (demo admin)";
+export interface Actor {
+  id: string | null;
+  label: string;
+}
 
-function getBooking(db: Database, id: string): Booking {
-  const b = db.bookings.find((x) => x.id === id);
+async function getBooking(tx: Tx, id: string) {
+  const b = await tx.booking.findUnique({ where: { id } });
   if (!b) throw new BookingError("NOT_FOUND", "Booking not found.");
   return b;
 }
 
-export interface CompletionInput {
-  lines: { id: string; delivered: boolean; actualPriceKobo: Kobo | null; addOnNote: string }[];
-  extras: { name: string; priceKobo: Kobo; note: string }[];
-  actualTotalKobo: Kobo;
-  completionNote: string;
-}
+const STATUS_CHANGES: Record<"cancelled" | "no_show" | "confirmed", BookingStatus[]> = {
+  cancelled: ["pending_payment", "confirmed", "needs_attention"],
+  no_show: ["confirmed"],
+  confirmed: ["cancelled", "no_show"],
+};
 
-export function recordCompletion(bookingId: string, input: CompletionInput) {
-  return transaction((db) => {
-    const b = getBooking(db, bookingId);
-    if (!["confirmed", "completed"].includes(b.status)) {
-      throw new BookingError("NOT_ALLOWED", "Only confirmed or completed bookings can be completed.");
+export async function setBookingStatus(bookingId: string, status: "cancelled" | "no_show" | "confirmed", actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const b = await getBooking(tx, bookingId);
+    if (!STATUS_CHANGES[status].includes(b.status)) {
+      throw new BookingError("NOT_ALLOWED", `A ${b.status.replace(/_/g, " ")} booking can't be changed to ${status.replace(/_/g, " ")}.`);
     }
-    if (!Number.isInteger(input.actualTotalKobo) || input.actualTotalKobo < 0) {
-      throw new BookingError("VALIDATION", "Enter a valid actual total.");
+    if (status === "confirmed") {
+      // Reinstating uses the same capacity check as a new booking, under the same lock.
+      await lockSalonDay(tx, lagosDateKey(b.startAt));
+      const settings = await loadSettings(tx);
+      if (!(await timeStillFree(tx, settings, b, Date.now()))) {
+        throw new BookingError("SLOT_TAKEN", "This time is now full, so the booking can't be reinstated. Move it to another time instead.");
+      }
+      const paid = await tx.payment.count({ where: { bookingId, status: "success", amountKobo: { gt: 0 } } });
+      if (!paid) throw new BookingError("NOT_ALLOWED", "This booking has no payment recorded, so it can't be reinstated as confirmed.");
     }
-    const prevTotal = b.actualTotalKobo;
-    const booked = b.lines.filter((l) => l.kind === "booked").map((l) => {
-      const u = input.lines.find((x) => x.id === l.id);
-      return u ? { ...l, delivered: u.delivered, actualPriceKobo: u.delivered ? u.actualPriceKobo : null, addOnNote: u.addOnNote.trim() } : l;
+    await tx.booking.update({
+      where: { id: bookingId },
+      data: { status, holdExpiresAt: null, cancelledAt: status === "cancelled" ? new Date() : status === "confirmed" ? null : undefined },
     });
-    const extras: BookingServiceLine[] = input.extras
-      .filter((e) => e.name.trim())
-      .map((e) => ({
-        id: newId("line"),
-        serviceId: null,
-        kind: "extra",
-        name: e.name.trim().slice(0, 80),
-        serviceStatus: "demo",
-        estimatedPriceKobo: null,
-        estimatedDurationMinutes: 0,
-        delivered: true,
-        actualPriceKobo: e.priceKobo,
-        addOnNote: e.note.trim(),
-      }));
-    b.lines = [...booked, ...extras];
-    b.actualTotalKobo = input.actualTotalKobo;
-    b.completionNote = input.completionNote.trim().slice(0, 1000);
-    const wasCompleted = b.status === "completed";
-    b.status = "completed";
-    b.completedAt = b.completedAt ?? new Date().toISOString();
-
-    const payments = db.payments.filter((p) => p.bookingId === b.id);
-    const due = balanceDue(b, payments)!;
-    const delivered = b.lines.filter((l) => l.delivered).map((l) => l.name).join(", ") || "none";
-    audit(db, {
+    await audit(tx, {
+      action: `booking.${status === "confirmed" ? "reinstated" : status}`,
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Booking",
+      entityId: b.id,
       bookingId: b.id,
       customerId: b.customerId,
-      action: wasCompleted ? "booking.completion_updated" : "booking.completed",
-      actor: ADMIN,
-      summary: `${wasCompleted ? "Updated" : "Recorded"} actual total ${formatNaira(input.actualTotalKobo)}${prevTotal === null ? "" : ` (was ${formatNaira(prevTotal)})`}; delivered: ${delivered}; balance now ${formatNaira(due)}`,
+      summary: `Status changed from ${b.status.replace(/_/g, " ")} to ${status.replace(/_/g, " ")}`,
+    });
+  });
+}
+
+export interface CompletionInput {
+  extras: { name: string; priceKobo: Kobo; note: string }[];
+}
+
+/** Marks the appointment completed, adding anything done on the day. The total follows the items. */
+export async function completeBooking(bookingId: string, input: CompletionInput, actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const b = await getBooking(tx, bookingId);
+    if (b.status !== "confirmed" && b.status !== "completed") {
+      throw new BookingError("NOT_ALLOWED", "Only confirmed or completed bookings can be completed.");
+    }
+    const extras = input.extras.filter((e) => e.name.trim());
+    for (const e of extras) {
+      if (!Number.isInteger(e.priceKobo) || e.priceKobo < 0) throw new BookingError("VALIDATION", `Enter a valid price for “${e.name}”.`);
+    }
+    if (extras.length) {
+      await tx.bookingItem.createMany({
+        data: extras.map((e) => ({ bookingId, kind: "extra" as const, name: e.name.trim().slice(0, 80), priceKobo: e.priceKobo, durationMinutes: 0, note: e.note.trim().slice(0, 300) })),
+      });
+    }
+    const items = await tx.bookingItem.findMany({ where: { bookingId } });
+    const totalKobo = itemsTotal(items);
+    await tx.booking.update({ where: { id: bookingId }, data: { status: "completed", completedAt: b.completedAt ?? new Date(), totalKobo } });
+    const payments = await tx.payment.findMany({ where: { bookingId } });
+    const due = balanceDue({ totalKobo }, payments);
+    await audit(tx, {
+      action: b.status === "completed" ? "booking.completion_updated" : "booking.completed",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Booking",
+      entityId: b.id,
+      bookingId: b.id,
+      customerId: b.customerId,
+      summary: `${extras.length ? `Added ${extras.map((e) => `${e.name} (${formatNaira(e.priceKobo)})`).join(", ")}. ` : ""}Total ${formatNaira(totalKobo)}; balance ${formatNaira(due)}`,
     });
     return { balanceDueKobo: due };
   });
 }
 
-export function setBookingStatus(bookingId: string, status: Extract<BookingStatus, "cancelled" | "no_show" | "confirmed">) {
-  return transaction((db) => {
-    const b = getBooking(db, bookingId);
-    const allowed: Record<string, BookingStatus[]> = {
-      cancelled: ["awaiting_deposit", "confirmed"],
-      no_show: ["confirmed"],
-      confirmed: ["cancelled", "no_show"],
-    };
-    if (!allowed[status].includes(b.status)) {
-      throw new BookingError("NOT_ALLOWED", `A ${b.status.replace("_", " ")} booking can't be changed to ${status.replace("_", " ")}.`);
+export async function updateBookingNote(bookingId: string, privateNote: string, actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const b = await getBooking(tx, bookingId);
+    await tx.booking.update({ where: { id: bookingId }, data: { privateNote: privateNote.trim().slice(0, 2000) } });
+    await audit(tx, { action: "booking.private_note", actorLabel: actor.label, actorId: actor.id, entityType: "Booking", entityId: b.id, bookingId: b.id, customerId: b.customerId, summary: "Private booking note updated" });
+  });
+}
+
+export async function updateCustomerNote(customerId: string, notes: string, actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const c = await tx.customer.findUnique({ where: { id: customerId } });
+    if (!c) throw new BookingError("NOT_FOUND", "Customer not found.");
+    await tx.customer.update({ where: { id: customerId }, data: { notes: notes.trim().slice(0, 4000) } });
+    await audit(tx, { action: "customer.private_note", actorLabel: actor.label, actorId: actor.id, entityType: "Customer", entityId: c.id, customerId: c.id, summary: "Private customer note updated" });
+  });
+}
+
+const MANUAL_PAYMENT_STATUSES: BookingStatus[] = ["pending_payment", "confirmed", "completed", "needs_attention", "no_show"];
+
+/**
+ * Cash, transfer to the salon's own account, or other. Appended to the ledger as `manual`.
+ * A manual deposit on an unpaid booking confirms it, with the same capacity check as online payment.
+ */
+export async function recordManualPayment(bookingId: string, input: { amountKobo: Kobo; method: PaymentMethod; note: string; towardsDeposit: boolean }, actor: Actor) {
+  if (!Number.isInteger(input.amountKobo) || input.amountKobo <= 0) throw new BookingError("VALIDATION", "Enter an amount above ₦0.");
+  return db.$transaction(async (tx) => {
+    const b = await getBooking(tx, bookingId);
+    if (!MANUAL_PAYMENT_STATUSES.includes(b.status)) {
+      throw new BookingError("NOT_ALLOWED", `Payments can't be recorded on a ${b.status.replace(/_/g, " ")} booking.`);
     }
-    if (status === "confirmed") {
-      // Reinstating must not create an overlap.
-      const others = db.bookings.filter((x) => x.id !== b.id);
-      const mins = (Date.parse(b.endAt) - Date.parse(b.startAt)) / 60_000;
-      const clash = others.some((x) => ["confirmed", "completed"].includes(x.status) && Date.parse(x.startAt) < Date.parse(b.startAt) + mins * 60_000 && Date.parse(b.startAt) < Date.parse(x.endAt));
-      if (clash) throw new BookingError("SLOT_TAKEN", "Another booking now occupies this time, so it can't be reinstated.");
-      const paid = db.payments.some((p) => p.bookingId === b.id && p.state === "success");
-      if (!paid) throw new BookingError("NOT_ALLOWED", "This booking has no successful deposit, so it can't be reinstated as confirmed.");
+    if (input.towardsDeposit && b.status !== "pending_payment") {
+      throw new BookingError("NOT_ALLOWED", "The deposit for this booking is already settled. Record it as a balance payment.");
     }
-    const prev = b.status;
-    b.status = status;
-    b.holdExpiresAt = null;
-    for (const p of db.payments) {
-      if (p.bookingId === b.id && p.state === "pending") {
-        p.state = "abandoned";
-        p.resolvedAt = new Date().toISOString();
+    await tx.payment.create({
+      data: { bookingId, type: "manual", method: input.method, amountKobo: input.amountKobo, recordedById: actor.id, note: input.note.trim().slice(0, 500) },
+    });
+    let confirmed = false;
+    if (input.towardsDeposit) {
+      await lockSalonDay(tx, lagosDateKey(b.startAt));
+      const settings = await loadSettings(tx);
+      const holdLive = b.holdExpiresAt !== null && b.holdExpiresAt.getTime() > Date.now();
+      const status = holdLive || (await timeStillFree(tx, settings, b, Date.now())) ? "confirmed" : "needs_attention";
+      await tx.booking.update({ where: { id: bookingId }, data: { status, holdExpiresAt: null } });
+      if (status === "confirmed") {
+        confirmed = true;
+        await createBookingNotifications(tx, bookingId);
       }
     }
-    audit(db, { bookingId: b.id, customerId: b.customerId, action: `booking.${status}`, actor: ADMIN, summary: `Status changed from ${prev.replace("_", " ")} to ${status.replace("_", " ")}` });
-  });
-}
-
-export function updateBookingNotes(bookingId: string, privateNote: string) {
-  return transaction((db) => {
-    const b = getBooking(db, bookingId);
-    b.privateNote = privateNote.trim().slice(0, 2000);
-    audit(db, { bookingId: b.id, customerId: b.customerId, action: "booking.private_note", actor: ADMIN, summary: "Private booking note updated" });
-  });
-}
-
-export function updateCustomerNotes(customerId: string, notes: string) {
-  return transaction((db) => {
-    const c = db.customers.find((x) => x.id === customerId);
-    if (!c) throw new BookingError("NOT_FOUND", "Customer not found.");
-    c.privateNotes = notes.trim().slice(0, 4000);
-    audit(db, { bookingId: null, customerId: c.id, action: "customer.private_note", actor: ADMIN, summary: "Private customer note updated" });
-  });
-}
-
-export function recordManualPayment(bookingId: string, input: { amountKobo: Kobo; method: string; note: string; purpose: "deposit" | "balance" }) {
-  return transaction((db) => {
-    const b = getBooking(db, bookingId);
-    if (!Number.isInteger(input.amountKobo) || input.amountKobo <= 0) throw new BookingError("VALIDATION", "Enter an amount above ₦0.");
-    if (!input.method.trim()) throw new BookingError("VALIDATION", "Say how the payment was received.");
-    const nowIso = new Date().toISOString();
-    const payment: Payment = {
-      id: newId("pay"),
+    await audit(tx, {
+      action: "payment.manual.recorded",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Booking",
+      entityId: b.id,
       bookingId: b.id,
       customerId: b.customerId,
-      amountKobo: input.amountKobo,
-      purpose: "manual",
-      state: "success",
-      source: "manual_entry",
-      reference: `MANUAL-${Date.now().toString(36).toUpperCase()}`,
-      createdAt: nowIso,
-      resolvedAt: nowIso,
-      method: input.method.trim().slice(0, 40),
-      note: `${input.purpose === "deposit" ? "Towards deposit. " : ""}${input.note.trim()}`.slice(0, 500),
-      recordedBy: ADMIN,
-      isDemo: true,
-    };
-    db.payments.push(payment);
-    // A manual deposit confirms an awaiting booking (owner's call, recorded in audit).
-    if (input.purpose === "deposit" && b.status === "awaiting_deposit") {
-      b.status = "confirmed";
-      b.holdExpiresAt = null;
-    }
-    audit(db, { bookingId: b.id, customerId: b.customerId, action: "payment.manual.recorded", actor: ADMIN, summary: `Manual ${input.method.trim()} payment of ${formatNaira(input.amountKobo)} recorded (not gateway-verified)` });
+      summary: `Manual ${input.method} payment of ${formatNaira(input.amountKobo)} recorded${confirmed ? "; booking confirmed" : ""}`,
+    });
   });
 }
 
-/* ──────────────────────────── Settings actions ─────────────────────────── */
+/* ───────────────────────────── Settings and services ───────────────────────────── */
 
-export function upsertService(input: Omit<Service, "sortOrder"> & { sortOrder?: number }) {
-  return transaction((db) => {
-    const existing = db.services.find((s) => s.id === input.id);
-    if (existing) {
-      Object.assign(existing, { ...input, sortOrder: existing.sortOrder });
-      audit(db, { bookingId: null, customerId: null, action: "service.updated", actor: ADMIN, summary: `Service “${input.name}” updated (existing bookings keep their snapshot)` });
-    } else {
-      const sortOrder = Math.max(0, ...db.services.map((s) => s.sortOrder)) + 1;
-      db.services.push({ ...input, id: newId("svc"), sortOrder });
-      audit(db, { bookingId: null, customerId: null, action: "service.created", actor: ADMIN, summary: `Service “${input.name}” added` });
-    }
+export interface ServiceInput {
+  id: string | null;
+  name: string;
+  description: string;
+  priceKobo: Kobo;
+  durationMinutes: number;
+  active: boolean;
+}
+
+export async function upsertService(input: ServiceInput, actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const data = { name: input.name, description: input.description, priceKobo: input.priceKobo, durationMinutes: input.durationMinutes, active: input.active };
+    const existing = input.id ? await tx.service.findUnique({ where: { id: input.id } }) : null;
+    const saved = existing
+      ? await tx.service.update({ where: { id: existing.id }, data })
+      : await tx.service.create({ data: { ...data, sortOrder: ((await tx.service.aggregate({ _max: { sortOrder: true } }))._max.sortOrder ?? 0) + 1 } });
+    await audit(tx, {
+      action: existing ? "service.updated" : "service.created",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Service",
+      entityId: saved.id,
+      summary: existing ? `Service “${saved.name}” updated (existing bookings keep their prices)` : `Service “${saved.name}” added`,
+    });
   });
 }
 
-export function updateSettings(patch: Partial<Pick<Settings, "availability" | "deposit">>) {
-  return transaction((db) => {
-    if (patch.availability) db.settings.availability = { ...db.settings.availability, ...patch.availability };
-    if (patch.deposit) db.settings.deposit = { ...db.settings.deposit, ...patch.deposit };
-    audit(db, { bookingId: null, customerId: null, action: "settings.updated", actor: ADMIN, summary: `Updated ${Object.keys(patch).join(" & ")} settings (demo values)` });
+export async function updateSettings(patch: Partial<Pick<Settings, "availability" | "deposit">>, actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const a = patch.availability;
+    const d = patch.deposit;
+    await tx.settings.update({
+      where: { id: 1 },
+      data: {
+        ...(a && {
+          weeklyHours: a.weeklyHours,
+          capacityByWeekday: a.capacityByWeekday,
+          slotIntervalMinutes: a.slotIntervalMinutes,
+          bufferMinutes: a.bufferMinutes,
+          holdMinutes: a.holdMinutes,
+          minimumLeadMinutes: a.minimumLeadMinutes,
+          bookingHorizonDays: a.bookingHorizonDays,
+        }),
+        ...(d && { depositType: d.type, depositFixedKobo: d.fixedKobo, depositPercent: d.percent, depositScope: d.scope, depositMinimumKobo: d.minimumKobo }),
+      },
+    });
+    await audit(tx, { action: "settings.updated", actorLabel: actor.label, actorId: actor.id, entityType: "Settings", entityId: "1", summary: `Updated ${Object.keys(patch).join(" and ")} settings` });
   });
 }
 
-export function toggleChecklistItem(id: string, done: boolean) {
-  return transaction((db) => {
-    const item = db.settings.checklist.find((c) => c.id === id);
-    if (item) item.done = done;
-  });
+/* ───────────────────────────── Customer access ───────────────────────────── */
+
+/** Booking for the customer's own page. Requires the link token; expired links stop working. */
+export async function findBookingByToken(reference: string, token: string | undefined) {
+  if (!token) return null;
+  const booking = await db.booking.findUnique({ where: { reference }, include: { items: true } });
+  if (!booking || booking.accessTokenHash !== (await sha256Hex(token)) || booking.accessExpiresAt.getTime() < Date.now()) return null;
+  return toBooking(booking);
 }

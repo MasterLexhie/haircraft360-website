@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { ExternalLink, Lock, Mail, Phone } from "lucide-react";
+import { Lock, Mail, Phone } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { getAdminData, joinBooking, requestNow } from "@/server/queries";
-import { balanceDue, paidKobo, remainingEstimate } from "@/domain/pricing";
+import { balanceDue, paidKobo } from "@/domain/pricing";
+import { formatPhone } from "@/domain/phone";
 import { bookingStatusLabel } from "@/domain/labels";
 import { formatNaira } from "@/lib/money";
 import { formatDateTime, formatDuration, formatLongDate, formatTime } from "@/lib/time";
 import { BookingStatusBadge, KeyValue, PageHeader, Panel, PaymentStateBadge } from "@/components/admin/bits";
 import { BalanceLink, CompletionForm, ManualPaymentForm, PrivateNoteForm, StatusActions } from "@/components/admin/booking-forms";
 import { PaymentHistory } from "@/components/booking/payment-history";
-import { Alert, DemoTag, Skeleton } from "@/components/ui/primitives";
+import { Alert, Skeleton } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Booking detail" };
 
@@ -46,79 +47,74 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
         actions={<StatusActions bookingId={booking.id} status={booking.status} />}
       />
 
-      {booking.status === "awaiting_deposit" && booking.holdExpiresAt && (
-        <Alert tone="warning" className="mb-6" title={`Slot held until ${formatTime(booking.holdExpiresAt)} awaiting the demo deposit`}>
-          Not confirmed. If no deposit arrives in time the slot is released automatically.
+      {booking.status === "pending_payment" && booking.holdExpiresAt && (
+        <Alert tone="warning" className="mb-6" title={`Time held until ${formatTime(booking.holdExpiresAt)} while the customer pays the deposit`}>
+          Not confirmed yet. If no deposit arrives in time, the time is released automatically.
+        </Alert>
+      )}
+      {booking.status === "needs_attention" && (
+        <Alert tone="danger" className="mb-6" title="Payment received, but the time needs changing">
+          The deposit arrived after this time was taken. Contact the customer and move the booking to another time.
         </Alert>
       )}
       {booking.status === "confirmed" && isPast && (
         <Alert tone="warning" className="mb-6" title="This appointment has passed">
-          Record what was delivered and the actual total below so the balance can be collected.
+          Add anything done on the day and mark it completed below, so the balance can be collected.
         </Alert>
       )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="space-y-6">
-          <Panel title="Services (snapshot at booking)">
+          <Panel title="Services (prices as booked)">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead className="text-xs text-ink-3">
                   <tr>
-                    <th scope="col" className="pb-2 font-medium">Service</th>
-                    <th scope="col" className="pb-2 text-right font-medium">Est. price</th>
-                    <th scope="col" className="pb-2 text-right font-medium">Est. time</th>
-                    <th scope="col" className="pb-2 text-right font-medium">Actual</th>
+                    <th scope="col" className="pb-2 font-medium">Item</th>
+                    <th scope="col" className="pb-2 text-right font-medium">Time</th>
+                    <th scope="col" className="pb-2 text-right font-medium">Price</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-line">
-                  {booking.lines.map((l) => (
+                  {booking.items.map((l) => (
                     <tr key={l.id}>
                       <td className="py-2.5 pr-3">
-                        <span className="font-medium">{l.name}</span>
-                        {l.kind === "extra" ? <span className="ml-2 text-xs text-ink-3">extra</span> : l.serviceStatus === "demo" && <DemoTag className="ml-2">Demo</DemoTag>}
-                        {booking.status === "completed" && l.kind === "booked" && <span className="block text-xs text-ink-3">{l.delivered ? "Delivered" : "Not delivered"}{l.addOnNote && ` · ${l.addOnNote}`}</span>}
-                        {l.kind === "extra" && l.addOnNote && <span className="block text-xs text-ink-3">{l.addOnNote}</span>}
+                        <span className="font-medium">{l.kind === "add_on" && <span className="text-ink-3">+ </span>}{l.name}</span>
+                        {l.kind === "extra" && <span className="ml-2 text-xs text-ink-3">added on the day</span>}
+                        {l.note && <span className="block text-xs text-ink-3">{l.note}</span>}
                       </td>
-                      <td className="py-2.5 text-right tabular">{l.kind === "extra" ? "—" : l.estimatedPriceKobo === null ? "TBC" : formatNaira(l.estimatedPriceKobo)}</td>
-                      <td className="py-2.5 text-right tabular">{l.kind === "extra" ? "—" : formatDuration(l.estimatedDurationMinutes)}</td>
-                      <td className="py-2.5 text-right tabular">{l.actualPriceKobo === null ? "—" : formatNaira(l.actualPriceKobo)}</td>
+                      <td className="py-2.5 text-right tabular">{l.durationMinutes ? formatDuration(l.durationMinutes) : "None"}</td>
+                      <td className="py-2.5 text-right tabular">{formatNaira(l.priceKobo)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
             {booking.customerNote && <p className="mt-3 rounded-[var(--radius)] bg-sand/60 p-3 text-sm"><span className="font-semibold">Customer note:</span> {booking.customerNote}</p>}
-            {booking.completionNote && <p className="mt-2 rounded-[var(--radius)] bg-sand/60 p-3 text-sm"><span className="font-semibold">Completion note (customer can see):</span> {booking.completionNote}</p>}
           </Panel>
 
           <Panel title="Money">
-            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-4">
-              <Stat label="Estimated total" value={formatNaira(booking.estimatedTotalKobo)} sub={booking.hasUnpricedItems ? "+ unpriced items" : undefined} />
-              <Stat label="Actual total" value={booking.actualTotalKobo === null ? "Not set" : formatNaira(booking.actualTotalKobo)} />
-              <Stat label="Paid (successful)" value={formatNaira(paid)} sub={`Deposit due was ${formatNaira(booking.depositDueKobo)}`} />
-              <Stat
-                label={due === null ? "Remaining (estimate)" : "Balance due"}
-                value={formatNaira(due ?? remainingEstimate(booking, payments))}
-                strong
-              />
+            <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+              <Stat label="Total" value={formatNaira(booking.totalKobo)} sub={`Deposit due was ${formatNaira(booking.depositDueKobo)}`} />
+              <Stat label="Paid" value={formatNaira(paid)} />
+              <Stat label="Balance due" value={formatNaira(due)} strong />
             </dl>
-            {booking.status === "completed" && due !== null && due > 0 && (
+            {booking.status === "completed" && due > 0 && (
               <div className="mt-5 border-t border-line pt-4">
-                <p className="mb-3 text-sm text-ink-2">Share a link so the customer can pay the {formatNaira(due)} balance through the mock checkout.</p>
-                <BalanceLink bookingId={booking.id} />
+                <BalanceLink />
               </div>
             )}
             <h3 className="mt-6 border-t border-line pt-4 text-xs font-semibold uppercase tracking-[0.1em] text-ink-3">Payment entries</h3>
             <PaymentHistory payments={payments} />
             <details className="mt-4 rounded-[var(--radius)] border border-line">
               <summary className="min-h-11 px-4 py-3 text-sm font-semibold">Record a manual payment</summary>
-              <div className="border-t border-line p-4"><ManualPaymentForm bookingId={booking.id} awaitingDeposit={booking.status === "awaiting_deposit"} /></div>
+              <div className="border-t border-line p-4"><ManualPaymentForm bookingId={booking.id} awaitingDeposit={booking.status === "pending_payment"} /></div>
             </details>
           </Panel>
 
           {canComplete && (
             <section id="complete" className="scroll-mt-20">
-              <Panel title={booking.status === "completed" ? "Completion record" : "Complete this appointment"}>
+              <Panel title={booking.status === "completed" ? "Add to this appointment" : "Complete this appointment"}>
                 <CompletionForm booking={booking} paidKobo={paid} />
               </Panel>
             </section>
@@ -127,14 +123,16 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
 
         <div className="space-y-6">
           <Panel title="Customer" action={<Link href={`/admin/customers/${customer.id}`} className="text-sm font-semibold underline">History</Link>}>
-            <p className="font-semibold">{customer.name} {customer.isDemo && <DemoTag className="ml-1">Demo record</DemoTag>}</p>
+            <p className="font-semibold">{customer.displayName}</p>
+            {booking.contactName !== customer.displayName && <p className="text-xs text-ink-3">Booked as “{booking.contactName}”</p>}
             <ul className="mt-2 space-y-1 text-sm">
-              {customer.phone && <li className="flex items-center gap-2"><Phone aria-hidden className="size-4 text-ink-3" /><a className="underline" href={`tel:${customer.phone}`}>{customer.phone}</a></li>}
-              {customer.email && <li className="flex items-center gap-2"><Mail aria-hidden className="size-4 text-ink-3" /><a className="break-all underline" href={`mailto:${customer.email}`}>{customer.email}</a></li>}
+              <li className="flex items-center gap-2"><Phone aria-hidden className="size-4 text-ink-3" /><a className="underline" href={`tel:${booking.contactPhone}`}>{formatPhone(booking.contactPhone)}</a></li>
+              {booking.contactEmail ? (
+                <li className="flex items-center gap-2"><Mail aria-hidden className="size-4 text-ink-3" /><a className="break-all underline" href={`mailto:${booking.contactEmail}`}>{booking.contactEmail}</a></li>
+              ) : (
+                <li className="flex items-center gap-2 text-ink-3"><Mail aria-hidden className="size-4" />No email: message on WhatsApp</li>
+              )}
             </ul>
-            <a href={`/booking/${booking.reference}?t=${encodeURIComponent(booking.accessToken)}`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold underline">
-              Customer&apos;s booking page <ExternalLink aria-hidden className="size-3.5" /><span className="sr-only">(opens in a new tab)</span>
-            </a>
           </Panel>
 
           <Panel title={<span className="flex items-center gap-1.5"><Lock aria-hidden className="size-3.5" /> Private booking note</span>}>
@@ -147,7 +145,6 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
                 { label: "Created", value: formatDateTime(booking.createdAt) },
                 { label: "Status meaning", value: bookingStatusLabel[booking.status].help },
                 { label: "Completed", value: booking.completedAt ? formatDateTime(booking.completedAt) : "—" },
-                { label: "Data", value: booking.isDemo ? "Demo record" : "Live" },
               ]}
             />
           </Panel>

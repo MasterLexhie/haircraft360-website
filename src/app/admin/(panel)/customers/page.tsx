@@ -7,6 +7,7 @@ import { getAdminData } from "@/server/queries";
 import { balanceDue, paidKobo } from "@/domain/pricing";
 import { formatNaira } from "@/lib/money";
 import { formatDate } from "@/lib/time";
+import { formatPhone } from "@/domain/phone";
 import { PageHeader } from "@/components/admin/bits";
 import { EmptyState, Skeleton, buttonClass, inputClass } from "@/components/ui/primitives";
 
@@ -25,11 +26,12 @@ async function Customers({ searchParams }: { searchParams: Promise<{ q?: string 
   const [db, { q }] = await Promise.all([getAdminData(), searchParams]);
   const needle = (q ?? "").trim().toLowerCase();
   const rows = db.customers
-    .filter((c) => !needle || [c.name, c.phone, c.email].join(" ").toLowerCase().includes(needle))
+    .filter((c) => !needle || [c.displayName, ...c.phones, ...c.phones.map(formatPhone), ...c.emails.map((e) => e.value)].join(" ").toLowerCase().includes(needle))
     .map((c) => {
       const bookings = db.bookings.filter((b) => b.customerId === c.id);
-      const payments = db.payments.filter((p) => p.customerId === c.id);
-      const outstanding = bookings.reduce((s, b) => s + (balanceDue(b, payments.filter((p) => p.bookingId === b.id)) ?? 0), 0);
+      const ids = new Set(bookings.map((b) => b.id));
+      const payments = db.payments.filter((p) => ids.has(p.bookingId));
+      const outstanding = bookings.filter((b) => b.status === "completed").reduce((s, b) => s + balanceDue(b, payments.filter((p) => p.bookingId === b.id)), 0);
       const last = bookings.map((b) => b.startAt).sort().at(-1);
       return { c, count: bookings.length, paid: paidKobo(payments), outstanding, last };
     })
@@ -37,7 +39,7 @@ async function Customers({ searchParams }: { searchParams: Promise<{ q?: string 
 
   return (
     <>
-      <PageHeader title="Customers" description="Customers are matched by phone number or email — no customer accounts." />
+      <PageHeader title="Customers" description="Customers are matched by phone number, then email. No customer accounts." />
       <form method="get" className="mb-5 flex gap-2">
         <label className="relative flex-1">
           <span className="sr-only">Search customers</span>
@@ -54,8 +56,8 @@ async function Customers({ searchParams }: { searchParams: Promise<{ q?: string 
             <li key={c.id}>
               <Link href={`/admin/customers/${c.id}`} className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 hover:bg-sand/50">
                 <span className="min-w-0 flex-1">
-                  <span className="block font-semibold">{c.name}</span>
-                  <span className="block truncate text-sm text-ink-3">{[c.phone, c.email].filter(Boolean).join(" · ")}</span>
+                  <span className="block font-semibold">{c.displayName}</span>
+                  <span className="block truncate text-sm text-ink-3">{[...c.phones.map(formatPhone), ...c.emails.filter((e) => !e.isPlaceholder).map((e) => e.value)].join(" · ")}</span>
                 </span>
                 <span className="text-sm text-ink-2">{count} booking{count === 1 ? "" : "s"}{last && ` · last ${formatDate(last)}`}</span>
                 <span className="tabular text-sm">Paid {formatNaira(paid)}</span>

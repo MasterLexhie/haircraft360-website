@@ -1,29 +1,31 @@
-import type { BookingStatus, PaymentPurpose, PaymentState } from "./types";
+import type { BookingStatus, PaymentMethod, PaymentType } from "./types";
 import type { PaymentSummaryState } from "./pricing";
 
 export type Tone = "neutral" | "success" | "warning" | "danger" | "info" | "accent";
 
-/** Status names are a planning default — final names need owner confirmation (PRD §6). */
+/** Plain-language status labels. The owner sees these; never show raw status codes. */
 export const bookingStatusLabel: Record<BookingStatus, { label: string; tone: Tone; help: string }> = {
-  awaiting_deposit: { label: "Awaiting deposit", tone: "warning", help: "Slot held until the demo deposit is paid or the hold ends." },
+  pending_payment: { label: "Awaiting deposit", tone: "warning", help: "The time is held while the customer pays the deposit." },
   confirmed: { label: "Confirmed", tone: "success", help: "Deposit paid. Appointment is booked." },
-  completed: { label: "Completed", tone: "info", help: "Service recorded by the salon." },
+  completed: { label: "Completed", tone: "info", help: "The appointment has taken place." },
   cancelled: { label: "Cancelled", tone: "neutral", help: "Cancelled by the salon." },
-  no_show: { label: "No-show", tone: "danger", help: "Marked as a no-show by the salon." },
-  expired: { label: "Hold expired", tone: "neutral", help: "Deposit was not completed in time, so the slot was released." },
+  no_show: { label: "No-show", tone: "danger", help: "The customer did not come." },
+  expired: { label: "Hold expired", tone: "neutral", help: "The deposit was not paid in time, so the time was released." },
+  needs_attention: { label: "Needs a new time", tone: "danger", help: "Payment arrived after the time was taken. Move this booking to another time." },
 };
 
-export const paymentStateLabel: Record<PaymentState, { label: string; tone: Tone }> = {
-  pending: { label: "Pending", tone: "warning" },
-  success: { label: "Successful", tone: "success" },
-  failed: { label: "Failed", tone: "danger" },
-  abandoned: { label: "Expired", tone: "neutral" },
-};
-
-export const paymentPurposeLabel: Record<PaymentPurpose, string> = {
+export const paymentTypeLabel: Record<PaymentType, string> = {
   deposit: "Deposit",
-  balance: "Balance",
-  manual: "Manual entry",
+  balance_online: "Balance (online)",
+  manual: "Recorded by the salon",
+  adjustment: "Correction",
+};
+
+export const paymentMethodLabel: Record<PaymentMethod, string> = {
+  card: "Card",
+  transfer: "Bank transfer",
+  cash: "Cash",
+  other: "Other",
 };
 
 export const paymentSummaryLabel: Record<PaymentSummaryState, { label: string; tone: Tone }> = {

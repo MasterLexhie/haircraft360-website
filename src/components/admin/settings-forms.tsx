@@ -1,44 +1,17 @@
 "use client";
 
 import { useActionState, useCallback, useEffect, useState, useTransition } from "react";
-import { Clock, CopyCheck, Pencil, Plus, RotateCcw, SlidersHorizontal, Wallet } from "lucide-react";
-import type { ChecklistItem, DayHours, DayKey, DepositRule, Service, Settings } from "@/domain/types";
-import { checklistAction, resetDemoAction, serviceAction, settingsAction, type ActionState } from "@/app/admin/actions";
+import { Clock, CopyCheck, Pencil, Plus, SlidersHorizontal, Wallet } from "lucide-react";
+import type { Service, Settings } from "@/domain/types";
+import type { WeekdayKey, WeeklyHours, CapacityByWeekday } from "@/domain/settings";
+import { depositDue, type DepositRule } from "@/domain/deposit";
+import { serviceAction, settingsAction, type ActionState } from "@/app/admin/actions";
 import { formatNaira, koboToInput } from "@/lib/money";
-import { depositFor } from "@/domain/pricing";
 import { WEEKDAYS, formatDuration, parseHHMM } from "@/lib/time";
 import { ActionFeedback } from "@/components/admin/action-feedback";
-import { Badge, Button, DemoTag, Field, cx, inputClass } from "@/components/ui/primitives";
+import { Badge, Button, Field, cx, inputClass } from "@/components/ui/primitives";
 
 const Feedback = ActionFeedback;
-
-export function OwnerChecklist({ items }: { items: ChecklistItem[] }) {
-  const [pending, start] = useTransition();
-  return (
-    <ul className="divide-y divide-line">
-      {items.map((i) => (
-        <li key={i.id}>
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 py-3">
-            <input
-              type="checkbox"
-              defaultChecked={i.done}
-              disabled={pending}
-              onChange={(e) => {
-                const done = e.target.checked;
-                start(() => checklistAction(i.id, done));
-              }}
-              className="mt-1 size-5 shrink-0 accent-[var(--ink)]"
-            />
-            <span>
-              <span className={cx("block font-medium", i.done && "text-ink-3 line-through")}>{i.label}</span>
-              <span className="block text-sm text-ink-3">{i.detail}</span>
-            </span>
-          </label>
-        </li>
-      ))}
-    </ul>
-  );
-}
 
 /** Inline editor for one service (or a new one). Calls onDone after a successful save or on cancel. */
 function ServiceForm({ service, onDone }: { service?: Service; onDone: (message?: string) => void }) {
@@ -68,16 +41,15 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: (message?
         </Field>
         <div>
           <label htmlFor={`${pre}-price`} className="mb-1.5 block text-sm font-semibold text-ink">Price</label>
-          <UnitInput id={`${pre}-price`} name="price" prefix="₦" inputMode="decimal" defaultValue={koboToInput(service?.priceKobo ?? null)} placeholder="TBC" invalid={!!fe.price} />
+          <UnitInput id={`${pre}-price`} name="price" prefix="₦" inputMode="decimal" defaultValue={koboToInput(service?.priceKobo ?? null)} invalid={!!fe.price} />
           {fe.price && <p id={`${pre}-price-error`} className="mt-1 text-xs text-danger">{fe.price}</p>}
         </div>
         <div>
           <label htmlFor={`${pre}-duration`} className="mb-1.5 block text-sm font-semibold text-ink">Duration</label>
-          <UnitInput id={`${pre}-duration`} name="duration" suffix="min" defaultValue={service?.durationMinutes ?? ""} placeholder="Default" invalid={!!fe.duration} />
+          <UnitInput id={`${pre}-duration`} name="duration" suffix="min" defaultValue={service?.durationMinutes ?? ""} invalid={!!fe.duration} />
           {fe.duration && <p id={`${pre}-duration-error`} className="mt-1 text-xs text-danger">{fe.duration}</p>}
         </div>
       </div>
-      <p className="-mt-2 text-xs text-ink-3">Leave price blank to show “price confirmed at appointment”. Leave duration blank to use the default appointment length.</p>
 
       <Field id={`${pre}-description`} label="Short description">
         <textarea id={`${pre}-description`} name="description" rows={2} defaultValue={service?.description} className={cx(inputClass, "min-h-16 text-sm")} />
@@ -101,7 +73,6 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: (message?
       <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">
         <Button type="submit" size="sm" loading={pending}>{service ? "Save changes" : "Add service"}</Button>
         <Button type="button" size="sm" variant="ghost" onClick={() => onDone()}>Cancel</Button>
-        <span className="text-xs text-ink-3 sm:ml-auto">Saved services stay marked Demo until the owner approves the menu.</span>
       </div>
     </form>
   );
@@ -112,7 +83,7 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: (message?
  * at a time, plus "Add service". Past bookings keep their own snapshot, so
  * edits here only affect new bookings.
  */
-export function ServicesManager({ services, defaultDuration }: { services: Service[]; defaultDuration: number }) {
+export function ServicesManager({ services }: { services: Service[] }) {
   const [editing, setEditing] = useState<string | null>(null); // service id, "new", or null
   const [notice, setNotice] = useState<ActionState>(null);
   const sorted = [...services].sort((a, b) => a.sortOrder - b.sortOrder);
@@ -123,16 +94,15 @@ export function ServicesManager({ services, defaultDuration }: { services: Servi
     if (message) setNotice({ ok: true, message });
   }, []);
 
-  const price = (s: Service) => (s.priceKobo === null ? <span className="text-ink-3">TBC</span> : formatNaira(s.priceKobo));
-  const duration = (s: Service) =>
-    s.durationMinutes ? formatDuration(s.durationMinutes) : <span className="text-ink-3">Default · {formatDuration(defaultDuration)}</span>;
+  const price = (s: Service) => formatNaira(s.priceKobo);
+  const duration = (s: Service) => formatDuration(s.durationMinutes);
 
   return (
     <section aria-labelledby="services-title" className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div>
           <h2 id="services-title" className="flex items-center gap-2 text-base font-semibold text-ink">
-            Service menu <DemoTag>All demo</DemoTag>
+            Service menu
           </h2>
           <p className="mt-0.5 text-xs text-ink-3">
             {sorted.length} service{sorted.length === 1 ? "" : "s"} · {bookable} bookable online
@@ -168,7 +138,7 @@ export function ServicesManager({ services, defaultDuration }: { services: Servi
               <div role="row" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3.5 md:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_5.5rem]">
                 <div role="cell" className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 font-semibold text-ink">
-                    {s.name} {s.status === "demo" && <DemoTag>Demo</DemoTag>}
+                    {s.name} {!s.bookableAlone && <Badge tone="neutral">Add-on only</Badge>}
                   </p>
                   {s.description && <p className="mt-0.5 line-clamp-1 text-xs text-ink-3">{s.description}</p>}
                   <p className="mt-1 text-xs tabular text-ink-2 md:hidden">
@@ -211,7 +181,7 @@ export function ServicesManager({ services, defaultDuration }: { services: Servi
       </div>
 
       <footer className="border-t border-line bg-sand/30 px-5 py-3 text-xs text-ink-3">
-        Editing a service never changes past bookings. Each booking keeps a snapshot of the name, price and duration it was booked with.
+        Editing a service never changes past bookings. Each booking keeps the name, price and duration it was booked with. Add-on settings arrive in the next update.
       </footer>
     </section>
   );
@@ -226,7 +196,7 @@ type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** Which sub-tab a field error belongs to, so the form can jump there and flag it. */
 function sectionOf(field: string): SectionId {
-  if (field.startsWith("day_")) return "hours";
+  if (field.startsWith("day_") || field.startsWith("capacity_")) return "hours";
   if (field.startsWith("deposit")) return "deposit";
   return "rules";
 }
@@ -255,8 +225,8 @@ export function AvailabilityForm({ settings }: { settings: Settings }) {
   const openDays = Object.values(a.weeklyHours).filter(Boolean).length;
   const summary: Record<SectionId, string> = {
     hours: `${openDays} day${openDays === 1 ? "" : "s"} a week`,
-    rules: `${a.bookingHorizonDays}-day window · ${a.slotStepMinutes}-min slots`,
-    deposit: d.type === "percent" ? `${d.percent}% · min ${formatNaira(d.minimumKobo)}` : `${formatNaira(d.fixedKobo)} fixed`,
+    rules: `${a.bookingHorizonDays}-day window · ${a.slotIntervalMinutes}-min slots`,
+    deposit: d.type === "percent" ? `${d.percent}%${d.minimumKobo ? ` · min ${formatNaira(d.minimumKobo)}` : ""}` : `${formatNaira(d.fixedKobo)} fixed`,
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -284,7 +254,6 @@ export function AvailabilityForm({ settings }: { settings: Settings }) {
         <div className="border-b border-line bg-sand/40 lg:border-b-0 lg:border-r">
           <div className="hidden items-center gap-2 px-5 pb-2 pt-5 lg:flex">
             <span className="type-caps text-[0.66rem] text-ink-3">Sections</span>
-            <DemoTag>Demo values</DemoTag>
           </div>
           <div
             role="tablist"
@@ -337,27 +306,24 @@ export function AvailabilityForm({ settings }: { settings: Settings }) {
 
         <div className="min-w-0 p-4 sm:p-7">
           <div role="tabpanel" id="subpanel-hours" aria-labelledby="subtab-hours" hidden={section !== "hours"}>
-            <OpeningHoursEditor initial={a.weeklyHours} errors={fe} />
+            <OpeningHoursEditor initial={a.weeklyHours} capacity={a.capacityByWeekday} errors={fe} />
           </div>
           <div role="tabpanel" id="subpanel-rules" aria-labelledby="subtab-rules" hidden={section !== "rules"}>
-          <SettingsGroup title="Booking rules" description="What customers can book online, and when. Demo defaults until the owner confirms.">
+          <SettingsGroup title="Booking rules" description="What customers can book online, and when.">
             <SettingRow id="bookingHorizonDays" label="Booking window" description="How far ahead customers can book." error={fe.bookingHorizonDays}>
               <UnitInput id="bookingHorizonDays" defaultValue={a.bookingHorizonDays} suffix="days" invalid={!!fe.bookingHorizonDays} />
             </SettingRow>
             <SettingRow id="minimumLeadMinutes" label="Minimum notice" description="How soon before a start time the last online booking is allowed." error={fe.minimumLeadMinutes}>
               <UnitInput id="minimumLeadMinutes" defaultValue={a.minimumLeadMinutes} suffix="min" invalid={!!fe.minimumLeadMinutes} />
             </SettingRow>
-            <SettingRow id="slotStepMinutes" label="Start-time interval" description="Gap between bookable start times, e.g. 9:00, 9:30, 10:00." error={fe.slotStepMinutes}>
-              <UnitInput id="slotStepMinutes" defaultValue={a.slotStepMinutes} suffix="min" invalid={!!fe.slotStepMinutes} />
+            <SettingRow id="slotIntervalMinutes" label="Start-time interval" description="Gap between bookable start times, for example 9:00, 9:30, 10:00." error={fe.slotIntervalMinutes}>
+              <UnitInput id="slotIntervalMinutes" defaultValue={a.slotIntervalMinutes} suffix="min" invalid={!!fe.slotIntervalMinutes} />
             </SettingRow>
-            <SettingRow id="defaultDurationMinutes" label="Default appointment length" description="Used for any service without its own duration." error={fe.defaultDurationMinutes}>
-              <UnitInput id="defaultDurationMinutes" defaultValue={a.defaultDurationMinutes} suffix="min" invalid={!!fe.defaultDurationMinutes} />
+            <SettingRow id="bufferMinutes" label="Cleanup time" description="Time kept free after each appointment before that chair can be booked again." error={fe.bufferMinutes}>
+              <UnitInput id="bufferMinutes" defaultValue={a.bufferMinutes} suffix="min" invalid={!!fe.bufferMinutes} />
             </SettingRow>
-            <SettingRow id="pendingHoldMinutes" label="Unpaid slot hold" description="How long a slot stays reserved while the customer pays the deposit." error={fe.pendingHoldMinutes}>
-              <UnitInput id="pendingHoldMinutes" defaultValue={a.pendingHoldMinutes} suffix="min" invalid={!!fe.pendingHoldMinutes} />
-            </SettingRow>
-            <SettingRow id="concurrentCapacity" label="Appointments at once" description="How many bookings can overlap. 1 means one chair or stylist." error={fe.concurrentCapacity}>
-              <UnitInput id="concurrentCapacity" defaultValue={a.concurrentCapacity} suffix="at once" invalid={!!fe.concurrentCapacity} />
+            <SettingRow id="holdMinutes" label="Unpaid time hold" description="How long a time stays reserved while the customer pays the deposit." error={fe.holdMinutes}>
+              <UnitInput id="holdMinutes" defaultValue={a.holdMinutes} suffix="min" invalid={!!fe.holdMinutes} />
             </SettingRow>
           </SettingsGroup>
           </div>
@@ -437,67 +403,71 @@ function UnitInput({
   );
 }
 
-/** Deposit rule: a two-option switch, only the fields that apply, and a live worked example. */
+/** Deposit rule: fixed or percentage, applied to the main service or the full total, with a live worked example. */
 function DepositRuleEditor({ deposit, errors }: { deposit: Settings["deposit"]; errors: Record<string, string> }) {
   const [type, setType] = useState<"percent" | "fixed">(deposit.type);
+  const [scope, setScope] = useState<"main_only" | "full_total">(deposit.scope);
   const [percent, setPercent] = useState(String(deposit.percent));
   const [fixed, setFixed] = useState(koboToInput(deposit.fixedKobo));
   const [minimum, setMinimum] = useState(koboToInput(deposit.minimumKobo));
 
   const toKobo = (v: string) => Math.round((Number(v.replace(/[^0-9.]/g, "")) || 0) * 100);
-  const rule: DepositRule = { type, percent: Number(percent) || 0, fixedKobo: toKobo(fixed), minimumKobo: toKobo(minimum) };
-  const examples = [1_500_000, 4_500_000]; // ₦15,000 and ₦45,000 estimates
-
-  const options = [
-    { value: "percent", label: "Percentage of estimate" },
-    { value: "fixed", label: "Fixed amount" },
-  ] as const;
+  const rule: DepositRule = { type, scope, percent: Number(percent) || 0, fixedKobo: toKobo(fixed), minimumKobo: minimum.trim() ? toKobo(minimum) : null };
+  // A ₦15,000 service with a ₦5,000 extra, and a ₦45,000 service with none.
+  const examples = [
+    { main: 1_500_000, total: 2_000_000, label: "₦15,000 service + ₦5,000 extra" },
+    { main: 4_500_000, total: 4_500_000, label: "₦45,000 service" },
+  ];
 
   return (
-    <SettingsGroup title="Deposit rule" description="What customers pay online to confirm a booking. Demo rule until the owner decides.">
-      <div className="grid gap-x-6 gap-y-2 py-3.5 sm:grid-cols-[1fr_auto] sm:items-center">
-        <div>
-          <p id="depositType-label" className="text-sm font-medium text-ink">Rule type</p>
-          <p className="text-xs text-ink-3">Charge a share of the estimated total, or the same amount every time.</p>
-        </div>
-        <div role="radiogroup" aria-labelledby="depositType-label" className="inline-flex rounded-[var(--radius-control)] bg-sand p-1 sm:justify-self-end">
-          {options.map((o) => (
-            <label
-              key={o.value}
-              className={cx(
-                "flex min-h-9 cursor-pointer items-center rounded-[var(--radius-control)] px-3.5 text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent",
-                type === o.value ? "bg-surface text-accent-text shadow-[var(--shadow-sm)]" : "text-ink-3 hover:text-ink",
-              )}
-            >
-              <input type="radio" name="depositType" value={o.value} checked={type === o.value} onChange={() => setType(o.value)} className="sr-only" />
-              {o.label}
-            </label>
-          ))}
-        </div>
-      </div>
-
+    <SettingsGroup title="Deposit rule" description="What customers pay online to secure a booking. Deposits are not refunded.">
+      <Choice
+        label="Rule type"
+        description="A share of the price, or the same amount every time."
+        name="depositType"
+        value={type}
+        onChange={(v) => setType(v as typeof type)}
+        options={[{ value: "percent", label: "Percentage" }, { value: "fixed", label: "Fixed amount" }]}
+      />
       {type === "percent" ? (
-        <SettingRow id="depositPercent" label="Percentage" description="Share of the estimated total paid upfront." error={errors.depositPercent}>
-          <UnitInput id="depositPercent" value={percent} onChange={(e) => setPercent(e.target.value)} suffix="%" invalid={!!errors.depositPercent} />
-        </SettingRow>
+        <>
+          <SettingRow id="depositPercent" label="Percentage" description="Share paid upfront." error={errors.depositPercent}>
+            <UnitInput id="depositPercent" value={percent} onChange={(e) => setPercent(e.target.value)} suffix="%" invalid={!!errors.depositPercent} />
+          </SettingRow>
+          <Choice
+            label="Applies to"
+            description="The main service only, or everything booked including extras."
+            name="depositScope"
+            value={scope}
+            onChange={(v) => setScope(v as typeof scope)}
+            options={[{ value: "full_total", label: "Full total" }, { value: "main_only", label: "Main service" }]}
+          />
+          <SettingRow id="depositMinimum" label="Minimum deposit" description="Optional. Leave blank for no minimum. Never more than the total." error={errors.depositMinimum}>
+            <UnitInput id="depositMinimum" value={minimum} onChange={(e) => setMinimum(e.target.value)} prefix="₦" inputMode="decimal" invalid={!!errors.depositMinimum} />
+          </SettingRow>
+        </>
       ) : (
         <SettingRow id="depositFixed" label="Fixed amount" description="Charged on every booking, whatever the services." error={errors.depositFixed}>
           <UnitInput id="depositFixed" value={fixed} onChange={(e) => setFixed(e.target.value)} prefix="₦" inputMode="decimal" invalid={!!errors.depositFixed} />
         </SettingRow>
       )}
-      {/* The action validates every deposit field, so keep the hidden one's value in the form. */}
-      {type === "percent" ? <input type="hidden" name="depositFixed" value={fixed} /> : <input type="hidden" name="depositPercent" value={percent} />}
-
-      <SettingRow id="depositMinimum" label="Minimum deposit" description="The deposit is never less than this (and never more than the estimate)." error={errors.depositMinimum}>
-        <UnitInput id="depositMinimum" value={minimum} onChange={(e) => setMinimum(e.target.value)} prefix="₦" inputMode="decimal" invalid={!!errors.depositMinimum} />
-      </SettingRow>
+      {/* The action validates every deposit field, so keep the hidden ones' values in the form. */}
+      {type === "percent" ? (
+        <input type="hidden" name="depositFixed" value={fixed} />
+      ) : (
+        <>
+          <input type="hidden" name="depositPercent" value={percent} />
+          <input type="hidden" name="depositScope" value={scope} />
+          <input type="hidden" name="depositMinimum" value={minimum} />
+        </>
+      )}
 
       <div className="py-3.5">
         <p className="text-xs font-semibold text-ink-2">Example</p>
-        <ul className="mt-1.5 flex flex-wrap gap-x-6 gap-y-1 text-sm text-ink-2">
-          {examples.map((est) => (
-            <li key={est}>
-              {formatNaira(est)} booking → <span className="font-semibold tabular text-accent-text">{formatNaira(depositFor(est, rule))}</span> deposit
+        <ul className="mt-1.5 space-y-1 text-sm text-ink-2">
+          {examples.map((ex) => (
+            <li key={ex.label}>
+              {ex.label} → <span className="font-semibold tabular text-accent-text">{formatNaira(depositDue({ mainServiceKobo: ex.main, totalKobo: ex.total }, rule))}</span> deposit
             </li>
           ))}
         </ul>
@@ -506,44 +476,51 @@ function DepositRuleEditor({ deposit, errors }: { deposit: Settings["deposit"]; 
   );
 }
 
-export function ResetDemoButton() {
-  const [pending, start] = useTransition();
+function Choice({ label, description, name, value, onChange, options }: { label: string; description: string; name: string; value: string; onChange: (v: string) => void; options: { value: string; label: string }[] }) {
   return (
-    <Button
-      variant="danger"
-      size="sm"
-      loading={pending}
-      onClick={() => {
-        if (window.confirm("Reset all demo data? Every booking, customer, payment and setting returns to the seeded sample state.")) {
-          start(() => resetDemoAction());
-        }
-      }}
-    >
-      <RotateCcw aria-hidden className="size-4" /> Reset demo data
-    </Button>
+    <div className="grid gap-x-6 gap-y-2 py-3.5 sm:grid-cols-[1fr_auto] sm:items-center">
+      <div>
+        <p id={`${name}-label`} className="text-sm font-medium text-ink">{label}</p>
+        <p className="text-xs text-ink-3">{description}</p>
+      </div>
+      <div role="radiogroup" aria-labelledby={`${name}-label`} className="inline-flex rounded-[var(--radius-control)] bg-sand p-1 sm:justify-self-end">
+        {options.map((o) => (
+          <label
+            key={o.value}
+            className={cx(
+              "flex min-h-9 cursor-pointer items-center rounded-[var(--radius-control)] px-3.5 text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent",
+              value === o.value ? "bg-surface text-accent-text shadow-[var(--shadow-sm)]" : "text-ink-3 hover:text-ink",
+            )}
+          >
+            <input type="radio" name={name} value={o.value} checked={value === o.value} onChange={() => onChange(o.value)} className="sr-only" />
+            {o.label}
+          </label>
+        ))}
+      </div>
+    </div>
   );
 }
 
-const WEEK_ORDER: DayKey[] = [1, 2, 3, 4, 5, 6, 0];
+const WEEK_ORDER: WeekdayKey[] = ["1", "2", "3", "4", "5", "6", "0"];
 
 const timeInputClass =
   "h-9 w-[8rem] rounded-[var(--radius-control)] border border-line-strong bg-surface px-2.5 text-sm tabular text-ink focus-visible:border-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent aria-[invalid=true]:border-danger sm:w-[8.75rem]";
 
 /**
  * Weekly hours as a compact schedule: one line per day with an open/closed
- * switch, a from–to time pair and the length of the day. Submits the same
- * field names the settings action already reads (closed_N, open_N, close_N).
+ * switch, a from and to time pair, how many customers can be served at once,
+ * and the length of the day. Field names: closed_N, open_N, close_N, capacity_N.
  */
-function OpeningHoursEditor({ initial, errors }: { initial: Record<DayKey, DayHours | null>; errors: Record<string, string> }) {
+function OpeningHoursEditor({ initial, capacity, errors }: { initial: WeeklyHours; capacity: CapacityByWeekday; errors: Record<string, string> }) {
   const [days, setDays] = useState(() =>
     Object.fromEntries(
-      WEEK_ORDER.map((d) => [d, { open: !!initial[d], from: initial[d]?.open ?? "08:00", to: initial[d]?.close ?? "21:00" }]),
-    ) as Record<DayKey, { open: boolean; from: string; to: string }>,
+      WEEK_ORDER.map((d) => [d, { open: !!initial[d], from: initial[d]?.open ?? "09:00", to: initial[d]?.close ?? "19:00", capacity: String(capacity[d] || 1) }]),
+    ) as Record<WeekdayKey, { open: boolean; from: string; to: string; capacity: string }>,
   );
-  const update = (d: DayKey, patch: Partial<{ open: boolean; from: string; to: string }>) =>
+  const update = (d: WeekdayKey, patch: Partial<{ open: boolean; from: string; to: string; capacity: string }>) =>
     setDays((prev) => ({ ...prev, [d]: { ...prev[d], ...patch } }));
 
-  const minutes = (d: DayKey) => {
+  const minutes = (d: WeekdayKey) => {
     const { open, from, to } = days[d];
     if (!open || !from || !to) return 0;
     return Math.max(parseHHMM(to) - parseHHMM(from), 0);
@@ -564,7 +541,7 @@ function OpeningHoursEditor({ initial, errors }: { initial: Record<DayKey, DayHo
         <div>
           <h3 id="opening-hours-title" className="text-sm font-semibold text-ink">Opening hours</h3>
           <p className="mt-0.5 text-xs text-ink-3">
-            Seeded from the public listing · Open {openDays.length} day{openDays.length === 1 ? "" : "s"}, {formatDuration(weeklyMinutes)} a week
+            Open {openDays.length} day{openDays.length === 1 ? "" : "s"}, {formatDuration(weeklyMinutes)} a week. “At once” is how many customers the salon can serve at the same time (roughly the stylists working).
           </p>
         </div>
         {firstOpen !== undefined && (
@@ -574,7 +551,7 @@ function OpeningHoursEditor({ initial, errors }: { initial: Record<DayKey, DayHo
             className="inline-flex min-h-9 items-center gap-1.5 rounded-[var(--radius-control)] px-2.5 text-xs font-semibold text-accent-text hover:bg-accent-soft"
           >
             <CopyCheck aria-hidden className="size-4" />
-            Use {WEEKDAYS[firstOpen]}&rsquo;s hours for all open days
+            Use {WEEKDAYS[Number(firstOpen)]}&rsquo;s hours for all open days
           </button>
         )}
       </div>
@@ -585,15 +562,15 @@ function OpeningHoursEditor({ initial, errors }: { initial: Record<DayKey, DayHo
           const err = errors[`day_${d}`];
           const len = minutes(d);
           return (
-            <li key={d} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 py-3 sm:grid-cols-[7rem_6.5rem_auto_1fr]">
-              <span className={cx("text-sm font-semibold", day.open ? "text-ink" : "text-ink-3")}>{WEEKDAYS[d]}</span>
+            <li key={d} className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2 py-3 sm:grid-cols-[7rem_6.5rem_auto_auto_1fr]">
+              <span className={cx("text-sm font-semibold", day.open ? "text-ink" : "text-ink-3")}>{WEEKDAYS[Number(d)]}</span>
 
               <div className="flex items-center gap-2.5 justify-self-end sm:justify-self-start">
                 <button
                   type="button"
                   role="switch"
                   aria-checked={day.open}
-                  aria-label={`Open on ${WEEKDAYS[d]}`}
+                  aria-label={`Open on ${WEEKDAYS[Number(d)]}`}
                   onClick={() => update(d, { open: !day.open })}
                   className={cx(
                     "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors",
@@ -616,7 +593,7 @@ function OpeningHoursEditor({ initial, errors }: { initial: Record<DayKey, DayHo
                       name={`open_${d}`}
                       value={day.from}
                       onChange={(e) => update(d, { from: e.target.value })}
-                      aria-label={`${WEEKDAYS[d]} opens`}
+                      aria-label={`${WEEKDAYS[Number(d)]} opens`}
                       aria-invalid={!!err}
                       className={timeInputClass}
                     />
@@ -626,7 +603,7 @@ function OpeningHoursEditor({ initial, errors }: { initial: Record<DayKey, DayHo
                       name={`close_${d}`}
                       value={day.to}
                       onChange={(e) => update(d, { to: e.target.value })}
-                      aria-label={`${WEEKDAYS[d]} closes`}
+                      aria-label={`${WEEKDAYS[Number(d)]} closes`}
                       aria-invalid={!!err}
                       className={timeInputClass}
                     />
@@ -636,9 +613,28 @@ function OpeningHoursEditor({ initial, errors }: { initial: Record<DayKey, DayHo
                 )}
               </div>
 
-              <span className="hidden whitespace-nowrap pl-1 text-xs tabular text-ink-3 sm:block">{day.open && len > 0 ? formatDuration(len) : "—"}</span>
+              {day.open ? (
+                <label className="col-span-2 flex items-center gap-2 text-xs text-ink-2 sm:col-span-1">
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    name={`capacity_${d}`}
+                    value={day.capacity}
+                    onChange={(e) => update(d, { capacity: e.target.value })}
+                    aria-invalid={!!errors[`capacity_${d}`]}
+                    className={cx(timeInputClass, "w-16 sm:w-16")}
+                  />
+                  at once
+                </label>
+              ) : (
+                <span className="hidden sm:block" />
+              )}
+
+              <span className="hidden whitespace-nowrap pl-1 text-xs tabular text-ink-3 sm:block">{day.open && len > 0 ? formatDuration(len) : "Closed"}</span>
 
               {err && <p className="col-span-full text-xs text-danger" role="alert">{err}</p>}
+              {errors[`capacity_${d}`] && <p className="col-span-full text-xs text-danger" role="alert">{errors[`capacity_${d}`]}</p>}
             </li>
           );
         })}

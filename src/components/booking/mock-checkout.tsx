@@ -4,27 +4,29 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { CheckCircle2, FlaskConical, RefreshCw, Timer, XCircle } from "lucide-react";
-import type { Kobo, PaymentPurpose, PaymentState } from "@/domain/types";
+import type { Kobo } from "@/domain/types";
+
+type AttemptState = "initialized" | "success" | "failed" | "abandoned";
 import { formatNaira } from "@/lib/money";
 import { business } from "@/config/business";
 import { Alert, Button, ButtonLink } from "@/components/ui/primitives";
 
 /**
- * MOCK CHECKOUT UI — a stand-in for the Paystack-hosted payment page.
+ * MOCK CHECKOUT UI: development-only stand-in for the Paystack popup (removed in Milestone 4).
  * It deliberately has no card fields. The tester chooses the outcome.
  */
 export function MockCheckout(props: {
   reference: string;
   amountKobo: Kobo;
-  purpose: PaymentPurpose;
-  state: PaymentState;
+  purpose: "deposit" | "balance_online";
+  state: AttemptState;
   bookingReference: string;
   accessToken: string;
   holdExpiresAt: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState<"success" | "failed" | "retry" | null>(null);
-  const [state, setState] = useState<PaymentState | "expired">(props.state);
+  const [state, setState] = useState<AttemptState | "expired">(props.state);
   const [error, setError] = useState<string | null>(null);
   const remaining = useCountdown(props.holdExpiresAt);
   const bookingHref = `/booking/${props.bookingReference}?t=${encodeURIComponent(props.accessToken)}`;
@@ -37,7 +39,7 @@ export function MockCheckout(props: {
       const res = await fetch(`/api/checkout/${props.reference}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outcome }),
+        body: JSON.stringify({ outcome, token: props.accessToken }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -45,9 +47,9 @@ export function MockCheckout(props: {
         return;
       }
       setState(data.status);
-      if (data.status === "success") router.push(`${bookingHref}&paid=${props.purpose}`);
+      if (data.status === "success") router.push(`${bookingHref}&paid=${props.purpose === "deposit" ? "deposit" : "balance"}`);
     } catch {
-      setError("We couldn't reach the checkout service. Nothing has been charged — please try again.");
+      setError("We couldn't reach the checkout service. Nothing has been charged. Please try again.");
     } finally {
       setBusy(null);
     }
@@ -67,7 +69,7 @@ export function MockCheckout(props: {
         setError(data.error?.message ?? "Couldn't start a new attempt.");
         return;
       }
-      router.push(`/checkout/${data.checkoutReference}`);
+      router.push(`/checkout/${data.checkoutReference}?t=${encodeURIComponent(props.accessToken)}`);
     } finally {
       setBusy(null);
     }
@@ -89,7 +91,7 @@ export function MockCheckout(props: {
           <p className="mt-4 tabular font-display text-5xl font-light">{formatNaira(props.amountKobo)}</p>
           <p className="mt-1 text-xs text-ink-3">Reference {props.reference}</p>
 
-          {props.purpose === "deposit" && remaining !== null && state === "pending" && !expired && (
+          {props.purpose === "deposit" && remaining !== null && state === "initialized" && !expired && (
             <p className="mt-5 flex items-center gap-2 rounded-[var(--radius)] bg-warning-soft px-3 py-2 text-sm text-warning" role="timer" aria-live="off">
               <Timer aria-hidden className="size-4" />
               Your time is held for <strong className="tabular">{formatCountdown(remaining)}</strong>

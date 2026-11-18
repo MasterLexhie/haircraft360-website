@@ -1,49 +1,49 @@
 import { CalendarDays, Clock } from "lucide-react";
-import type { DepositRule, Kobo, Service } from "@/domain/types";
+import type { DepositRule } from "@/domain/deposit";
+import type { Kobo } from "@/domain/types";
 import { formatNaira } from "@/lib/money";
 import { formatDateKey, formatDuration, formatTime } from "@/lib/time";
-import { DemoTag } from "@/components/ui/primitives";
 
 export function describeDepositRule(rule: DepositRule): string {
-  return rule.type === "percent"
-    ? `${rule.percent}% of the estimate, minimum ${formatNaira(rule.minimumKobo)}`
-    : `Fixed ${formatNaira(rule.fixedKobo)}`;
+  const base = rule.scope === "main_only" ? "the main service" : "the total";
+  if (rule.type === "fixed") return `${formatNaira(rule.fixedKobo)} to secure your time`;
+  const min = rule.minimumKobo ? `, minimum ${formatNaira(rule.minimumKobo)}` : "";
+  return `${rule.percent}% of ${base}${min}`;
+}
+
+export interface SummaryLine {
+  key: string;
+  name: string;
+  priceKobo: Kobo;
+  durationMinutes: number;
+  isAddOn?: boolean;
 }
 
 /** Money rows shared by the wizard summary, review step and confirmation page. */
 export function MoneyRows({
-  estimateKobo,
-  hasUnpriced,
+  totalKobo,
   depositKobo,
-  depositLabel = "Deposit due now",
   paidKobo,
-  depositIsDemo = true,
 }: {
-  estimateKobo: Kobo;
-  hasUnpriced: boolean;
+  totalKobo: Kobo;
   depositKobo: Kobo;
-  depositLabel?: string;
+  /** When given (after booking), shows what has been paid instead of the deposit due. */
   paidKobo?: Kobo;
-  depositIsDemo?: boolean;
 }) {
-  const remaining = Math.max(estimateKobo - (paidKobo ?? depositKobo), 0);
+  const paidOrDue = paidKobo ?? depositKobo;
+  const remaining = Math.max(totalKobo - paidOrDue, 0);
   return (
     <dl className="space-y-2 text-sm">
       <div className="flex items-baseline justify-between gap-4">
-        <dt className="text-ink-2">Estimated total</dt>
-        <dd className="tabular font-semibold text-ink">
-          {formatNaira(estimateKobo)}
-          {hasUnpriced && <span className="block text-right text-xs font-normal text-ink-3">+ items priced at appointment</span>}
-        </dd>
+        <dt className="text-ink-2">Total</dt>
+        <dd className="tabular font-semibold text-ink">{formatNaira(totalKobo)}</dd>
       </div>
       <div className="flex items-baseline justify-between gap-4">
-        <dt className="flex items-center gap-1.5 text-ink-2">
-          {paidKobo !== undefined ? "Paid so far" : depositLabel} {depositIsDemo && paidKobo === undefined && <DemoTag />}
-        </dt>
-        <dd className="tabular font-semibold text-ink">{formatNaira(paidKobo ?? depositKobo)}</dd>
+        <dt className="text-ink-2">{paidKobo !== undefined ? "Paid so far" : "Deposit due now"}</dt>
+        <dd className="tabular font-semibold text-ink">{formatNaira(paidOrDue)}</dd>
       </div>
       <div className="flex items-baseline justify-between gap-4 border-t border-line pt-2">
-        <dt className="text-ink-2">Estimated remaining after your visit</dt>
+        <dt className="text-ink-2">Balance due at the salon</dt>
         <dd className="tabular font-semibold text-ink">{formatNaira(remaining)}</dd>
       </div>
     </dl>
@@ -51,40 +51,36 @@ export function MoneyRows({
 }
 
 export function BookingSummaryPanel({
-  services,
-  defaultDuration,
+  lines,
   durationMinutes,
   dateKey,
   startAt,
-  estimateKobo,
-  hasUnpriced,
+  totalKobo,
   depositKobo,
   depositRule,
 }: {
-  services: Service[];
-  defaultDuration: number;
+  lines: SummaryLine[];
   durationMinutes: number;
   dateKey: string | null;
   startAt: string | null;
-  estimateKobo: Kobo;
-  hasUnpriced: boolean;
+  totalKobo: Kobo;
   depositKobo: Kobo;
   depositRule: DepositRule;
 }) {
   return (
     <section aria-labelledby="summary-title" className="overflow-hidden rounded-[var(--radius)] bg-surface p-5 pt-0 shadow-[var(--shadow-sm)] ring-1 ring-line">
       <h2 id="summary-title" className="type-caps -mx-5 mb-1 bg-sand-2 px-5 py-3.5 text-center text-[0.8rem] text-accent-text">Your booking</h2>
-      {services.length === 0 ? (
-        <p className="mt-3 text-sm text-ink-3">No services selected yet.</p>
+      {lines.length === 0 ? (
+        <p className="mt-3 text-sm text-ink-3">No service selected yet.</p>
       ) : (
         <ul className="mt-3 divide-y divide-line">
-          {services.map((s) => (
-            <li key={s.id} className="flex items-start justify-between gap-3 py-2.5 text-sm">
+          {lines.map((l) => (
+            <li key={l.key} className="flex items-start justify-between gap-3 py-2.5 text-sm">
               <span>
-                <span className="font-medium text-ink">{s.name}</span>
-                <span className="block text-xs text-ink-3">{formatDuration(s.durationMinutes ?? defaultDuration)}{s.status === "demo" && " · demo service"}</span>
+                <span className="font-medium text-ink">{l.isAddOn && <span className="text-ink-3">+ </span>}{l.name}</span>
+                <span className="block text-xs text-ink-3">{formatDuration(l.durationMinutes)}</span>
               </span>
-              <span className="tabular shrink-0 text-ink-2">{s.priceKobo === null ? "At appointment" : formatNaira(s.priceKobo)}</span>
+              <span className="tabular shrink-0 text-ink-2">{formatNaira(l.priceKobo)}</span>
             </li>
           ))}
         </ul>
@@ -99,15 +95,15 @@ export function BookingSummaryPanel({
           <dt><Clock aria-hidden className="size-4" /><span className="sr-only">Time</span></dt>
           <dd>
             {startAt ? formatTime(startAt) : "Time not chosen"}
-            {services.length > 0 && <span className="text-ink-3"> · about {formatDuration(durationMinutes)}</span>}
+            {lines.length > 0 && <span className="text-ink-3"> · about {formatDuration(durationMinutes)}</span>}
           </dd>
         </div>
       </dl>
 
-      {services.length > 0 && (
+      {lines.length > 0 && (
         <div className="mt-4 rounded-[var(--radius)] bg-sand/70 p-4">
-          <MoneyRows estimateKobo={estimateKobo} hasUnpriced={hasUnpriced} depositKobo={depositKobo} />
-          <p className="mt-3 text-xs text-ink-3">Demo deposit rule: {describeDepositRule(depositRule)}.</p>
+          <MoneyRows totalKobo={totalKobo} depositKobo={depositKobo} />
+          <p className="mt-3 text-xs text-ink-3">Deposit: {describeDepositRule(depositRule)}.</p>
         </div>
       )}
     </section>

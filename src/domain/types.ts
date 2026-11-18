@@ -1,113 +1,105 @@
 /**
- * Core data model for the Haircraft360 prototype.
+ * Domain shapes shared by server and client code.
  *
- * Money is always integer kobo (₦1 = 100 kobo). Timestamps are ISO-8601 UTC
- * strings; the UI renders them in the salon timezone (Africa/Lagos).
+ * These are plain, serialisable objects (dates as ISO strings) so they can cross
+ * the server/client boundary. The database rows behind them live in
+ * prisma/schema.prisma; src/server/mappers.ts converts between the two.
+ * Money is always integer kobo (₦1 = 100 kobo).
  */
+import type { DepositRule } from "./deposit";
+import type { CapacityByWeekday, MessageTemplates, SalonDetails, WeeklyHours } from "./settings";
 
 export type Kobo = number;
 
-/** "demo" = sample data for the prototype; "approved" = confirmed by the owner. */
-export type ApprovalStatus = "demo" | "approved";
+export type BookingStatus = "pending_payment" | "confirmed" | "completed" | "cancelled" | "no_show" | "expired" | "needs_attention";
+export type BookingItemKind = "main" | "add_on" | "extra";
+export type PaymentType = "deposit" | "balance_online" | "manual" | "adjustment";
+export type PaymentMethod = "card" | "transfer" | "cash" | "other";
+export type PaymentStatus = "success" | "failed";
 
 export interface Service {
   id: string;
   name: string;
   description: string;
+  priceKobo: Kobo;
+  durationMinutes: number;
+  bookableAlone: boolean;
+  availableAsAddOn: boolean;
+  /** Price and duration when sold as an add-on; null falls back to the main values. */
+  addOnPriceKobo: Kobo | null;
+  addOnDurationMinutes: number | null;
   active: boolean;
-  status: ApprovalStatus;
-  /** null = price not configured ("confirmed at appointment"). */
-  priceKobo: Kobo | null;
-  /** null = duration not configured; availability falls back to the default block. */
-  durationMinutes: number | null;
   sortOrder: number;
+  /** Add-ons this service offers (when it is a main service). */
+  addOnIds: string[];
 }
 
-export interface Customer {
+/** One line of a booking. Price and duration are copied at the time, so later price changes never alter it. */
+export interface BookingItem {
   id: string;
-  name: string;
-  phone: string | null;
-  email: string | null;
-  createdAt: string;
-  /** Private to the admin area. Never sent to customer-facing pages. */
-  privateNotes: string;
-  isDemo: boolean;
-}
-
-export type BookingStatus =
-  | "awaiting_deposit"
-  | "confirmed"
-  | "completed"
-  | "cancelled"
-  | "no_show"
-  | "expired";
-
-/** Snapshot of a service as it was booked, plus what was actually delivered. */
-export interface BookingServiceLine {
-  id: string;
-  /** null for extras added at completion. */
   serviceId: string | null;
-  kind: "booked" | "extra";
+  kind: BookingItemKind;
   name: string;
-  serviceStatus: ApprovalStatus;
-  estimatedPriceKobo: Kobo | null;
-  estimatedDurationMinutes: number;
-  delivered: boolean;
-  actualPriceKobo: Kobo | null;
-  addOnNote: string;
+  priceKobo: Kobo;
+  durationMinutes: number;
+  note: string;
+  createdAt: string;
 }
 
 export interface Booking {
   id: string;
-  /** Short human reference shown to customers, e.g. HC-7KQ2M. */
+  /** Short human reference shown to customers, for example HC-7KQ2M. */
   reference: string;
-  /** Unguessable token for the customer's booking link (stands in for a signed link). */
-  accessToken: string;
   customerId: string;
+  /** What the customer typed for this booking. Customer-facing pages show only these. */
+  contactName: string;
+  contactPhone: string;
+  contactEmail: string | null;
   startAt: string;
   endAt: string;
   status: BookingStatus;
-  createdAt: string;
-  /** While awaiting deposit, the slot is held until this time. */
   holdExpiresAt: string | null;
-  estimatedTotalKobo: Kobo;
-  hasUnpricedItems: boolean;
+  totalKobo: Kobo;
   depositDueKobo: Kobo;
-  /** Set by the owner after the appointment. Kept separate from the estimate. */
-  actualTotalKobo: Kobo | null;
-  lines: BookingServiceLine[];
-  /** Written by the customer when booking; visible to both sides. */
   customerNote: string;
-  /** Owner's note on what changed (extras/products/adjustments). Visible to customer. */
-  completionNote: string;
-  /** Private admin note. Never sent to customer-facing pages. */
+  /** Admin only. Never sent to customer-facing pages. */
   privateNote: string;
   completedAt: string | null;
-  isDemo: boolean;
+  cancelledAt: string | null;
+  createdAt: string;
+  items: BookingItem[];
 }
 
-export type PaymentPurpose = "deposit" | "balance" | "manual";
-export type PaymentState = "pending" | "success" | "failed" | "abandoned";
-export type PaymentSource = "mock_checkout" | "manual_entry";
-
+/** A ledger row: money actually received (or a correction). Never edited. */
 export interface Payment {
   id: string;
   bookingId: string;
-  customerId: string;
+  type: PaymentType;
+  method: PaymentMethod;
   amountKobo: Kobo;
-  purpose: PaymentPurpose;
-  state: PaymentState;
-  source: PaymentSource;
-  /** Unique reference; the idempotency key for checkout callbacks. */
-  reference: string;
-  createdAt: string;
-  resolvedAt: string | null;
-  /** Manual entries only: e.g. "Cash", "Bank transfer". */
-  method: string | null;
+  status: PaymentStatus;
+  paystackReference: string | null;
+  recordedByName: string | null;
   note: string;
-  recordedBy: string | null;
-  /** Always true in this prototype: no real money moves. */
-  isDemo: true;
+  createdAt: string;
+}
+
+export interface CustomerEmail {
+  value: string;
+  isPlaceholder: boolean;
+  bounced: boolean;
+}
+
+export interface Customer {
+  id: string;
+  displayName: string;
+  /** Admin only. */
+  notes: string;
+  tags: string[];
+  marketingConsent: boolean;
+  createdAt: string;
+  phones: string[];
+  emails: CustomerEmail[];
 }
 
 export interface AuditEvent {
@@ -120,55 +112,21 @@ export interface AuditEvent {
   summary: string;
 }
 
-export type DayKey = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday
-
-export interface DayHours {
-  open: string; // "08:00"
-  close: string; // "21:00"
-}
-
-export interface AvailabilityConfig {
-  timezone: "Africa/Lagos";
-  weeklyHours: Record<DayKey, DayHours | null>;
-  slotStepMinutes: number;
-  bookingHorizonDays: number;
-  pendingHoldMinutes: number;
+export interface AvailabilitySettings {
+  timezone: string;
+  weeklyHours: WeeklyHours;
+  capacityByWeekday: CapacityByWeekday;
+  slotIntervalMinutes: number;
+  bufferMinutes: number;
+  holdMinutes: number;
   minimumLeadMinutes: number;
-  defaultDurationMinutes: number;
-  /** How many appointments can overlap. 1 = a single chair / stylist. */
-  concurrentCapacity: number;
-}
-
-export interface DepositRule {
-  type: "percent" | "fixed";
-  percent: number;
-  fixedKobo: Kobo;
-  minimumKobo: Kobo;
-}
-
-export interface ChecklistItem {
-  id: string;
-  label: string;
-  detail: string;
-  done: boolean;
+  bookingHorizonDays: number;
 }
 
 export interface Settings {
-  availability: AvailabilityConfig;
+  availability: AvailabilitySettings;
   deposit: DepositRule;
-  /** Whether the hours/deposit/availability values are owner-approved. */
-  availabilityStatus: ApprovalStatus;
-  depositStatus: ApprovalStatus;
-  checklist: ChecklistItem[];
-}
-
-export interface Database {
-  version: number;
-  seededAt: string;
-  services: Service[];
-  customers: Customer[];
-  bookings: Booking[];
-  payments: Payment[];
-  audit: AuditEvent[];
-  settings: Settings;
+  messageTemplates: MessageTemplates;
+  salonDetails: SalonDetails;
+  schedulerHeartbeat: string | null;
 }

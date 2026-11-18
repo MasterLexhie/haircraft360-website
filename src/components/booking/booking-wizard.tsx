@@ -4,28 +4,37 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Lock, Pencil, ShieldCheck } from "lucide-react";
 import type { Service, Settings } from "@/domain/types";
-import { depositFor, estimateServices } from "@/domain/pricing";
+import { depositDue } from "@/domain/deposit";
+import { addOnTerms, itemsDuration, itemsTotal } from "@/domain/pricing";
 import { validateContact, type ContactErrors } from "@/domain/validation";
 import { formatNaira } from "@/lib/money";
 import { formatDateKey, formatDuration, formatTime, lagosDateKey } from "@/lib/time";
 import { business } from "@/config/business";
-import { Alert, Button, DemoTag, Field, cx, describedBy, inputClass } from "@/components/ui/primitives";
-import { ServiceDemoTag, ServiceMeta } from "./service-bits";
-import { BookingSummaryPanel, MoneyRows, describeDepositRule } from "./booking-summary";
+import { Alert, Button, Field, cx, describedBy, inputClass } from "@/components/ui/primitives";
+import { ServiceMeta } from "./service-bits";
+import { BookingSummaryPanel, MoneyRows, describeDepositRule, type SummaryLine } from "./booking-summary";
 import { DateTimeStep } from "./date-time-step";
 
-const STEPS = ["Services", "Date & time", "Your details", "Review"] as const;
-const DRAFT_KEY = "hc360-booking-draft-v1";
+const STEPS = ["Service", "Date & time", "Your details", "Review"] as const;
+const DRAFT_KEY = "hc360-booking-draft-v2";
 
-interface Draft {
-  selected: string[];
-  dateKey: string | null;
-  startAt: string | null;
+interface Contact {
   name: string;
   phone: string;
   email: string;
+  noEmail: boolean;
+  marketingConsent: boolean;
   note: string;
 }
+
+interface Draft extends Contact {
+  mainId: string | null;
+  addOnIds: string[];
+  dateKey: string | null;
+  startAt: string | null;
+}
+
+const EMPTY_CONTACT: Contact = { name: "", phone: "", email: "", noEmail: false, marketingConsent: false, note: "" };
 
 function readDraft(): Partial<Draft> | null {
   try {
@@ -39,18 +48,22 @@ function readDraft(): Partial<Draft> | null {
 export function BookingWizard({
   services,
   settings,
-  initialSelected,
+  initialServiceId,
 }: {
   services: Service[];
-  settings: Pick<Settings, "availability" | "deposit" | "depositStatus">;
-  initialSelected: string[];
+  settings: Pick<Settings, "availability" | "deposit">;
+  initialServiceId: string | null;
 }) {
   const router = useRouter();
+  const mains = useMemo(() => services.filter((s) => s.bookableAlone), [services]);
+  const byId = useMemo(() => new Map(services.map((s) => [s.id, s])), [services]);
   const [step, setStep] = useState(0);
-  const [selected, setSelected] = useState<string[]>(initialSelected.filter((id) => services.some((s) => s.id === id)));
+  const [mainId, setMainId] = useState<string | null>(initialServiceId && mains.some((s) => s.id === initialServiceId) ? initialServiceId : null);
+  const [addOnIds, setAddOnIds] = useState<string[]>([]);
   const [dateKey, setDateKey] = useState<string | null>(null);
   const [startAt, setStartAt] = useState<string | null>(null);
-  const [contact, setContact] = useState({ name: "", phone: "", email: "", note: "" });
+  const [contact, setContact] = useState<Contact>(EMPTY_CONTACT);
+  const [website, setWebsite] = useState(""); // honeypot: people never see or fill this
   const [errors, setErrors] = useState<ContactErrors>({});
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [stepError, setStepError] = useState<string | null>(null);
@@ -62,18 +75,22 @@ export function BookingWizard({
   const summaryRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
 
-  // Restore an in-progress draft (same tab), unless services came in via the URL.
+  // Restore an in-progress draft (same tab), unless a service came in via the URL.
   // sessionStorage is only readable after hydration, so restoring must happen in an effect.
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const d = readDraft();
     if (d) {
-      if (!initialSelected.length && d.selected) setSelected(d.selected.filter((id) => services.some((s) => s.id === id)));
+      if (!initialServiceId && d.mainId && mains.some((s) => s.id === d.mainId)) {
+        setMainId(d.mainId);
+        const offered = byId.get(d.mainId)?.addOnIds ?? [];
+        setAddOnIds((d.addOnIds ?? []).filter((id) => offered.includes(id) && byId.has(id)));
+      }
       if (d.dateKey && d.dateKey >= lagosDateKey(Date.now())) {
         setDateKey(d.dateKey);
         setStartAt(d.startAt ?? null);
       }
-      setContact({ name: d.name ?? "", phone: d.phone ?? "", email: d.email ?? "", note: d.note ?? "" });
+      setContact({ ...EMPTY_CONTACT, ...pickContact(d) });
     }
     setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -83,11 +100,11 @@ export function BookingWizard({
   useEffect(() => {
     if (!hydrated) return;
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ selected, dateKey, startAt, ...contact } satisfies Draft));
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ mainId, addOnIds, dateKey, startAt, ...contact } satisfies Draft));
     } catch {
       /* storage unavailable: the flow still works */
     }
-  }, [hydrated, selected, dateKey, startAt, contact]);
+  }, [hydrated, mainId, addOnIds, dateKey, startAt, contact]);
 
   // Move focus to the step heading on step change (not on first load).
   useEffect(() => {
@@ -104,16 +121,34 @@ export function BookingWizard({
     if (summaryFocus) summaryRef.current?.focus();
   }, [summaryFocus]);
 
-  const chosen = useMemo(() => services.filter((s) => selected.includes(s.id)), [services, selected]);
-  const { defaultDurationMinutes, pendingHoldMinutes } = settings.availability;
-  const estimate = estimateServices(chosen, defaultDurationMinutes);
-  const deposit = depositFor(estimate.totalKobo, settings.deposit);
+  const main = mainId ? byId.get(mainId) ?? null : null;
+  const offeredAddOns = useMemo(() => (main ? main.addOnIds.map((id) => byId.get(id)).filter((s): s is Service => Boolean(s?.availableAsAddOn)) : []), [main, byId]);
+  const lines: SummaryLine[] = useMemo(() => {
+    if (!main) return [];
+    return [
+      { key: main.id, name: main.name, priceKobo: main.priceKobo, durationMinutes: main.durationMinutes },
+      ...addOnIds.map((id) => byId.get(id)).filter((s): s is Service => Boolean(s)).map((a) => ({ key: a.id, name: a.name, isAddOn: true, ...addOnTerms(a) })),
+    ];
+  }, [main, addOnIds, byId]);
+  const totalKobo = itemsTotal(lines);
+  const durationMinutes = itemsDuration(lines);
+  const deposit = main ? depositDue({ mainServiceKobo: main.priceKobo, totalKobo }, settings.deposit) : 0;
+  const { holdMinutes } = settings.availability;
 
-  function toggle(id: string) {
+  function chooseMain(id: string) {
     setStepError(null);
-    // Changing services changes the duration, so a chosen time may no longer fit.
+    // A different service changes the duration, so a chosen time may no longer fit.
+    if (id !== mainId) {
+      setStartAt(null);
+      setAddOnIds([]);
+    }
+    setMainId(id);
+  }
+
+  function toggleAddOn(id: string) {
+    setStepError(null);
     setStartAt(null);
-    setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+    setAddOnIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   }
 
   function go(next: number) {
@@ -122,7 +157,7 @@ export function BookingWizard({
   }
 
   function next() {
-    if (step === 0 && selected.length === 0) return setStepError("Choose at least one service to continue.");
+    if (step === 0 && !main) return setStepError("Choose a service to continue.");
     if (step === 1 && !startAt) return setStepError("Choose a date and an available time to continue.");
     if (step === 2) {
       const errs = validateContact(contact);
@@ -143,14 +178,25 @@ export function BookingWizard({
   }
 
   async function submit() {
-    if (!startAt) return go(1);
+    if (!startAt || !main) return go(main ? 1 : 0);
     setSubmitting(true);
     setStepError(null);
     try {
       const res = await fetch("/api/bookings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ serviceIds: selected, startAt, name: contact.name, phone: contact.phone, email: contact.email, customerNote: contact.note }),
+        body: JSON.stringify({
+          mainServiceId: main.id,
+          addOnIds,
+          startAt,
+          name: contact.name,
+          phone: contact.phone,
+          email: contact.noEmail ? "" : contact.email,
+          noEmail: contact.noEmail,
+          marketingConsent: contact.marketingConsent,
+          customerNote: contact.note,
+          website,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -173,16 +219,16 @@ export function BookingWizard({
       try {
         sessionStorage.removeItem(DRAFT_KEY);
       } catch {}
-      router.push(`/checkout/${data.checkoutReference}`);
+      const t = encodeURIComponent(data.accessToken);
+      router.push(data.checkoutReference ? `/checkout/${data.checkoutReference}?t=${t}` : `/booking/${data.reference}?t=${t}`);
     } catch {
-      setStepError("We couldn't reach the booking service. Check your connection and try again — nothing has been charged.");
+      setStepError("We couldn't reach the booking service. Check your connection and try again. Nothing has been charged.");
     } finally {
       setSubmitting(false);
     }
   }
 
   const visibleError = (f: "name" | "phone" | "email") => (touched[f] ? errors[f] : undefined);
-  const contactError = touched.phone && touched.email ? errors.contact : undefined;
   const errorList = Object.entries(errors) as [keyof ContactErrors, string][];
   const isLast = step === STEPS.length - 1;
 
@@ -197,10 +243,10 @@ export function BookingWizard({
           </h1>
           <p className="mt-2 text-ink-2">
             {[
-              "Select one or more services. You can change this later in the flow.",
-              `Showing times that fit about ${formatDuration(estimate.durationMinutes || defaultDurationMinutes)} for your selection.`,
-              "Name plus a phone number or email is all that's needed. No account required.",
-              "Nothing is final until the demo deposit is completed.",
+              "Choose a service, then add any extras.",
+              `Showing times that fit about ${formatDuration(durationMinutes)} for your booking.`,
+              "Your name and phone number are all that's needed. No account required.",
+              "Your time is reserved once the deposit is paid.",
             ][step]}
           </p>
 
@@ -210,44 +256,76 @@ export function BookingWizard({
 
           <div className="mt-8">
             {step === 0 && (
-              <fieldset>
-                <legend className="sr-only">Services</legend>
-                <ul className="grid gap-3">
-                  {services.map((s) => {
-                    const on = selected.includes(s.id);
-                    return (
-                      <li key={s.id}>
-                        <label
-                          className={cx(
-                            "flex cursor-pointer gap-4 rounded-[var(--radius)] border bg-surface p-4 transition-[border-color,box-shadow] has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink sm:p-5",
-                            on ? "border-accent bg-accent-soft/40 shadow-[var(--shadow-md)]" : "border-line hover:border-line-strong",
-                          )}
-                        >
-                          <input type="checkbox" checked={on} onChange={() => toggle(s.id)} aria-label={`${s.name}${s.status === "demo" ? " (demo service)" : ""}`} aria-describedby={`svc-desc-${s.id}`} className="peer sr-only" />
-                          <span aria-hidden className={cx("mt-1 flex size-6 shrink-0 items-center justify-center rounded-md border-2", on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface")}>
-                            {on && <Check className="size-4" strokeWidth={3} />}
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="flex flex-wrap items-center gap-2">
+              <div className="space-y-8">
+                <fieldset>
+                  <legend className="sr-only">Service</legend>
+                  <ul className="grid gap-3">
+                    {mains.map((s) => {
+                      const on = mainId === s.id;
+                      return (
+                        <li key={s.id}>
+                          <label
+                            className={cx(
+                              "flex cursor-pointer gap-4 rounded-[var(--radius)] border bg-surface p-4 transition-[border-color,box-shadow] has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink sm:p-5",
+                              on ? "border-accent bg-accent-soft/40 shadow-[var(--shadow-md)]" : "border-line hover:border-line-strong",
+                            )}
+                          >
+                            <input type="radio" name="main-service" checked={on} onChange={() => chooseMain(s.id)} aria-describedby={`svc-desc-${s.id}`} className="peer sr-only" />
+                            <span aria-hidden className={cx("mt-1 flex size-6 shrink-0 items-center justify-center rounded-full border-2", on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface")}>
+                              {on && <Check className="size-4" strokeWidth={3} />}
+                            </span>
+                            <span className="min-w-0 flex-1">
                               <span className="type-caps text-[0.85rem] text-accent-text">{s.name}</span>
-                              <ServiceDemoTag service={s} />
+                              <span id={`svc-desc-${s.id}`} className="mt-1 block text-ink-2">{s.description}</span>
+                              <span className="mt-3 block">
+                                <ServiceMeta service={s} />
+                              </span>
                             </span>
-                            <span id={`svc-desc-${s.id}`} className="mt-1 block text-ink-2">{s.description}</span>
-                            <span className="mt-3 block">
-                              <ServiceMeta service={s} defaultDuration={defaultDurationMinutes} />
-                            </span>
-                          </span>
-                        </label>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </fieldset>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </fieldset>
+
+                {main && offeredAddOns.length > 0 && (
+                  <fieldset>
+                    <legend className="text-lg font-semibold text-ink">Add extras (optional)</legend>
+                    <p className="mt-1 text-sm text-ink-2">Each extra adds to the price and the time. Skip this if you don&apos;t need any.</p>
+                    <ul className="mt-4 grid gap-3">
+                      {offeredAddOns.map((a) => {
+                        const on = addOnIds.includes(a.id);
+                        const terms = addOnTerms(a);
+                        return (
+                          <li key={a.id}>
+                            <label className={cx("flex cursor-pointer items-center gap-4 rounded-[var(--radius)] border bg-surface p-4 has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink", on ? "border-accent bg-accent-soft/40" : "border-line hover:border-line-strong")}>
+                              <input type="checkbox" checked={on} onChange={() => toggleAddOn(a.id)} className="peer sr-only" />
+                              <span aria-hidden className={cx("flex size-6 shrink-0 items-center justify-center rounded-md border-2", on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface")}>
+                                {on && <Check className="size-4" strokeWidth={3} />}
+                              </span>
+                              <span className="min-w-0 flex-1 font-medium text-ink">{a.name}</span>
+                              <span className="shrink-0 text-right text-sm text-ink-2">
+                                <span className="tabular block font-semibold text-ink">+{formatNaira(terms.priceKobo)}</span>
+                                +{formatDuration(terms.durationMinutes)}
+                              </span>
+                            </label>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    {addOnIds.length > 0 && (
+                      <button type="button" onClick={() => setAddOnIds([])} className="mt-3 text-sm font-semibold text-ink-2 underline underline-offset-4">
+                        Skip extras
+                      </button>
+                    )}
+                  </fieldset>
+                )}
+              </div>
             )}
 
             {step === 1 && (
               <DateTimeStep
-                durationMinutes={estimate.durationMinutes || defaultDurationMinutes}
+                durationMinutes={durationMinutes}
                 dateKey={dateKey}
                 startAt={startAt}
                 refreshKey={slotRefresh}
@@ -271,7 +349,7 @@ export function BookingWizard({
                     <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
                       {errorList.map(([field, msg]) => (
                         <li key={field}>
-                          <a className="text-danger underline" href={`#f-${field === "contact" ? "phone" : field}`}>{msg}</a>
+                          <a className="text-danger underline" href={`#f-${field}`}>{msg}</a>
                         </li>
                       ))}
                     </ul>
@@ -282,80 +360,90 @@ export function BookingWizard({
                     aria-invalid={!!visibleError("name")} aria-describedby={describedBy("f-name", { error: !!visibleError("name") })}
                     onChange={(e) => setContact({ ...contact, name: e.target.value })} onBlur={() => blur("name")} />
                 </Field>
-                <fieldset className="space-y-4 rounded-[var(--radius)] border border-line bg-surface/60 p-4">
-                  <legend className="px-1 text-sm font-semibold text-ink">Contact — phone or email (at least one)</legend>
-                  {contactError && (
-                    <p id="contact-error" className="text-sm font-medium text-danger">{contactError}</p>
-                  )}
-                  <Field id="f-phone" label="Phone number" hint="Nigerian mobile, e.g. 0803 123 4567" error={visibleError("phone")}>
-                    <input id="f-phone" type="tel" inputMode="tel" autoComplete="tel" className={inputClass} value={contact.phone}
-                      aria-invalid={!!visibleError("phone") || !!contactError}
-                      aria-describedby={[describedBy("f-phone", { hint: true, error: !!visibleError("phone") }), contactError && "contact-error"].filter(Boolean).join(" ")}
-                      onChange={(e) => setContact({ ...contact, phone: e.target.value })} onBlur={() => blur("phone")} />
-                  </Field>
-                  <Field id="f-email" label="Email address" error={visibleError("email")}>
+                <Field id="f-phone" label="Phone number" required hint="Nigerian mobile, for example 0803 123 4567" error={visibleError("phone")}>
+                  <input id="f-phone" type="tel" inputMode="tel" autoComplete="tel" className={inputClass} value={contact.phone}
+                    aria-invalid={!!visibleError("phone")}
+                    aria-describedby={describedBy("f-phone", { hint: true, error: !!visibleError("phone") })}
+                    onChange={(e) => setContact({ ...contact, phone: e.target.value })} onBlur={() => blur("phone")} />
+                </Field>
+                {!contact.noEmail && (
+                  <Field id="f-email" label="Email address" required hint="For your confirmation and reminder" error={visibleError("email")}>
                     <input id="f-email" type="email" inputMode="email" autoComplete="email" className={inputClass} value={contact.email}
-                      aria-invalid={!!visibleError("email") || !!contactError}
-                      aria-describedby={[describedBy("f-email", { error: !!visibleError("email") }), contactError && "contact-error"].filter(Boolean).join(" ") || undefined}
+                      aria-invalid={!!visibleError("email")}
+                      aria-describedby={describedBy("f-email", { hint: true, error: !!visibleError("email") })}
                       onChange={(e) => setContact({ ...contact, email: e.target.value })} onBlur={() => blur("email")} />
                   </Field>
-                </fieldset>
-                <Field id="f-note" label="Anything the salon should know?" optional hint="E.g. current loc length or a style you have in mind. The salon can see this.">
+                )}
+                <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-ink">
+                  <input type="checkbox" className="mt-0.5 size-5 accent-[var(--color-accent)]" checked={contact.noEmail}
+                    onChange={(e) => {
+                      const noEmail = e.target.checked;
+                      const updated = { ...contact, noEmail, email: noEmail ? "" : contact.email };
+                      setContact(updated);
+                      setErrors(validateContact(updated));
+                    }} />
+                  <span>I don&apos;t have an email. <span className="text-ink-3">The salon will message you on WhatsApp instead.</span></span>
+                </label>
+                <Field id="f-note" label="Anything the salon should know?" optional hint="For example, your current loc length or a style you have in mind. The salon can see this.">
                   <textarea id="f-note" rows={3} maxLength={500} className={cx(inputClass, "min-h-24")} value={contact.note}
                     aria-describedby="f-note-hint" onChange={(e) => setContact({ ...contact, note: e.target.value })} />
                 </Field>
+                <label className="flex min-h-11 cursor-pointer items-start gap-3 text-sm text-ink">
+                  <input type="checkbox" className="mt-0.5 size-5 accent-[var(--color-accent)]" checked={contact.marketingConsent}
+                    onChange={(e) => setContact({ ...contact, marketingConsent: e.target.checked })} />
+                  <span>Send me occasional offers and news from the salon. <span className="text-ink-3">Optional; you can say no.</span></span>
+                </label>
+                {/* Honeypot: hidden from people and screen readers; bots that fill it are turned away. */}
+                <div aria-hidden className="absolute -left-[9999px] h-px w-px overflow-hidden">
+                  <label htmlFor="f-website">Website</label>
+                  <input id="f-website" name="website" tabIndex={-1} autoComplete="off" value={website} onChange={(e) => setWebsite(e.target.value)} />
+                </div>
                 <p className="flex items-start gap-2 text-sm text-ink-3">
                   <Lock aria-hidden className="mt-0.5 size-4 shrink-0" />
-                  Your details are only used to manage this appointment. (Prototype: no messages are actually sent.)
+                  Your details are only used to manage your appointments.
                 </p>
                 <button type="submit" className="sr-only">Continue</button>
               </form>
             )}
 
-            {step === 3 && startAt && (
+            {step === 3 && startAt && main && (
               <div className="space-y-6">
-                <ReviewBlock title="Services" onEdit={() => go(0)}>
+                <ReviewBlock title="Service" onEdit={() => go(0)}>
                   <ul className="divide-y divide-line">
-                    {chosen.map((s) => (
-                      <li key={s.id} className="flex items-start justify-between gap-4 py-2.5">
+                    {lines.map((l) => (
+                      <li key={l.key} className="flex items-start justify-between gap-4 py-2.5">
                         <span>
-                          <span className="font-medium">{s.name}</span>{" "}
-                          {s.status === "demo" && <DemoTag className="ml-1 align-middle">Demo service</DemoTag>}
-                          <span className="block text-sm text-ink-3">{formatDuration(s.durationMinutes ?? defaultDurationMinutes)}</span>
+                          <span className="font-medium">{l.isAddOn && <span className="text-ink-3">+ </span>}{l.name}</span>
+                          <span className="block text-sm text-ink-3">{formatDuration(l.durationMinutes)}</span>
                         </span>
-                        <span className="tabular shrink-0 text-ink-2">{s.priceKobo === null ? "At appointment" : formatNaira(s.priceKobo)}</span>
+                        <span className="tabular shrink-0 text-ink-2">{formatNaira(l.priceKobo)}</span>
                       </li>
                     ))}
                   </ul>
                 </ReviewBlock>
                 <ReviewBlock title="Date and time" onEdit={() => go(1)}>
                   <p className="font-medium">{formatDateKey(dateKey!, { long: true })}</p>
-                  <p className="text-ink-2">{formatTime(startAt)} – about {formatDuration(estimate.durationMinutes)} · Ibadan time</p>
+                  <p className="text-ink-2">{formatTime(startAt)}, about {formatDuration(durationMinutes)} · Ibadan time</p>
                 </ReviewBlock>
                 <ReviewBlock title="Your details" onEdit={() => go(2)}>
                   <p className="font-medium">{contact.name}</p>
-                  <p className="text-ink-2">{[contact.phone, contact.email].filter(Boolean).join(" · ")}</p>
+                  <p className="text-ink-2">{[contact.phone, contact.noEmail ? "No email" : contact.email].filter(Boolean).join(" · ")}</p>
                   {contact.note && <p className="mt-1 text-sm text-ink-3">Note: {contact.note}</p>}
                 </ReviewBlock>
 
                 <section aria-labelledby="pay-title" className="rounded-[var(--radius)] border border-accent/70 bg-surface p-5">
                   <h2 id="pay-title" className="font-semibold">Payment</h2>
                   <div className="mt-3">
-                    <MoneyRows estimateKobo={estimate.totalKobo} hasUnpriced={estimate.hasUnpricedItems} depositKobo={deposit} />
+                    <MoneyRows totalKobo={totalKobo} depositKobo={deposit} />
                   </div>
                   <p className="mt-3 text-xs text-ink-3">
-                    Demo deposit rule: {describeDepositRule(settings.deposit)}. Your final bill is confirmed by the salon after your appointment; anything already paid is deducted.
+                    Deposit: {describeDepositRule(settings.deposit)}. The deposit secures your time and is not refundable. Anything added on the day is included in the balance.
                   </p>
                 </section>
 
-                <Alert tone="warning" title="Booking terms not yet published">
-                  Haircraft360 hasn&apos;t approved its deposit, cancellation, rescheduling or refund terms yet, so none are shown here.
-                  Questions? Call <a href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
-                </Alert>
-
                 <p className="flex items-start gap-2 text-sm text-ink-2">
                   <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
-                  Your time will be held for {pendingHoldMinutes} minutes (demo setting) while you complete the simulated deposit. No card details are collected.
+                  Your time is held for {holdMinutes} minutes while you pay the deposit. Questions? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
                 </p>
               </div>
             )}
@@ -372,12 +460,12 @@ export function BookingWizard({
                 </Button>
               ) : null}
               <div className={cx("min-w-0 flex-1 md:hidden", isLast && "hidden")} aria-live="polite">
-                <p className="truncate text-xs text-ink-3">{chosen.length} service{chosen.length === 1 ? "" : "s"}{startAt ? ` · ${formatTime(startAt)}` : ""}</p>
-                <p className="tabular text-sm font-semibold">{chosen.length ? `Deposit ${formatNaira(deposit)}` : "Nothing selected"}</p>
+                <p className="truncate text-xs text-ink-3">{main ? main.name : "No service yet"}{addOnIds.length ? ` + ${addOnIds.length}` : ""}{startAt ? ` · ${formatTime(startAt)}` : ""}</p>
+                <p className="tabular text-sm font-semibold">{main ? `Total ${formatNaira(totalKobo)}` : "Nothing selected"}</p>
               </div>
               {isLast ? (
                 <Button size="lg" onClick={submit} loading={submitting} className="flex-1 md:flex-none">
-                  {submitting ? "Reserving…" : <>Pay demo deposit <span className="tabular">{formatNaira(deposit)}</span></>}
+                  {submitting ? "Reserving…" : <>Pay deposit <span className="tabular">{formatNaira(deposit)}</span></>}
                 </Button>
               ) : (
                 <Button size="lg" onClick={next} className="shrink-0">
@@ -391,13 +479,11 @@ export function BookingWizard({
         <aside className="hidden md:block">
           <div className="sticky top-24">
             <BookingSummaryPanel
-              services={chosen}
-              defaultDuration={defaultDurationMinutes}
-              durationMinutes={estimate.durationMinutes}
+              lines={lines}
+              durationMinutes={durationMinutes}
               dateKey={dateKey}
               startAt={startAt}
-              estimateKobo={estimate.totalKobo}
-              hasUnpriced={estimate.hasUnpricedItems}
+              totalKobo={totalKobo}
               depositKobo={deposit}
               depositRule={settings.deposit}
             />
@@ -407,6 +493,17 @@ export function BookingWizard({
 
     </div>
   );
+}
+
+function pickContact(d: Partial<Draft>): Partial<Contact> {
+  return {
+    name: d.name ?? "",
+    phone: d.phone ?? "",
+    email: d.email ?? "",
+    noEmail: d.noEmail ?? false,
+    marketingConsent: d.marketingConsent ?? false,
+    note: d.note ?? "",
+  };
 }
 
 function StepIndicator({ step, onJump }: { step: number; onJump: (i: number) => void }) {
@@ -438,7 +535,7 @@ function StepIndicator({ step, onJump }: { step: number; onJump: (i: number) => 
                 </span>
                 <span className={cx("truncate text-[0.7rem] font-semibold uppercase tracking-[0.14em] max-sm:sr-only", current ? "text-accent-text" : "text-ink-3")}>
                   {label}
-                  {done && <span className="sr-only"> (completed — go back)</span>}
+                  {done && <span className="sr-only"> (completed, go back)</span>}
                 </span>
               </button>
               {i < STEPS.length - 1 && <span aria-hidden className={cx("h-0.5 flex-1 rounded", done ? "bg-accent" : "bg-line")} />}

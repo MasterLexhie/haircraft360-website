@@ -28,9 +28,9 @@ const TONE: Record<Tone, string> = {
 function describe(action: string): { title: string; icon: LucideIcon; tone: Tone } {
   const [kind, a, b] = action.split(".");
   if (kind === "payment") {
-    const what = a === "deposit" ? "Deposit" : a === "balance" ? "Balance" : "Payment";
-    if (a === "manual") return { title: "Manual payment recorded", icon: Banknote, tone: "success" };
-    if (b === "success") return { title: `${what} paid`, icon: Banknote, tone: "success" };
+    const what = a === "deposit" ? "Deposit" : a === "balance_online" || a === "balance" ? "Balance" : "Payment";
+    if (a === "manual") return { title: "Payment recorded by the salon", icon: Banknote, tone: "success" };
+    if (b === "received" || b === "success") return { title: `${what} received`, icon: Banknote, tone: "success" };
     if (b === "failed") return { title: `${what} payment failed`, icon: CircleX, tone: "danger" };
     if (b === "abandoned") return { title: `${what} checkout abandoned`, icon: CircleX, tone: "danger" };
     if (b === "initialized") return { title: `${what} checkout opened`, icon: CreditCard, tone: "neutral" };
@@ -52,6 +52,7 @@ function describe(action: string): { title: string; icon: LucideIcon; tone: Tone
   }
   if (kind === "customer") return { title: "Customer note added", icon: NotebookPen, tone: "neutral" };
   if (kind === "service") return { title: a === "created" ? "Service added" : "Service updated", icon: Settings2, tone: "neutral" };
+  if (kind === "seed") return { title: "Sample data loaded", icon: Settings2, tone: "neutral" };
   return { title: "Settings updated", icon: Settings2, tone: "neutral" };
 }
 

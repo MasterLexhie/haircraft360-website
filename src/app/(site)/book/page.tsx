@@ -7,7 +7,7 @@ import { business } from "@/config/business";
 
 export const metadata: Metadata = { title: "Book an appointment" };
 
-export default function BookPage({ searchParams }: { searchParams: Promise<{ services?: string }> }) {
+export default function BookPage({ searchParams }: { searchParams: Promise<{ service?: string }> }) {
   return (
     <Suspense fallback={<WizardSkeleton />}>
       <Wizard searchParams={searchParams} />
@@ -15,10 +15,9 @@ export default function BookPage({ searchParams }: { searchParams: Promise<{ ser
   );
 }
 
-async function Wizard({ searchParams }: { searchParams: Promise<{ services?: string }> }) {
+async function Wizard({ searchParams }: { searchParams: Promise<{ service?: string }> }) {
   const [{ services, settings }, params] = await Promise.all([getBookingConfig(), searchParams]);
-  const initial = (params.services ?? "").split(",").filter(Boolean);
-  if (services.length === 0) {
+  if (!services.some((s) => s.bookableAlone)) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <h1 className="type-display text-[2.2rem]">Online booking is paused</h1>
@@ -29,7 +28,7 @@ async function Wizard({ searchParams }: { searchParams: Promise<{ services?: str
       </div>
     );
   }
-  return <BookingWizard services={services} settings={settings} initialSelected={initial} />;
+  return <BookingWizard services={services} settings={{ availability: settings.availability, deposit: settings.deposit }} initialServiceId={params.service ?? null} />;
 }
 
 function WizardSkeleton() {

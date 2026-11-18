@@ -9,7 +9,7 @@ import { StockPhoto } from "@/components/site/brand";
 import { GALLERY_PAIRS, HERO_PHOTO } from "@/config/stock-photos";
 import { ButtonLink, DemoTag, SectionHeading, Skeleton } from "@/components/ui/primitives";
 import { formatHHMM, WEEKDAYS } from "@/lib/time";
-import type { DayKey } from "@/domain/types";
+import type { WeekdayKey } from "@/domain/settings";
 
 export default function HomePage() {
   return (
@@ -154,7 +154,7 @@ function Welcome() {
 }
 
 async function ServicesSection() {
-  const [services, settings] = await Promise.all([getActiveServices(), getPublicSettings()]);
+  const services = (await getActiveServices()).filter((s) => s.bookableAlone);
   if (services.length === 0) {
     return (
       <div className="rounded-[var(--radius)] border border-dashed border-line-strong p-8 text-center">
@@ -165,7 +165,7 @@ async function ServicesSection() {
       </div>
     );
   }
-  return <HomeServices services={services} defaultDuration={settings.availability.defaultDurationMinutes} />;
+  return <HomeServices services={services} />;
 }
 
 function ServicesSkeleton() {
@@ -264,8 +264,8 @@ function Visit() {
 }
 
 async function HoursTable() {
-  const { availability, availabilityStatus } = await getPublicSettings();
-  const order: DayKey[] = [1, 2, 3, 4, 5, 6, 0];
+  const { availability } = await getPublicSettings();
+  const order: WeekdayKey[] = ["1", "2", "3", "4", "5", "6", "0"];
   return (
     <>
       <table className="mt-6 w-full text-left text-sm">
@@ -275,7 +275,7 @@ async function HoursTable() {
             const h = availability.weeklyHours[d];
             return (
               <tr key={d} className="border-b border-line last:border-0">
-                <th scope="row" className="py-3 font-semibold text-ink">{WEEKDAYS[d]}</th>
+                <th scope="row" className="py-3 font-semibold text-ink">{WEEKDAYS[Number(d)]}</th>
                 <td className={h ? "py-3 text-right tabular text-ink-2" : "py-3 text-right font-display italic text-ink-3"}>
                   {h ? `${formatHHMM(h.open)} – ${formatHHMM(h.close)}` : "Closed"}
                 </td>
@@ -284,9 +284,6 @@ async function HoursTable() {
           })}
         </tbody>
       </table>
-      {availabilityStatus === "demo" && (
-        <p className="mt-4 text-xs text-ink-3">Listed hours — not yet confirmed. Public-holiday hours have not been supplied.</p>
-      )}
     </>
   );
 }

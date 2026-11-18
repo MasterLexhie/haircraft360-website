@@ -6,7 +6,8 @@ import { requireAdmin } from "@/server/auth";
 import { getAdminData, joinBooking } from "@/server/queries";
 import { balanceDue, paidKobo, paymentSummaryState } from "@/domain/pricing";
 import { bookingStatusLabel, paymentSummaryLabel } from "@/domain/labels";
-import type { BookingStatus } from "@/domain/types";
+import type { Booking, BookingStatus } from "@/domain/types";
+import { formatPhone } from "@/domain/phone";
 import { formatNaira } from "@/lib/money";
 import { formatDate, formatTime, lagosDateKey } from "@/lib/time";
 import { BookingStatusBadge, PageHeader, PaymentStateBadge } from "@/components/admin/bits";
@@ -40,7 +41,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
       if (f.from && day < f.from) return false;
       if (f.to && day > f.to) return false;
       if (q) {
-        const hay = [booking.reference, customer.name, customer.phone, customer.email, ...booking.lines.map((l) => l.name)].join(" ").toLowerCase();
+        const hay = [booking.reference, customer.displayName, booking.contactName, ...customer.phones, ...customer.emails.map((e) => e.value), ...booking.items.map((l) => l.name)].join(" ").toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -52,8 +53,8 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
 
   // Totals cover every booking matching the filters, not just the visible page.
   const totalPaid = rows.reduce((s, r) => s + paidKobo(r.payments), 0);
-  const totalBalance = rows.reduce((s, r) => s + (balanceDue(r.booking, r.payments) ?? 0), 0);
-  const awaitingActual = rows.filter((r) => r.booking.actualTotalKobo === null && ["confirmed", "completed"].includes(r.booking.status)).length;
+  // Only completed appointments owe a balance; confirmed ones pay theirs on the day.
+  const totalBalance = rows.filter((r) => r.booking.status === "completed").reduce((s, r) => s + balanceDue(r.booking, r.payments), 0);
 
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const page = Math.min(Math.max(1, Number.parseInt(_page ?? "1", 10) || 1), pageCount);
@@ -123,8 +124,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
                   <th scope="col" className="px-4 py-3 font-semibold">When</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Customer</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Services</th>
-                  <th scope="col" className="whitespace-nowrap px-4 py-3 text-right font-semibold">Estimated</th>
-                  <th scope="col" className="px-4 py-3 text-right font-semibold">Actual</th>
+                  <th scope="col" className="px-4 py-3 text-right font-semibold">Total</th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">Paid</th>
                   <th scope="col" className="px-4 py-3 text-right font-semibold">Balance</th>
                   <th scope="col" className="px-4 py-3 font-semibold">Status</th>
@@ -142,20 +142,13 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
                         <span className="block text-xs text-ink-3">{formatTime(booking.startAt)} · {booking.reference}</span>
                       </td>
                       <td className="px-4 py-3">
-                        <Link href={`/admin/customers/${customer.id}`} className="font-medium hover:underline">{customer.name}</Link>
-                        <span className="block text-xs text-ink-3">{customer.phone ?? customer.email}</span>
+                        <Link href={`/admin/customers/${customer.id}`} className="font-medium hover:underline">{customer.displayName}</Link>
+                        <span className="block text-xs text-ink-3">{formatPhone(booking.contactPhone)}</span>
                       </td>
-                      <td className="max-w-56 px-4 py-3 text-ink-2">{booking.lines.filter((l) => l.kind === "booked").map((l) => l.name).join(", ")}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right tabular">{formatNaira(booking.estimatedTotalKobo)}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right tabular">
-                        {booking.actualTotalKobo === null ? (
-                          <span className="text-ink-3" aria-label="Not recorded yet" title="Not recorded yet">—</span>
-                        ) : (
-                          formatNaira(booking.actualTotalKobo)
-                        )}
-                      </td>
+                      <td className="max-w-56 px-4 py-3 text-ink-2">{serviceNames(booking)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right tabular">{formatNaira(booking.totalKobo)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right tabular">{formatNaira(paidKobo(payments))}</td>
-                      <td className="whitespace-nowrap px-4 py-3 text-right tabular font-semibold">{due === null ? <span className="font-normal text-ink-3">—</span> : formatNaira(due)}</td>
+                      <td className="whitespace-nowrap px-4 py-3 text-right tabular font-semibold">{formatNaira(due)}</td>
                       <td className="px-4 py-3"><div className="flex flex-col items-start gap-1"><BookingStatusBadge status={booking.status} /><PaymentStateBadge booking={booking} payments={payments} /></div></td>
                     </tr>
                   );
@@ -173,17 +166,17 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
                   <Link href={`/admin/bookings/${booking.id}`} className="block rounded-[var(--radius)] border border-line bg-surface p-4 hover:border-ink">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="font-semibold">{customer.name}</p>
+                        <p className="font-semibold">{customer.displayName}</p>
                         <p className="tabular text-sm text-ink-2">{formatDate(booking.startAt)}, {formatTime(booking.startAt)}</p>
                       </div>
                       <BookingStatusBadge status={booking.status} />
                     </div>
-                    <p className="mt-2 text-sm text-ink-2">{booking.lines.filter((l) => l.kind === "booked").map((l) => l.name).join(", ")}</p>
+                    <p className="mt-2 text-sm text-ink-2">{serviceNames(booking)}</p>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-line pt-3 text-sm">
                       <span className="text-ink-3">{booking.reference}</span>
                       <span className="flex flex-wrap items-center gap-2">
                         <span className="tabular">Paid {formatNaira(paidKobo(payments))}</span>
-                        {due !== null && due > 0 && <span className="tabular font-semibold text-danger">Due {formatNaira(due)}</span>}
+                        {booking.status === "completed" && due > 0 && <span className="tabular font-semibold text-danger">Due {formatNaira(due)}</span>}
                         <PaymentStateBadge booking={booking} payments={payments} />
                       </span>
                     </div>
@@ -195,7 +188,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
 
           <Pagination page={page} pageCount={pageCount} first={firstIndex + 1} last={firstIndex + pageRows.length} total={rows.length} hrefFor={hrefFor} />
 
-          <TotalsBar count={rows.length} paidKobo={totalPaid} balanceKobo={totalBalance} awaitingActual={awaitingActual} />
+          <TotalsBar count={rows.length} paidKobo={totalPaid} balanceKobo={totalBalance} />
         </>
       )}
     </>
@@ -266,7 +259,7 @@ function Pagination({
 }
 
 /** Pinned to the bottom of the admin scroll area so the totals stay visible while scrolling. */
-function TotalsBar({ count, paidKobo, balanceKobo, awaitingActual }: { count: number; paidKobo: number; balanceKobo: number; awaitingActual: number }) {
+function TotalsBar({ count, paidKobo, balanceKobo }: { count: number; paidKobo: number; balanceKobo: number }) {
   return (
     <section
       aria-label="Totals for the filtered bookings"
@@ -282,15 +275,14 @@ function TotalsBar({ count, paidKobo, balanceKobo, awaitingActual }: { count: nu
           <dd className="tabular text-lg font-semibold text-ink">{formatNaira(paidKobo)}</dd>
         </div>
         <div>
-          <dt className="text-xs text-ink-3">Balance due</dt>
+          <dt className="text-xs text-ink-3">Balance due (completed)</dt>
           <dd className={cx("tabular text-lg font-semibold", balanceKobo > 0 ? "text-danger" : "text-ink")}>{formatNaira(balanceKobo)}</dd>
         </div>
       </dl>
-      {awaitingActual > 0 && (
-        <p className="mt-1 text-xs text-ink-3">
-          Balance excludes {awaitingActual} booking{awaitingActual === 1 ? "" : "s"} with no actual total recorded yet.
-        </p>
-      )}
     </section>
   );
+}
+
+function serviceNames(booking: Booking): string {
+  return booking.items.filter((l) => l.kind !== "extra").map((l) => l.name).join(", ");
 }

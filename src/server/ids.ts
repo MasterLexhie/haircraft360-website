@@ -1,13 +1,12 @@
 import "server-only";
-import { randomBytes, randomUUID } from "node:crypto";
 
 const ALPHABET = "23456789ABCDEFGHJKMNPQRSTUVWXYZ"; // no 0/O/1/I/L
 
+/** Random code from an unambiguous alphabet (Web Crypto, so it runs on any host). */
 export function shortCode(length: number): string {
-  const bytes = randomBytes(length);
+  const bytes = crypto.getRandomValues(new Uint8Array(length));
   return Array.from(bytes, (b) => ALPHABET[b % ALPHABET.length]).join("");
 }
 
-export const newId = (prefix: string) => `${prefix}_${randomUUID().slice(0, 12)}`;
+/** Short human reference shown to customers, for example HC-7KQ2M. Not a secret. */
 export const newBookingReference = () => `HC-${shortCode(5)}`;
-export const newAccessToken = () => randomBytes(18).toString("base64url");
