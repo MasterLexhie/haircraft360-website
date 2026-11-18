@@ -19,6 +19,9 @@ export function normalizePhone(input: string): string | null {
   const candidate = /^234\d{10}$/.test(trimmed.replace(/[\s()-]/g, "")) ? `+${trimmed}` : trimmed;
   const parsed = parsePhoneNumberFromString(candidate, DEFAULT_PHONE_REGION);
   if (!parsed || !parsed.isValid()) return null;
+  // The compact metadata only checks length ranges. Nigerian booking numbers must be mobiles
+  // (they receive WhatsApp messages): 10 digits starting 70x, 80x, 81x, 90x or 91x.
+  if (parsed.country === "NG" && !/^[789][01]\d{8}$/.test(parsed.nationalNumber)) return null;
   return parsed.number;
 }
 
