@@ -139,4 +139,33 @@ describe("sessions", () => {
     const admin = await auth.requireAdmin();
     await expect(auth.changePassword(admin, PASSWORD, "short")).rejects.toThrow(/at least 12/);
   });
+
+  it("counts wrong current passwords on the Account page like failed sign-ins", async () => {
+    await signUpAndEnable();
+    const admin = await auth.requireAdmin();
+    for (let i = 0; i < 5; i++) {
+      ip = `10.2.0.${i}`; // spread across IPs so the per-account rule is what triggers
+      await expect(auth.changePassword(admin, "wrong password", "a brand new long password")).rejects.toThrow(/isn't right/);
+    }
+    ip = "10.2.0.99";
+    await expect(auth.changePassword(admin, PASSWORD, "a brand new long password")).rejects.toThrow(/Too many failed attempts/);
+    const alerts = await db.notification.findMany({ where: { type: "owner_alert" } });
+    expect(alerts.some((a) => (a.payload as { kind?: string }).kind === "failed_sign_ins")).toBe(true);
+  });
+
+  it("limits wrong current passwords from one IP", async () => {
+    await signUpAndEnable();
+    const admin = await auth.requireAdmin();
+    for (let i = 0; i < 5; i++) await expect(auth.signInWithPassword(`x${i}@example.com`, "nope")).rejects.toThrow(/don't match/);
+    await expect(auth.changePassword(admin, PASSWORD, "a brand new long password")).rejects.toThrow(/Too many sign-in attempts/);
+  });
+
+  it("clears the failure count after a successful change", async () => {
+    await signUpAndEnable();
+    const admin = await auth.requireAdmin();
+    await expect(auth.changePassword(admin, "wrong password", "a brand new long password")).rejects.toThrow(/isn't right/);
+    await auth.changePassword(admin, PASSWORD, "a brand new long password");
+    const user = await db.adminUser.findUniqueOrThrow({ where: { email: EMAIL } });
+    expect(user.failedLoginCount).toBe(0);
+  });
 });

@@ -291,9 +291,16 @@ export async function confirmTotpSetup(codeRaw: string): Promise<string[]> {
 
 export async function changePassword(admin: AdminIdentity, current: string, next: string): Promise<void> {
   if (next.length < MIN_PASSWORD_LENGTH) throw new AuthError(`Use at least ${MIN_PASSWORD_LENGTH} characters for the new password.`);
+  // Wrong current passwords count toward the same limits as sign-in, so someone at an
+  // unlocked, signed-in device can't keep guessing.
+  await checkIpLimit();
   const user = await db.adminUser.findUniqueOrThrow({ where: { id: admin.id } });
-  if (!(await verifyPassword(current, user.passwordHash))) throw new AuthError("Your current password isn't right.");
-  await db.adminUser.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next), passwordChangedAt: new Date() } });
+  assertNotWaiting(user);
+  if (!(await verifyPassword(current, user.passwordHash))) {
+    await recordFailure(user);
+    throw new AuthError("Your current password isn't right.");
+  }
+  await db.adminUser.update({ where: { id: user.id }, data: { passwordHash: await hashPassword(next), passwordChangedAt: new Date(), failedLoginCount: 0, loginBlockedUntil: null } });
   // End every session, then start a fresh one here so the owner stays signed in on this device.
   await db.adminSession.deleteMany({ where: { adminUserId: user.id } });
   await startSession(user.id, true);
