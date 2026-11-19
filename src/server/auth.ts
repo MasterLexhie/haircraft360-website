@@ -23,7 +23,7 @@ import { queueSecurityAlert } from "./security-alerts";
  *   cookie exists, as a fast first filter.
  */
 
-import { SESSION_COOKIE_NAME } from "./session-cookie";
+import { REQUEST_PATH_HEADER, SESSION_COOKIE_NAME } from "./session-cookie";
 
 export const SESSION_COOKIE = SESSION_COOKIE_NAME;
 const SESSION_HOURS = 8;
@@ -101,13 +101,20 @@ async function endCurrentSession(): Promise<void> {
 export async function requireAdmin(): Promise<AdminIdentity> {
   await connection();
   const session = await currentSession();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect(await loginUrl());
   if (!session.mfaVerified) redirect(session.adminUser.totpEnabledAt ? "/admin/login/verify" : "/admin/login/setup");
   if (Date.now() - session.lastSeenAt.getTime() > 5 * 60_000) {
     await db.adminSession.update({ where: { id: session.id }, data: { lastSeenAt: new Date() } });
   }
   const u = session.adminUser;
   return { id: u.id, name: u.displayName, email: u.email };
+}
+
+/** The sign-in page, with the page being opened as ?next= (checked again by safeNext on sign-in). */
+async function loginUrl(): Promise<string> {
+  const path = (await headers()).get(REQUEST_PATH_HEADER) ?? "";
+  const keep = path.startsWith("/admin") && path !== "/admin" && !path.startsWith("/admin/login") && !path.startsWith("//");
+  return keep ? `/admin/login?next=${encodeURIComponent(path)}` : "/admin/login";
 }
 
 /** For the 2FA steps: a session that has passed the password but not the code. */

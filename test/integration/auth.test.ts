@@ -6,13 +6,14 @@ import { hashPassword } from "@/lib/crypto";
 /* A tiny cookie jar and request standing in for Next.js request APIs. */
 const jar = new Map<string, string>();
 let ip = "10.0.0.1";
+let path = "";
 vi.mock("next/headers", () => ({
   cookies: async () => ({
     get: (name: string) => (jar.has(name) ? { name, value: jar.get(name)! } : undefined),
     set: (name: string, value: string) => void jar.set(name, value),
     delete: (name: string) => void jar.delete(name),
   }),
-  headers: async () => new Headers({ "x-forwarded-for": ip, "user-agent": "vitest" }),
+  headers: async () => new Headers({ "x-forwarded-for": ip, "user-agent": "vitest", ...(path ? { "x-hc360-path": path } : {}) }),
 }));
 vi.mock("next/server", () => ({ connection: async () => {} }));
 vi.mock("next/navigation", () => ({
@@ -29,6 +30,7 @@ const PASSWORD = "correct horse battery staple";
 beforeEach(async () => {
   await resetDatabase();
   jar.clear();
+  path = "";
   ip = `10.0.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
   await db.adminUser.create({ data: { email: EMAIL, displayName: "Owner", passwordHash: await hashPassword(PASSWORD, 1000) } });
 });
@@ -116,6 +118,14 @@ describe("two-factor sign-in", () => {
 });
 
 describe("sessions", () => {
+  it("sends a stale cookie back to sign-in with the page it was opening", async () => {
+    jar.set(auth.SESSION_COOKIE, "expired-or-forged");
+    path = "/admin/bookings/abc?tab=payments";
+    await expect(auth.requireAdmin()).rejects.toThrow(`REDIRECT:/admin/login?next=${encodeURIComponent(path)}`);
+    path = "https://evil.example/admin";
+    await expect(auth.requireAdmin()).rejects.toThrow(/^REDIRECT:\/admin\/login$/);
+  });
+
   it("logout ends the session in the database, not just the cookie", async () => {
     await signUpAndEnable();
     const token = [...jar.values()][0];
