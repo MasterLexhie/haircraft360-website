@@ -9,7 +9,7 @@
  * - Refuses to run unless DATABASE_URL points at this machine. Production never gets this data.
  */
 import { config } from "dotenv";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { pgAdapter } from "../src/lib/pg-adapter";
 import { PrismaClient, type Prisma } from "../src/generated/prisma/client";
 import { addDays, lagosDateKey, lagosToUtcMs } from "../src/lib/time";
 import { hashPassword, randomToken, sha256Hex } from "../src/lib/crypto";
@@ -106,7 +106,7 @@ const LAST = ["Okafor", "Adeyemi", "Balogun", "Eze", "Ojo", "Nwosu", "Bello", "A
 
 async function main() {
   const url = assertLocalDatabase(process.env.DATABASE_URL);
-  const db = new PrismaClient({ adapter: new PrismaPg({ connectionString: url }) });
+  const db = new PrismaClient({ adapter: pgAdapter(url) });
   const nowMs = Date.now();
   const today = lagosDateKey(nowMs);
 

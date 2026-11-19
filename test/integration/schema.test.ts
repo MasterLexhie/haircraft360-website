@@ -72,3 +72,13 @@ describe("uniqueness rules that protect data integrity", () => {
     await expect(db.customer.delete({ where: { id: booking.customerId } })).rejects.toThrow();
   });
 });
+
+describe("stored times", () => {
+  it("stores and reads back the exact instant, whatever the database's own timezone", async () => {
+    const at = new Date("2026-11-23T08:30:00.000Z"); // 9:30 am in Lagos
+    await db.block.create({ data: { id: "tz_check", startAt: at, endAt: at } });
+    const [row] = await db.$queryRaw<{ epoch: number }[]>`SELECT extract(epoch FROM "startAt")::float8 AS epoch FROM "Block" WHERE id = 'tz_check'`;
+    expect(row.epoch * 1000).toBe(at.getTime());
+    expect((await db.block.findUniqueOrThrow({ where: { id: "tz_check" } })).startAt.toISOString()).toBe(at.toISOString());
+  });
+});

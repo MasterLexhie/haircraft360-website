@@ -1,5 +1,5 @@
 import "server-only";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { pgAdapter } from "@/lib/pg-adapter";
 import { PrismaClient } from "@/generated/prisma/client";
 
 /**
@@ -14,7 +14,7 @@ import { PrismaClient } from "@/generated/prisma/client";
 function createClient(): PrismaClient {
   const connectionString = process.env.DATABASE_URL;
   if (!connectionString) throw new Error("DATABASE_URL is not set.");
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
+  return new PrismaClient({ adapter: pgAdapter(connectionString) });
 }
 
 const g = globalThis as unknown as { __hc360prisma?: PrismaClient };
