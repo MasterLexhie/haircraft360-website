@@ -12,12 +12,16 @@ export function formatNaira(kobo: Kobo): string {
   return ngn.format(kobo / 100);
 }
 
+/** Largest amount accepted from a form: ₦10,000,000. Keeps typos and abuse well inside the database's integer range. */
+export const MAX_FORM_AMOUNT_KOBO = 1_000_000_000;
+
 /** Parse a user-typed Naira amount ("4,500", "₦4500.50") into integer kobo. */
 export function parseNairaToKobo(input: string): Kobo | null {
   const cleaned = input.replace(/[₦,\s]/g, "").replace(/^NGN/i, "");
-  if (cleaned === "") return null;
+  if (cleaned === "" || cleaned.length > 15) return null;
   if (!/^\d+(\.\d{1,2})?$/.test(cleaned)) return null;
-  return Math.round(Number(cleaned) * 100);
+  const kobo = Math.round(Number(cleaned) * 100);
+  return kobo <= MAX_FORM_AMOUNT_KOBO ? kobo : null;
 }
 
 /** Kobo -> plain naira string for form inputs, e.g. 450000 -> "4500". */

@@ -1,6 +1,7 @@
 import { BookingError, createPendingBooking } from "@/server/booking-service";
 import { isMockCheckoutEnabled, startMockCheckout } from "@/server/payments/mock";
 import { clientIpFrom, hit, LIMITS, retryMessage } from "@/server/rate-limit";
+import { badRequest, createBookingSchema, readJson } from "@/domain/schemas";
 
 /** POST /api/bookings: hold a time and record the booking awaiting its deposit. */
 export async function POST(request: Request) {
@@ -11,28 +12,13 @@ export async function POST(request: Request) {
       { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
     );
   }
-  let body: Record<string, unknown>;
-  try {
-    body = await request.json();
-  } catch {
-    return Response.json({ error: { code: "VALIDATION", message: "Invalid request." } }, { status: 400 });
-  }
+  const parsed = createBookingSchema.safeParse(await readJson(request));
+  if (!parsed.success) return badRequest("Please check your booking details and try again.");
+  const body = parsed.data;
   // Honeypot: a hidden field people never fill. Bots that fill it get a generic refusal.
-  if (typeof body.website === "string" && body.website.trim() !== "") {
-    return Response.json({ error: { code: "VALIDATION", message: "Please check your details and try again." } }, { status: 400 });
-  }
+  if (body.website?.trim()) return badRequest("Please check your details and try again.");
   try {
-    const result = await createPendingBooking({
-      mainServiceId: String(body.mainServiceId ?? ""),
-      addOnIds: Array.isArray(body.addOnIds) ? body.addOnIds.map(String) : [],
-      startAt: String(body.startAt ?? ""),
-      name: String(body.name ?? ""),
-      phone: String(body.phone ?? ""),
-      email: String(body.email ?? ""),
-      noEmail: body.noEmail === true,
-      marketingConsent: body.marketingConsent === true,
-      customerNote: String(body.customerNote ?? ""),
-    });
+    const result = await createPendingBooking(body);
     // Until Paystack is connected (Milestone 4), local development pays through the mock checkout.
     const checkout = isMockCheckoutEnabled() ? await startMockCheckout(result.reference, result.accessToken, "deposit") : null;
     return Response.json({ reference: result.reference, accessToken: result.accessToken, checkoutReference: checkout?.checkoutReference ?? null }, { status: 201 });

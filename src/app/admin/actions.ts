@@ -15,6 +15,8 @@ import {
   type CompletionInput,
 } from "@/server/booking-service";
 import { parseNairaToKobo } from "@/lib/money";
+import { recordId } from "@/domain/schemas";
+import { z } from "zod";
 import type { PaymentMethod } from "@/domain/types";
 import { capacityByWeekdaySchema, weeklyHoursSchema, type CapacityByWeekday, type WeekdayKey, type WeeklyHours } from "@/domain/settings";
 
@@ -25,6 +27,14 @@ function fail(err: unknown): ActionState {
   throw err;
 }
 
+/** IDs arrive from the browser, so they are checked like any other input. */
+function validId(value: unknown): string | null {
+  const parsed = recordId.safeParse(value);
+  return parsed.success ? parsed.data : null;
+}
+const INVALID: ActionState = { error: "That record couldn't be found. Reload the page and try again." };
+const statusSchema = z.enum(["cancelled", "no_show", "confirmed"]);
+
 /** Every admin action starts here: the permission check runs inside the action, not only in proxy.ts. */
 async function adminActor(): Promise<Actor> {
   const admin = await requireAdmin();
@@ -33,11 +43,14 @@ async function adminActor(): Promise<Actor> {
 
 /* ───────────── Bookings ───────────── */
 
-export async function completeBookingAction(bookingId: string, _: ActionState, formData: FormData): Promise<ActionState> {
+export async function completeBookingAction(bookingIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await adminActor();
+  const bookingId = validId(bookingIdRaw);
+  if (!bookingId) return INVALID;
   const fieldErrors: Record<string, string> = {};
   const extras: CompletionInput["extras"] = [];
   const names = formData.getAll("extraName");
+  if (names.length > 20) return { error: "Add at most 20 items at a time." };
   names.forEach((n, i) => {
     const name = String(n).trim();
     const raw = String(formData.getAll("extraPrice")[i] ?? "");
@@ -58,10 +71,13 @@ export async function completeBookingAction(bookingId: string, _: ActionState, f
   }
 }
 
-export async function setStatusAction(bookingId: string, status: "cancelled" | "no_show" | "confirmed"): Promise<ActionState> {
+export async function setStatusAction(bookingIdRaw: string, statusRaw: "cancelled" | "no_show" | "confirmed"): Promise<ActionState> {
   const actor = await adminActor();
+  const bookingId = validId(bookingIdRaw);
+  const status = statusSchema.safeParse(statusRaw);
+  if (!bookingId || !status.success) return INVALID;
   try {
-    await setBookingStatus(bookingId, status, actor);
+    await setBookingStatus(bookingId, status.data, actor);
     refresh();
     return { ok: true, message: "Status updated." };
   } catch (e) {
@@ -69,8 +85,10 @@ export async function setStatusAction(bookingId: string, status: "cancelled" | "
   }
 }
 
-export async function bookingNoteAction(bookingId: string, _: ActionState, formData: FormData): Promise<ActionState> {
+export async function bookingNoteAction(bookingIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await adminActor();
+  const bookingId = validId(bookingIdRaw);
+  if (!bookingId) return INVALID;
   try {
     await updateBookingNote(bookingId, String(formData.get("privateNote") ?? ""), actor);
     refresh();
@@ -80,8 +98,10 @@ export async function bookingNoteAction(bookingId: string, _: ActionState, formD
   }
 }
 
-export async function customerNoteAction(customerId: string, _: ActionState, formData: FormData): Promise<ActionState> {
+export async function customerNoteAction(customerIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await adminActor();
+  const customerId = validId(customerIdRaw);
+  if (!customerId) return INVALID;
   try {
     await updateCustomerNote(customerId, String(formData.get("privateNotes") ?? ""), actor);
     refresh();
@@ -93,8 +113,10 @@ export async function customerNoteAction(customerId: string, _: ActionState, for
 
 const METHODS: PaymentMethod[] = ["cash", "transfer", "card", "other"];
 
-export async function manualPaymentAction(bookingId: string, _: ActionState, formData: FormData): Promise<ActionState> {
+export async function manualPaymentAction(bookingIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await adminActor();
+  const bookingId = validId(bookingIdRaw);
+  if (!bookingId) return INVALID;
   const amount = parseNairaToKobo(String(formData.get("amount") ?? ""));
   if (amount === null || amount <= 0) return { error: "Enter the amount received, for example 5000.", fieldErrors: { amount: "Enter an amount above ₦0." } };
   const method = String(formData.get("method") ?? "") as PaymentMethod;
@@ -116,7 +138,7 @@ export async function manualPaymentAction(bookingId: string, _: ActionState, for
 
 export async function serviceAction(_: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await adminActor();
-  const name = String(formData.get("name") ?? "").trim();
+  const name = String(formData.get("name") ?? "").trim().slice(0, 80);
   const price = parseNairaToKobo(String(formData.get("price") ?? ""));
   const duration = Number(formData.get("duration"));
   const fieldErrors: Record<string, string> = {};
@@ -129,7 +151,7 @@ export async function serviceAction(_: ActionState, formData: FormData): Promise
   try {
     await upsertService(
       {
-        id: String(formData.get("id") ?? "") || null,
+        id: validId(formData.get("id")),
         name,
         description: String(formData.get("description") ?? "").trim().slice(0, 500),
         active: formData.get("active") === "on",

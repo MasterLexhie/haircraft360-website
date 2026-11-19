@@ -1,5 +1,6 @@
 import { BookingError } from "@/server/booking-service";
 import { completeMockCheckout } from "@/server/payments/mock";
+import { badRequest, completeMockCheckoutSchema, readJson, referenceParam } from "@/domain/schemas";
 
 /**
  * POST /api/checkout/:reference { token, outcome: "success" | "failed" }
@@ -7,13 +8,11 @@ import { completeMockCheckout } from "@/server/payments/mock";
  * Requires the booking's link token. Idempotent: repeating it never adds a second payment.
  */
 export async function POST(request: Request, ctx: { params: Promise<{ reference: string }> }) {
-  const { reference } = await ctx.params;
-  const body = (await request.json().catch(() => ({}))) as { outcome?: string; token?: string };
-  if (body.outcome !== "success" && body.outcome !== "failed") {
-    return Response.json({ error: { code: "VALIDATION", message: "Outcome must be success or failed." } }, { status: 400 });
-  }
+  const reference = referenceParam.safeParse((await ctx.params).reference);
+  const body = completeMockCheckoutSchema.safeParse(await readJson(request));
+  if (!reference.success || !body.success) return badRequest();
   try {
-    return Response.json(await completeMockCheckout(reference, String(body.token ?? ""), body.outcome));
+    return Response.json(await completeMockCheckout(reference.data, body.data.token, body.data.outcome));
   } catch (err) {
     if (err instanceof BookingError) {
       return Response.json({ error: { code: err.code, message: err.message } }, { status: err.code === "NOT_FOUND" ? 404 : 409 });

@@ -12,6 +12,9 @@ describe("money", () => {
     expect(parseNairaToKobo("₦4500.50")).toBe(450_050);
     expect(parseNairaToKobo("")).toBeNull();
     expect(parseNairaToKobo("4.555")).toBeNull();
+    expect(parseNairaToKobo("10,000,000")).toBe(1_000_000_000);
+    expect(parseNairaToKobo("10,000,001")).toBeNull();
+    expect(parseNairaToKobo("99999999999999999999")).toBeNull();
   });
 
   it("round-trips kobo for form inputs", () => {
