@@ -2,10 +2,10 @@
  * Admin account tool for the developer (task S2). There is no password reset by
  * email, so this is how a forgotten password or a lost phone is handled.
  *
- *   npm run admin -- list
- *   npm run admin -- create owner@example.com "Salon owner"
- *   npm run admin -- reset-password owner@example.com
- *   npm run admin -- reset-2fa owner@example.com
+ *   npm run admin list
+ *   npm run admin create owner@example.com "Salon owner"
+ *   npm run admin reset-password owner@example.com
+ *   npm run admin reset-2fa owner@example.com
  *
  * New passwords are generated and printed once; share them with the owner privately.
  * Every reset signs the account out everywhere. Uses DATABASE_URL, so it works on
@@ -21,10 +21,10 @@ import { hashPassword, randomToken } from "../src/lib/crypto";
 config({ path: [".env.local", ".env"], quiet: true });
 
 const USAGE = `Usage:
-  npm run admin -- list
-  npm run admin -- create <email> "<display name>"
-  npm run admin -- reset-password <email>
-  npm run admin -- reset-2fa <email>`;
+  npm run admin list
+  npm run admin create <email> "<display name>"
+  npm run admin reset-password <email>
+  npm run admin reset-2fa <email>`;
 
 /** Long enough to be safe, easy enough to read out over the phone. */
 const newPassword = () => randomToken(12).replace(/[-_]/g, "x");

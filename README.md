@@ -29,10 +29,10 @@ after that needs a code from it, or a one-time backup code.
 Admin accounts are managed with a script (there is no reset by email):
 
 ```bash
-npm run admin -- list
-npm run admin -- create owner@salon.ng "Salon owner"
-npm run admin -- reset-password owner@salon.ng
-npm run admin -- reset-2fa owner@salon.ng
+npm run admin list
+npm run admin create owner@salon.ng "Salon owner"
+npm run admin reset-password owner@salon.ng
+npm run admin reset-2fa owner@salon.ng
 ```
 
 `AUTH_SECRET` also encrypts the stored 2FA secrets. If it ever changes, every admin needs `reset-2fa`.
