@@ -71,7 +71,6 @@ export async function findBookingSummary(reference: string, contact: string) {
     startAt: booking.startAt.toISOString(),
     endAt: booking.endAt.toISOString(),
     status: booking.status,
-    services: booking.items.filter((i) => i.kind !== "extra").map((i) => i.name),
     balanceKobo: balanceDue(booking, booking.payments),
   };
 }

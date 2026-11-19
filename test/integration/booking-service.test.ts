@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDatabase } from "../db";
 import { bookingInput, createServices, createSettings, slot } from "../factories";
 import { BookingError, createPendingBooking, recordManualPayment, recordOnlinePayment, setBookingStatus } from "@/server/booking-service";
-import { getCustomerBooking } from "@/server/queries";
+import { findBookingSummary, getCustomerBooking } from "@/server/queries";
 
 // next/server's connection() needs a request; tests call queries directly.
 import { vi } from "vitest";
@@ -128,6 +128,15 @@ describe("customer matching", () => {
     expect(await getCustomerBooking(r.reference, undefined)).toBeNull();
     expect(await getCustomerBooking(r.reference, "wrong")).toBeNull();
     expect(await getCustomerBooking(r.reference, r.accessToken)).not.toBeNull();
+  });
+  it("Find my booking needs the booking's own phone or email and shows only date, time, status and balance (D6)", async () => {
+    const r = await createPendingBooking(bookingInput({ phone: "08035550030", email: "finder@example.com" }));
+    const ref = r.reference.toLowerCase();
+    const byPhone = await findBookingSummary(ref, "+234 803 555 0030");
+    expect(byPhone && Object.keys(byPhone).sort()).toEqual(["balanceKobo", "endAt", "reference", "startAt", "status"]);
+    expect(await findBookingSummary(ref, "FINDER@example.com")).not.toBeNull();
+    expect(await findBookingSummary(ref, "08035550031")).toBeNull();
+    expect(await findBookingSummary(ref, "someone@example.com")).toBeNull();
   });
 });
 

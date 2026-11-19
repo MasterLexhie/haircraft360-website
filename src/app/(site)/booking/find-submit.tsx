@@ -44,9 +44,6 @@ export function FindBookingForm() {
             <dd className="font-medium">{formatTime(b.startAt)} <span className="font-normal text-ink-3">· Ibadan time</span></dd>
           </div>
           <div className="flex justify-between gap-3 border-t border-line pt-3">
-            <dt className="text-ink-2">{b.services.join(", ")}</dt>
-          </div>
-          <div className="flex justify-between gap-3">
             <dt className="text-ink-2">Balance</dt>
             <dd className="tabular font-semibold">{formatNaira(b.balanceKobo)}</dd>
           </div>
