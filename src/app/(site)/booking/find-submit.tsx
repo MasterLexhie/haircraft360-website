@@ -58,6 +58,7 @@ export function FindBookingForm() {
 
   return (
     <form action={action} className="space-y-5">
+      {state.status === "rate_limited" && <Alert tone="warning" role="alert" title={state.message} />}
       {state.status === "not_found" && (
         <Alert tone="danger" role="alert" title="We couldn't find a booking with those details">
           Check the reference and use the same phone number or email you booked with.
@@ -68,7 +69,7 @@ export function FindBookingForm() {
           id="reference"
           name="reference"
           required
-          defaultValue={state.status === "not_found" ? state.reference : ""}
+          defaultValue={state.status === "not_found" || state.status === "rate_limited" ? state.reference : ""}
           autoCapitalize="characters"
           autoComplete="off"
           spellCheck={false}

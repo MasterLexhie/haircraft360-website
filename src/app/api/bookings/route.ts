@@ -1,13 +1,25 @@
 import { BookingError, createPendingBooking } from "@/server/booking-service";
 import { isMockCheckoutEnabled, startMockCheckout } from "@/server/payments/mock";
+import { clientIpFrom, hit, LIMITS, retryMessage } from "@/server/rate-limit";
 
 /** POST /api/bookings: hold a time and record the booking awaiting its deposit. */
 export async function POST(request: Request) {
+  const limit = await hit(`booking:ip:${clientIpFrom(request.headers)}`, LIMITS.bookingPerIp);
+  if (!limit.ok) {
+    return Response.json(
+      { error: { code: "RATE_LIMITED", message: `Too many booking attempts. ${retryMessage(limit.retryAfterSeconds)}` } },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfterSeconds) } },
+    );
+  }
   let body: Record<string, unknown>;
   try {
     body = await request.json();
   } catch {
     return Response.json({ error: { code: "VALIDATION", message: "Invalid request." } }, { status: 400 });
+  }
+  // Honeypot: a hidden field people never fill. Bots that fill it get a generic refusal.
+  if (typeof body.website === "string" && body.website.trim() !== "") {
+    return Response.json({ error: { code: "VALIDATION", message: "Please check your details and try again." } }, { status: 400 });
   }
   try {
     const result = await createPendingBooking({
