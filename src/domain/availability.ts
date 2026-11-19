@@ -6,15 +6,26 @@ import { addDays, dayOfWeek, lagosDateKey, lagosToUtcMs, parseHHMM } from "@/lib
  * Slot calculation (BUILD_SPEC 6.2). Pure: the server passes in bookings and settings.
  *
  * Each booking occupies one unit of capacity from its start until its end plus the
- * buffer. A time is available only if, across the new booking's duration plus buffer,
- * fewer bookings overlap than the day's capacity.
- *
- * Blocks (admin closures) arrive in Milestone 3.
+ * buffer. A time is available only if, at every moment of the new booking's duration
+ * plus buffer, the bookings running at that moment are below the capacity left after
+ * any Blocks (admin closures or reductions) covering that moment.
  */
 
 export interface Interval {
   start: number;
   end: number;
+}
+
+/** An admin Block. `capacityReduction` null closes the salon for the period. */
+export interface BlockWindow {
+  startAt: string;
+  endAt: string;
+  capacityReduction: number | null;
+}
+
+export interface Load extends Interval {
+  /** Capacity used: 1 for a booking, the reduction for a Block (Infinity when closed). */
+  units: number;
 }
 
 export interface Slot {
@@ -55,8 +66,25 @@ export function occupiedIntervals(bookings: OccupyingBooking[], nowMs: number, b
     .map((b) => ({ start: Date.parse(b.startAt), end: Date.parse(b.endAt) + bufferMinutes * 60_000 }));
 }
 
-function overlapCount(intervals: Interval[], start: number, end: number): number {
-  return intervals.filter((i) => i.start < end && start < i.end).length;
+function blockLoads(blocks: BlockWindow[]): Load[] {
+  return blocks.map((b) => ({ start: Date.parse(b.startAt), end: Date.parse(b.endAt), units: b.capacityReduction ?? Infinity }));
+}
+
+/**
+ * The most capacity in use at any single moment of [start, end). Load only rises where
+ * an interval begins, so checking the window start and every start inside it is enough.
+ * Two bookings that touch the window at different times are not counted together.
+ */
+export function peakLoad(loads: Load[], start: number, end: number): number {
+  const inWindow = loads.filter((l) => l.start < end && start < l.end);
+  const points = [start, ...inWindow.map((l) => l.start).filter((t) => t > start)];
+  let peak = 0;
+  for (const t of points) {
+    let used = 0;
+    for (const l of inWindow) if (l.start <= t && t < l.end) used += l.units;
+    if (used > peak) peak = used;
+  }
+  return peak;
 }
 
 export function capacityFor(dateKey: string, config: AvailabilitySettings): number {
@@ -81,6 +109,7 @@ export function slotsForDate(params: {
   durationMinutes: number;
   config: AvailabilitySettings;
   bookings: OccupyingBooking[];
+  blocks?: BlockWindow[];
   nowMs: number;
   excludeBookingId?: string;
 }): { status: DateStatus; slots: Slot[] } {
@@ -94,13 +123,16 @@ export function slotsForDate(params: {
   const capacity = capacityFor(dateKey, config);
   const buffer = config.bufferMinutes * 60_000;
   const earliest = nowMs + config.minimumLeadMinutes * 60_000;
-  const intervals = occupiedIntervals(bookings, nowMs, config.bufferMinutes, params.excludeBookingId);
+  const loads: Load[] = [
+    ...occupiedIntervals(bookings, nowMs, config.bufferMinutes, params.excludeBookingId).map((i) => ({ ...i, units: 1 })),
+    ...blockLoads(params.blocks ?? []),
+  ];
   const slots: Slot[] = [];
 
   for (let m = open; m + durationMinutes <= close; m += config.slotIntervalMinutes) {
     const start = lagosToUtcMs(dateKey, m);
     const end = start + durationMinutes * 60_000;
-    const available = start >= earliest && overlapCount(intervals, start, end + buffer) < capacity;
+    const available = start >= earliest && peakLoad(loads, start, end + buffer) < capacity;
     slots.push({ startAt: new Date(start).toISOString(), endAt: new Date(end).toISOString(), minutes: m, available });
   }
   return { status, slots };
@@ -111,6 +143,7 @@ export function dateOptions(params: {
   durationMinutes: number;
   config: AvailabilitySettings;
   bookings: OccupyingBooking[];
+  blocks?: BlockWindow[];
   nowMs: number;
 }): DateOption[] {
   const today = lagosDateKey(params.nowMs);
@@ -132,6 +165,7 @@ export function isSlotBookable(params: {
   durationMinutes: number;
   config: AvailabilitySettings;
   bookings: OccupyingBooking[];
+  blocks?: BlockWindow[];
   nowMs: number;
   excludeBookingId?: string;
 }): boolean {

@@ -8,7 +8,7 @@ import { validateContact } from "@/domain/validation";
 import { formatNaira } from "@/lib/money";
 import { addDays, lagosDateKey, lagosToUtcMs } from "@/lib/time";
 import { randomToken, sha256Hex } from "@/lib/crypto";
-import { db, type Tx } from "./db";
+import { db, type Db, type Tx } from "./db";
 import { audit } from "./audit";
 import { matchOrCreateCustomer } from "./customers";
 import { loadSettings } from "./settings";
@@ -47,21 +47,33 @@ export async function lockSalonDay(tx: Tx, dateKey: string): Promise<void> {
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`salon-day:${dateKey}`}))`;
 }
 
-/** Bookings that could overlap a day (with a day of margin either side for long bookings and buffers). */
-async function bookingsAround(tx: Tx, dateKey: string) {
-  const from = new Date(lagosToUtcMs(addDays(dateKey, -1), 0));
-  const to = new Date(lagosToUtcMs(addDays(dateKey, 2), 0));
-  const rows = await tx.booking.findMany({
-    where: { startAt: { lt: to }, endAt: { gt: from }, status: { in: ["confirmed", "completed", "pending_payment"] } },
-    select: { id: true, status: true, startAt: true, endAt: true, holdExpiresAt: true },
-  });
-  return rows.map((r) => ({
-    id: r.id,
-    status: r.status,
-    startAt: r.startAt.toISOString(),
-    endAt: r.endAt.toISOString(),
-    holdExpiresAt: r.holdExpiresAt?.toISOString() ?? null,
-  }));
+/**
+ * Bookings and Blocks that could affect availability between two instants.
+ * Shared by the booking service (inside the day lock) and the public availability route.
+ */
+export async function occupancyBetween(client: Tx | Db, from: Date, to: Date) {
+  const [rows, blocks] = await Promise.all([
+    client.booking.findMany({
+      where: { startAt: { lt: to }, endAt: { gt: from }, status: { in: ["confirmed", "completed", "pending_payment"] } },
+      select: { id: true, status: true, startAt: true, endAt: true, holdExpiresAt: true },
+    }),
+    client.block.findMany({ where: { startAt: { lt: to }, endAt: { gt: from } }, select: { startAt: true, endAt: true, capacityReduction: true } }),
+  ]);
+  return {
+    bookings: rows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      startAt: r.startAt.toISOString(),
+      endAt: r.endAt.toISOString(),
+      holdExpiresAt: r.holdExpiresAt?.toISOString() ?? null,
+    })),
+    blocks: blocks.map((b) => ({ startAt: b.startAt.toISOString(), endAt: b.endAt.toISOString(), capacityReduction: b.capacityReduction })),
+  };
+}
+
+/** Everything that could overlap a day (with a day of margin either side for long bookings and buffers). */
+function occupancyAround(tx: Tx, dateKey: string) {
+  return occupancyBetween(tx, new Date(lagosToUtcMs(addDays(dateKey, -1), 0)), new Date(lagosToUtcMs(addDays(dateKey, 2), 0)));
 }
 
 /** True when the booking's own time still fits (it is excluded from the count). Caller holds the day lock. */
@@ -72,7 +84,7 @@ async function timeStillFree(tx: Tx, settings: Settings, booking: { id: string; 
     startAt: booking.startAt.toISOString(),
     durationMinutes,
     config: { ...settings.availability, minimumLeadMinutes: 0 },
-    bookings: await bookingsAround(tx, dateKey),
+    ...(await occupancyAround(tx, dateKey)),
     nowMs,
     excludeBookingId: booking.id,
   });
@@ -147,7 +159,7 @@ export async function createPendingBooking(input: CreateBookingInput): Promise<C
       throw new BookingError("TOO_MANY_HOLDS", "You already have a booking waiting for its deposit. Please finish that payment first, or wait a few minutes for it to expire.");
     }
 
-    const bookable = isSlotBookable({ startAt: startAt.toISOString(), durationMinutes: duration, config: settings.availability, bookings: await bookingsAround(tx, dateKey), nowMs });
+    const bookable = isSlotBookable({ startAt: startAt.toISOString(), durationMinutes: duration, config: settings.availability, ...(await occupancyAround(tx, dateKey)), nowMs });
     if (!bookable) throw new BookingError("SLOT_TAKEN", "Sorry, that time was just taken or is no longer available. Please choose another time.");
 
     const match = await matchOrCreateCustomer(tx, { name, phone, email, emailIsPlaceholder: input.noEmail, marketingConsent: input.marketingConsent }, now);

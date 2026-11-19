@@ -61,6 +61,12 @@ describe("createPendingBooking", () => {
     expect(rejected.reason.code).toBe("SLOT_TAKEN");
   });
 
+  it("refuses a time the salon has closed with a Block", async () => {
+    await db.block.create({ data: { startAt: new Date(slot(3, "09:00")), endAt: new Date(slot(3, "13:00")), reason: "Training" } });
+    await expect(createPendingBooking(bookingInput())).rejects.toMatchObject({ code: "SLOT_TAKEN" });
+    await expect(createPendingBooking(bookingInput({ startAt: slot(3, "13:00") }))).resolves.toMatchObject({ reference: expect.any(String) });
+  });
+
   it("allows one active unpaid hold per phone number", async () => {
     const input = bookingInput();
     await createPendingBooking(input);
