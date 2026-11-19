@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatPhone, isPlaceholderEmail, isValidEmail, normalizeEmail, normalizePhone, placeholderEmailFor, whatsappNumber } from "@/domain/phone";
+import { validateContact } from "@/domain/validation";
 
 describe("normalizePhone", () => {
   it.each([
@@ -44,5 +45,29 @@ describe("formatting and helpers", () => {
     expect(email).toBe("2348031234567@noemail.haircraft360.ng");
     expect(isPlaceholderEmail(email)).toBe(true);
     expect(isPlaceholderEmail("ada@example.com")).toBe(false);
+  });
+});
+
+describe("validateContact (booking details step and server)", () => {
+  const base = { name: "Ada Okafor", phone: "0803 123 4567", email: "ada@example.com", noEmail: false };
+
+  it("accepts a name, a Nigerian mobile and an email", () => {
+    expect(validateContact(base)).toEqual({});
+  });
+
+  it("always requires a phone, even when the email is given", () => {
+    expect(validateContact({ ...base, phone: "" }).phone).toMatch(/phone number/);
+    expect(validateContact({ ...base, phone: "0123" }).phone).toMatch(/Nigerian mobile/);
+  });
+
+  it("requires an email unless “I don't have an email” is ticked", () => {
+    expect(validateContact({ ...base, email: "" }).email).toMatch(/tick/);
+    expect(validateContact({ ...base, email: "not-an-email" }).email).toMatch(/name@example.com/);
+    expect(validateContact({ ...base, email: "", noEmail: true })).toEqual({});
+  });
+
+  it("asks for a real name", () => {
+    expect(validateContact({ ...base, name: " a " }).name).toBeDefined();
+    expect(validateContact({ ...base, name: "x".repeat(81) }).name).toBeDefined();
   });
 });
