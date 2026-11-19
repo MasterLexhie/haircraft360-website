@@ -7,8 +7,13 @@ import {
   CircleCheck,
   CircleX,
   CreditCard,
+  KeyRound,
+  LogIn,
+  LogOut,
   NotebookPen,
   Settings2,
+  ShieldAlert,
+  ShieldCheck,
   type LucideIcon,
 } from "lucide-react";
 import type { AuditEvent } from "@/domain/types";
@@ -53,6 +58,19 @@ function describe(action: string): { title: string; icon: LucideIcon; tone: Tone
   if (kind === "customer") return { title: "Customer note added", icon: NotebookPen, tone: "neutral" };
   if (kind === "service") return { title: a === "created" ? "Service added" : "Service updated", icon: Settings2, tone: "neutral" };
   if (kind === "seed") return { title: "Sample data loaded", icon: Settings2, tone: "neutral" };
+  if (kind === "auth") {
+    switch (a) {
+      case "signed_in": return { title: "Signed in", icon: LogIn, tone: "neutral" };
+      case "signed_out_everywhere": return { title: "Signed out on every device", icon: LogOut, tone: "neutral" };
+      case "password_changed": return { title: "Password changed", icon: KeyRound, tone: "accent" };
+      case "password_reset": return { title: "Password reset by the developer", icon: KeyRound, tone: "accent" };
+      case "2fa_enabled": return { title: "Two-factor sign-in switched on", icon: ShieldCheck, tone: "success" };
+      case "2fa_reset": return { title: "Two-factor sign-in reset by the developer", icon: ShieldAlert, tone: "danger" };
+      case "backup_codes_replaced": return { title: "New backup codes made", icon: ShieldCheck, tone: "neutral" };
+      case "admin_created": return { title: "Admin account created", icon: ShieldCheck, tone: "neutral" };
+    }
+    return { title: "Account security updated", icon: ShieldCheck, tone: "neutral" };
+  }
   return { title: "Settings updated", icon: Settings2, tone: "neutral" };
 }
 
