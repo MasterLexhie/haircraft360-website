@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Lock, Pencil, ShieldCheck } from "lucide-react";
@@ -15,7 +16,11 @@ import { ServiceMeta } from "./service-bits";
 import { BookingSummaryPanel, MoneyRows, describeDepositRule, type SummaryLine } from "./booking-summary";
 import { DateTimeStep } from "./date-time-step";
 
-const STEPS = ["Service", "Date & time", "Your details", "Review"] as const;
+const STEPS = ["Service", "Extras", "Date & time", "Your details", "Review"] as const;
+const SERVICE = 0;
+const EXTRAS = 1;
+const WHEN = 2;
+const DETAILS = 3;
 const DRAFT_KEY = "hc360-booking-draft-v2";
 
 interface Contact {
@@ -156,10 +161,26 @@ export function BookingWizard({
     setStep(next);
   }
 
+  /** The extras step only appears when the chosen service offers extras. */
+  const hasExtras = offeredAddOns.length > 0;
+
+  function back() {
+    go(step === WHEN && !hasExtras ? SERVICE : step - 1);
+  }
+
+  function skipExtras() {
+    if (addOnIds.length) {
+      setAddOnIds([]);
+      setStartAt(null);
+    }
+    go(WHEN);
+  }
+
   function next() {
-    if (step === 0 && !main) return setStepError("Choose a service to continue.");
-    if (step === 1 && !startAt) return setStepError("Choose a date and an available time to continue.");
-    if (step === 2) {
+    if (step === SERVICE && !main) return setStepError("Choose a service to continue.");
+    if (step === SERVICE && !hasExtras) return go(WHEN);
+    if (step === WHEN && !startAt) return setStepError("Choose a date and an available time to continue.");
+    if (step === DETAILS) {
       const errs = validateContact(contact);
       setErrors(errs);
       setTouched({ name: true, phone: true, email: true });
@@ -178,7 +199,7 @@ export function BookingWizard({
   }
 
   async function submit() {
-    if (!startAt || !main) return go(main ? 1 : 0);
+    if (!startAt || !main) return go(main ? WHEN : SERVICE);
     setSubmitting(true);
     setStepError(null);
     try {
@@ -204,11 +225,11 @@ export function BookingWizard({
         if (err.code === "SLOT_TAKEN") {
           setStartAt(null);
           setSlotRefresh((n) => n + 1);
-          setStep(1);
+          setStep(WHEN);
           setStepError(err.message);
         } else if (err.fieldErrors) {
           setErrors(err.fieldErrors);
-          setStep(2);
+          setStep(DETAILS);
           setStepError("summary");
           setSummaryFocus((n) => n + 1);
         } else {
@@ -234,18 +255,19 @@ export function BookingWizard({
 
   return (
     <div className="mx-auto max-w-6xl px-4 pb-36 pt-6 sm:px-6 md:pb-20 md:pt-10">
-      <StepIndicator step={step} onJump={(i) => i < step && go(i)} />
+      <StepIndicator step={step} onJump={(i) => i < step && go(i === EXTRAS && !hasExtras ? SERVICE : i)} />
 
       <div className="mt-8 grid gap-8 md:grid-cols-[minmax(0,1fr)_340px] lg:gap-12">
         <div className="min-w-0">
           <h1 ref={headingRef} tabIndex={-1} className="type-display text-[2.2rem] focus:outline-none sm:text-[2.75rem]">
-            {["What would you like done?", "When would you like to come in?", "How can the salon reach you?", "Check and reserve"][step]}
+            {["What would you like done?", "Add any extras?", "When would you like to come in?", "How can the salon reach you?", "Check and reserve"][step]}
           </h1>
           <p className="mt-2 text-ink-2">
             {[
-              "Choose a service, then add any extras.",
+              "Choose the main service you'd like.",
+              "Each extra adds to the price and the time. Skip this if you don't need any.",
               `Showing times that fit about ${formatDuration(durationMinutes)} for your booking.`,
-              "Your name and phone number are all that's needed. No account required.",
+              "Your name, phone number and email. No account needed.",
               "Your time is reserved once the deposit is paid.",
             ][step]}
           </p>
@@ -255,8 +277,8 @@ export function BookingWizard({
           )}
 
           <div className="mt-8">
-            {step === 0 && (
-              <div className="space-y-8">
+            {step === SERVICE && (
+              <div>
                 <fieldset>
                   <legend className="sr-only">Service</legend>
                   <ul className="grid gap-3">
@@ -287,43 +309,49 @@ export function BookingWizard({
                     })}
                   </ul>
                 </fieldset>
-
-                {main && offeredAddOns.length > 0 && (
-                  <fieldset>
-                    <legend className="text-lg font-semibold text-ink">Add extras (optional)</legend>
-                    <p className="mt-1 text-sm text-ink-2">Each extra adds to the price and the time. Skip this if you don&apos;t need any.</p>
-                    <ul className="mt-4 grid gap-3">
-                      {offeredAddOns.map((a) => {
-                        const on = addOnIds.includes(a.id);
-                        const terms = addOnTerms(a);
-                        return (
-                          <li key={a.id}>
-                            <label className={cx("flex cursor-pointer items-center gap-4 rounded-[var(--radius)] border bg-surface p-4 has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink", on ? "border-accent bg-accent-soft/40" : "border-line hover:border-line-strong")}>
-                              <input type="checkbox" checked={on} onChange={() => toggleAddOn(a.id)} className="peer sr-only" />
-                              <span aria-hidden className={cx("flex size-6 shrink-0 items-center justify-center rounded-md border-2", on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface")}>
-                                {on && <Check className="size-4" strokeWidth={3} />}
-                              </span>
-                              <span className="min-w-0 flex-1 font-medium text-ink">{a.name}</span>
-                              <span className="shrink-0 text-right text-sm text-ink-2">
-                                <span className="tabular block font-semibold text-ink">+{formatNaira(terms.priceKobo)}</span>
-                                +{formatDuration(terms.durationMinutes)}
-                              </span>
-                            </label>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {addOnIds.length > 0 && (
-                      <button type="button" onClick={() => setAddOnIds([])} className="mt-3 text-sm font-semibold text-ink-2 underline underline-offset-4">
-                        Skip extras
-                      </button>
-                    )}
-                  </fieldset>
-                )}
               </div>
             )}
 
-            {step === 1 && (
+            {step === EXTRAS && main && (
+              <div>
+                <fieldset>
+                  <legend className="sr-only">Extras for {main.name}</legend>
+                  <ul className="grid gap-3">
+                    {offeredAddOns.map((a) => {
+                      const on = addOnIds.includes(a.id);
+                      const terms = addOnTerms(a);
+                      return (
+                        <li key={a.id}>
+                          <label className={cx("flex cursor-pointer items-center gap-4 rounded-[var(--radius)] border bg-surface p-4 has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink", on ? "border-accent bg-accent-soft/40" : "border-line hover:border-line-strong")}>
+                            <input type="checkbox" checked={on} onChange={() => toggleAddOn(a.id)} className="peer sr-only" />
+                            <span aria-hidden className={cx("flex size-6 shrink-0 items-center justify-center rounded-md border-2", on ? "border-accent bg-accent text-on-accent" : "border-line-strong bg-surface")}>
+                              {on && <Check className="size-4" strokeWidth={3} />}
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block font-medium text-ink">{a.name}</span>
+                              {a.description && <span className="block text-sm text-ink-3">{a.description}</span>}
+                            </span>
+                            <span className="shrink-0 text-right text-sm text-ink-2">
+                              <span className="tabular block font-semibold text-ink">+{formatNaira(terms.priceKobo)}</span>
+                              +{formatDuration(terms.durationMinutes)}
+                            </span>
+                          </label>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </fieldset>
+                <p className="mt-5 rounded-[var(--radius)] bg-sand/60 px-4 py-3 text-sm text-ink" aria-live="polite">
+                  <span className="font-semibold">{main.name}</span>
+                  {addOnIds.length ? ` + ${addOnIds.length} extra${addOnIds.length === 1 ? "" : "s"}` : ", no extras"}: <span className="tabular font-semibold">{formatNaira(totalKobo)}</span>, about {formatDuration(durationMinutes)}
+                </p>
+                <Button variant="secondary" onClick={skipExtras} className="mt-4">
+                  {addOnIds.length ? "Remove extras and continue" : "Skip, no extras"}
+                </Button>
+              </div>
+            )}
+
+            {step === WHEN && (
               <DateTimeStep
                 durationMinutes={durationMinutes}
                 dateKey={dateKey}
@@ -341,7 +369,7 @@ export function BookingWizard({
               />
             )}
 
-            {step === 2 && (
+            {step === DETAILS && (
               <form noValidate onSubmit={(e) => { e.preventDefault(); next(); }} className="space-y-5">
                 {stepError === "summary" && errorList.length > 0 && (
                   <div ref={summaryRef} tabIndex={-1} role="alert" className="rounded-[var(--radius)] border border-danger/30 bg-danger-soft p-4 focus:outline-3 focus:outline-danger">
@@ -406,9 +434,9 @@ export function BookingWizard({
               </form>
             )}
 
-            {step === 3 && startAt && main && (
+            {isLast && startAt && main && (
               <div className="space-y-6">
-                <ReviewBlock title="Service" onEdit={() => go(0)}>
+                <ReviewBlock title="Service and extras" onEdit={() => go(SERVICE)}>
                   <ul className="divide-y divide-line">
                     {lines.map((l) => (
                       <li key={l.key} className="flex items-start justify-between gap-4 py-2.5">
@@ -421,11 +449,11 @@ export function BookingWizard({
                     ))}
                   </ul>
                 </ReviewBlock>
-                <ReviewBlock title="Date and time" onEdit={() => go(1)}>
+                <ReviewBlock title="Date and time" onEdit={() => go(WHEN)}>
                   <p className="font-medium">{formatDateKey(dateKey!, { long: true })}</p>
                   <p className="text-ink-2">{formatTime(startAt)}, about {formatDuration(durationMinutes)} · Ibadan time</p>
                 </ReviewBlock>
-                <ReviewBlock title="Your details" onEdit={() => go(2)}>
+                <ReviewBlock title="Your details" onEdit={() => go(DETAILS)}>
                   <p className="font-medium">{contact.name}</p>
                   <p className="text-ink-2">{[contact.phone, contact.noEmail ? "No email" : contact.email].filter(Boolean).join(" · ")}</p>
                   {contact.note && <p className="mt-1 text-sm text-ink-3">Note: {contact.note}</p>}
@@ -438,6 +466,10 @@ export function BookingWizard({
                   </div>
                   <p className="mt-3 text-xs text-ink-3">
                     Deposit: {describeDepositRule(settings.deposit)}. The deposit secures your time and is not refundable. Anything added on the day is included in the balance.
+                  </p>
+                  <p className="mt-2 text-xs text-ink-2">
+                    By paying the deposit you agree to the salon&apos;s{" "}
+                    <Link href="/terms" target="_blank" className="font-semibold underline underline-offset-2">booking terms</Link>.
                   </p>
                 </section>
 
@@ -455,7 +487,7 @@ export function BookingWizard({
           >
             <div className="mx-auto flex max-w-6xl items-center gap-3 md:max-w-none md:justify-between">
               {step > 0 ? (
-                <Button variant="secondary" onClick={() => go(step - 1)} className="shrink-0 px-4">
+                <Button variant="secondary" onClick={back} className="shrink-0 px-4">
                   <ArrowLeft aria-hidden className="size-4" /> <span className="sr-only sm:not-sr-only">Back</span>
                 </Button>
               ) : null}
