@@ -58,6 +58,7 @@ function describe(action: string): { title: string; icon: LucideIcon; tone: Tone
   }
   if (kind === "customer") return { title: "Customer note added", icon: NotebookPen, tone: "neutral" };
   if (kind === "service") return { title: a === "created" ? "Service added" : "Service updated", icon: Settings2, tone: "neutral" };
+  if (kind === "block") return { title: a === "deleted" ? "Closure removed" : "Closure added", icon: Settings2, tone: "neutral" };
   if (kind === "seed") return { title: "Sample data loaded", icon: Settings2, tone: "neutral" };
   if (kind === "auth") {
     switch (a) {

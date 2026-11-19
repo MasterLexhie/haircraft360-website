@@ -5,6 +5,8 @@ import { requireAdmin } from "@/server/auth";
 import {
   BookingError,
   completeBooking,
+  createBlock,
+  deleteBlock,
   moveBooking,
   recordManualPayment,
   setBookingStatus,
@@ -16,6 +18,7 @@ import {
   type CompletionInput,
 } from "@/server/booking-service";
 import { parseNairaToKobo } from "@/lib/money";
+import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
 import { recordId } from "@/domain/schemas";
 import { z } from "zod";
 import type { PaymentMethod } from "@/domain/types";
@@ -152,17 +155,29 @@ export async function manualPaymentAction(bookingIdRaw: string, _: ActionState, 
 
 /* ───────────── Settings ───────────── */
 
+const minutesInRange = (v: number, min: number) => Number.isInteger(v) && v >= min && v <= 600 && v % 15 === 0;
+
 export async function serviceAction(_: ActionState, formData: FormData): Promise<ActionState> {
   const actor = await adminActor();
   const name = String(formData.get("name") ?? "").trim().slice(0, 80);
   const price = parseNairaToKobo(String(formData.get("price") ?? ""));
   const duration = Number(formData.get("duration"));
+  const bookableAlone = formData.get("bookableAlone") === "on";
+  const availableAsAddOn = formData.get("availableAsAddOn") === "on";
+  const addOnPriceRaw = String(formData.get("addOnPrice") ?? "").trim();
+  const addOnDurationRaw = String(formData.get("addOnDuration") ?? "").trim();
+  const addOnPrice = addOnPriceRaw === "" ? null : parseNairaToKobo(addOnPriceRaw);
+  const addOnDuration = addOnDurationRaw === "" ? null : Number(addOnDurationRaw);
+  const addOnIds = formData.getAll("addOnIds").map(validId);
+
   const fieldErrors: Record<string, string> = {};
   if (name.length < 2) fieldErrors.name = "Give the service a name.";
   if (price === null) fieldErrors.price = "Enter a price, for example 15000.";
-  if (!Number.isInteger(duration) || duration < 15 || duration > 600 || duration % 15) {
-    fieldErrors.duration = "Use minutes in steps of 15, from 15 to 600.";
-  }
+  if (!minutesInRange(duration, 15)) fieldErrors.duration = "Use minutes in steps of 15, from 15 to 600.";
+  if (!bookableAlone && !availableAsAddOn) fieldErrors.offeredAs = "Choose at least one.";
+  if (availableAsAddOn && addOnPriceRaw !== "" && addOnPrice === null) fieldErrors.addOnPrice = "Enter a price, or leave blank to use the main price.";
+  if (availableAsAddOn && addOnDuration !== null && !minutesInRange(addOnDuration, 0)) fieldErrors.addOnDuration = "Use minutes in steps of 15, from 0 to 600, or leave blank.";
+  if (addOnIds.length > 50 || addOnIds.some((id) => id === null)) return INVALID;
   if (Object.keys(fieldErrors).length) return { error: "Please fix the highlighted fields.", fieldErrors };
   try {
     await upsertService(
@@ -173,11 +188,70 @@ export async function serviceAction(_: ActionState, formData: FormData): Promise
         active: formData.get("active") === "on",
         priceKobo: price!,
         durationMinutes: duration,
+        bookableAlone,
+        availableAsAddOn,
+        addOnPriceKobo: addOnPrice,
+        addOnDurationMinutes: addOnDuration,
+        addOnIds: addOnIds as string[],
       },
       actor,
     );
     refresh();
     return { ok: true, message: `Saved “${name}”. Existing bookings keep their original prices.` };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/* ───────────── Closures (Blocks) ───────────── */
+
+const hhmmPattern = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+export async function blockAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const startDate = String(formData.get("startDate") ?? "");
+  const endDate = String(formData.get("endDate") ?? "") || startDate;
+  const wholeDay = formData.get("wholeDay") === "on";
+  const from = String(formData.get("from") ?? "");
+  const to = String(formData.get("to") ?? "");
+  const mode = formData.get("mode") === "reduce" ? "reduce" : "close";
+  const reduceBy = Number(formData.get("reduceBy"));
+
+  const fieldErrors: Record<string, string> = {};
+  if (!isValidDateKey(startDate)) fieldErrors.startDate = "Choose the first day.";
+  if (!isValidDateKey(endDate) || endDate < startDate) fieldErrors.endDate = "Choose a last day on or after the first day.";
+  if (!wholeDay && !hhmmPattern.test(from)) fieldErrors.from = "Choose a start time.";
+  if (!wholeDay && !hhmmPattern.test(to)) fieldErrors.to = "Choose an end time.";
+  if (mode === "reduce" && (!Number.isInteger(reduceBy) || reduceBy < 1 || reduceBy > 20)) fieldErrors.reduceBy = "Enter a whole number from 1 to 20.";
+  if (Object.keys(fieldErrors).length) return { error: "Please fix the highlighted fields.", fieldErrors };
+
+  const startAt = new Date(lagosToUtcMs(startDate, wholeDay ? 0 : parseHHMM(from)));
+  const endAt = new Date(wholeDay ? lagosToUtcMs(addDays(endDate, 1), 0) : lagosToUtcMs(endDate, parseHHMM(to)));
+  try {
+    const { affectedBookings } = await createBlock(
+      { startAt, endAt, capacityReduction: mode === "reduce" ? reduceBy : null, reason: String(formData.get("reason") ?? "") },
+      actor,
+    );
+    refresh();
+    return {
+      ok: true,
+      message: affectedBookings
+        ? `Saved. ${affectedBookings} existing booking${affectedBookings === 1 ? " is" : "s are"} in this period and still stand; contact them if they need to move.`
+        : "Saved. Those times are no longer offered online.",
+    };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function deleteBlockAction(blockIdRaw: string): Promise<ActionState> {
+  const actor = await adminActor();
+  const blockId = validId(blockIdRaw);
+  if (!blockId) return INVALID;
+  try {
+    await deleteBlock(blockId, actor);
+    refresh();
+    return { ok: true, message: "Closure removed. Those times are bookable again." };
   } catch (e) {
     return fail(e);
   }

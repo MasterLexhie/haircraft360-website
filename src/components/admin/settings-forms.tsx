@@ -14,11 +14,14 @@ import { Badge, Button, Field, cx, inputClass } from "@/components/ui/primitives
 const Feedback = ActionFeedback;
 
 /** Inline editor for one service (or a new one). Calls onDone after a successful save or on cancel. */
-function ServiceForm({ service, onDone }: { service?: Service; onDone: (message?: string) => void }) {
+function ServiceForm({ service, services, onDone }: { service?: Service; services: Service[]; onDone: (message?: string) => void }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(serviceAction, null);
   const [, startTransition] = useTransition();
   const fe = state?.fieldErrors ?? {};
   const pre = service?.id ?? "new";
+  const [isMain, setIsMain] = useState(service?.bookableAlone ?? true);
+  const [isExtra, setIsExtra] = useState(service?.availableAsAddOn ?? false);
+  const extras = services.filter((x) => x.availableAsAddOn && x.id !== service?.id);
 
   // Close the editor once a save succeeds; the list shows the confirmation.
   useEffect(() => {
@@ -54,6 +57,59 @@ function ServiceForm({ service, onDone }: { service?: Service; onDone: (message?
       <Field id={`${pre}-description`} label="Short description">
         <textarea id={`${pre}-description`} name="description" rows={2} defaultValue={service?.description} className={cx(inputClass, "min-h-16 text-sm")} />
       </Field>
+
+      <fieldset className="rounded-[var(--radius)] border border-line p-4" aria-describedby={fe.offeredAs ? `${pre}-offered-error` : undefined}>
+        <legend className="px-1 text-sm font-semibold text-ink">Offered as</legend>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input type="checkbox" name="bookableAlone" checked={isMain} onChange={(e) => setIsMain(e.target.checked)} className="mt-0.5 size-4 accent-[var(--color-accent)]" />
+            <span><span className="font-medium text-ink">Main service</span><span className="block text-xs text-ink-3">Customers can book it on its own.</span></span>
+          </label>
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input type="checkbox" name="availableAsAddOn" checked={isExtra} onChange={(e) => setIsExtra(e.target.checked)} className="mt-0.5 size-4 accent-[var(--color-accent)]" />
+            <span><span className="font-medium text-ink">Extra</span><span className="block text-xs text-ink-3">Can be added to a main service.</span></span>
+          </label>
+        </div>
+        {fe.offeredAs && <p id={`${pre}-offered-error`} className="mt-2 text-xs text-danger">{fe.offeredAs}</p>}
+
+        {isExtra && (
+          <div className="mt-4 grid gap-4 border-t border-line pt-4 sm:grid-cols-2">
+            <div>
+              <label htmlFor={`${pre}-addOnPrice`} className="mb-1.5 block text-sm font-semibold text-ink">Price as an extra</label>
+              <UnitInput id={`${pre}-addOnPrice`} name="addOnPrice" prefix="₦" inputMode="decimal" placeholder="Same as above" defaultValue={koboToInput(service?.addOnPriceKobo ?? null)} invalid={!!fe.addOnPrice} />
+              <p id={`${pre}-addOnPrice-desc`} className="mt-1 text-xs text-ink-3">Leave blank to use the main price.</p>
+              {fe.addOnPrice && <p id={`${pre}-addOnPrice-error`} className="mt-1 text-xs text-danger">{fe.addOnPrice}</p>}
+            </div>
+            <div>
+              <label htmlFor={`${pre}-addOnDuration`} className="mb-1.5 block text-sm font-semibold text-ink">Time as an extra</label>
+              <UnitInput id={`${pre}-addOnDuration`} name="addOnDuration" suffix="min" placeholder="Same" defaultValue={service?.addOnDurationMinutes ?? ""} invalid={!!fe.addOnDuration} />
+              <p id={`${pre}-addOnDuration-desc`} className="mt-1 text-xs text-ink-3">Extra time added to the appointment. Blank uses the main duration.</p>
+              {fe.addOnDuration && <p id={`${pre}-addOnDuration-error`} className="mt-1 text-xs text-danger">{fe.addOnDuration}</p>}
+            </div>
+          </div>
+        )}
+
+        {isMain && (
+          <div className="mt-4 border-t border-line pt-4">
+            <p className="text-sm font-semibold text-ink">Extras offered with this service</p>
+            {extras.length ? (
+              <ul className="mt-2 grid gap-2 sm:grid-cols-2">
+                {extras.map((x) => (
+                  <li key={x.id}>
+                    <label className="flex cursor-pointer items-center gap-2.5 text-sm">
+                      <input type="checkbox" name="addOnIds" value={x.id} defaultChecked={service?.addOnIds.includes(x.id)} className="size-4 accent-[var(--color-accent)]" />
+                      <span className="text-ink">{x.name}</span>
+                      <span className="ml-auto tabular text-xs text-ink-3">+{formatNaira(x.addOnPriceKobo ?? x.priceKobo)}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-xs text-ink-3">No extras yet. Mark a service as an extra first, then come back here to offer it.</p>
+            )}
+          </div>
+        )}
+      </fieldset>
 
       <label className="flex w-fit cursor-pointer items-center gap-3">
         <input type="checkbox" role="switch" name="active" defaultChecked={service?.active ?? true} className="peer sr-only" />
@@ -118,7 +174,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
       {editing === "new" && (
         <div className="border-b border-line bg-sand/40 px-5 py-5">
           <p className="type-caps mb-4 text-[0.68rem] text-accent-text">New service</p>
-          <ServiceForm onDone={done} />
+          <ServiceForm services={services} onDone={done} />
         </div>
       )}
 
@@ -138,8 +194,14 @@ export function ServicesManager({ services }: { services: Service[] }) {
               <div role="row" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3.5 md:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_5.5rem]">
                 <div role="cell" className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 font-semibold text-ink">
-                    {s.name} {!s.bookableAlone && <Badge tone="neutral">Add-on only</Badge>}
+                    {s.name} {!s.bookableAlone && <Badge tone="neutral">Extra only</Badge>}
+                    {s.bookableAlone && s.availableAsAddOn && <Badge tone="neutral">Also an extra</Badge>}
                   </p>
+                  {s.bookableAlone && s.addOnIds.length > 0 && (
+                    <p className="mt-0.5 text-xs text-ink-3">
+                      Extras: {s.addOnIds.map((id) => services.find((x) => x.id === id)?.name).filter(Boolean).join(", ")}
+                    </p>
+                  )}
                   {s.description && <p className="mt-0.5 line-clamp-1 text-xs text-ink-3">{s.description}</p>}
                   <p className="mt-1 text-xs tabular text-ink-2 md:hidden">
                     {price(s)} · {duration(s)} ·{" "}
@@ -171,7 +233,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
               {open && (
                 <div id={`edit-${s.id}`} className="px-5 pb-5">
                   <div className="rounded-[var(--radius)] border border-line bg-surface p-4 sm:p-5">
-                    <ServiceForm service={s} onDone={done} />
+                    <ServiceForm service={s} services={services} onDone={done} />
                   </div>
                 </div>
               )}
@@ -181,7 +243,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
       </div>
 
       <footer className="border-t border-line bg-sand/30 px-5 py-3 text-xs text-ink-3">
-        Editing a service never changes past bookings. Each booking keeps the name, price and duration it was booked with. Add-on settings arrive in the next update.
+        Editing a service never changes past bookings. Each booking keeps the name, price and duration it was booked with.
       </footer>
     </section>
   );

@@ -151,3 +151,18 @@ export async function getMoveSlots(booking: { id: string; startAt: string; endAt
   });
   return { status, startTimes: slots.filter((s) => s.available && s.startAt !== booking.startAt).map((s) => s.startAt) };
 }
+
+export interface BlockRow {
+  id: string;
+  startAt: string;
+  endAt: string;
+  capacityReduction: number | null;
+  reason: string;
+}
+
+/** Closures that haven't finished yet, soonest first (admin Settings). */
+export async function getUpcomingBlocks(): Promise<BlockRow[]> {
+  await connection();
+  const rows = await db.block.findMany({ where: { endAt: { gt: new Date() } }, orderBy: { startAt: "asc" } });
+  return rows.map((b) => ({ id: b.id, startAt: b.startAt.toISOString(), endAt: b.endAt.toISOString(), capacityReduction: b.capacityReduction, reason: b.reason }));
+}

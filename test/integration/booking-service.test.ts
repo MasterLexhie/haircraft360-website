@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDatabase } from "../db";
 import { bookingInput, createServices, createSettings, slot } from "../factories";
-import { BookingError, createPendingBooking, moveBooking, recordManualPayment, recordOnlinePayment, setBookingStatus } from "@/server/booking-service";
+import { BookingError, createBlock, createPendingBooking, deleteBlock, moveBooking, recordManualPayment, recordOnlinePayment, setBookingStatus, upsertService, type ServiceInput } from "@/server/booking-service";
 import { findBookingSummary, getCustomerBooking } from "@/server/queries";
 
 // next/server's connection() needs a request; tests call queries directly.
@@ -256,5 +256,45 @@ describe("moving a booking", () => {
     await expect(moveBooking(b.id, new Date(Date.now() - 3_600_000).toISOString(), actor)).rejects.toMatchObject({ code: "VALIDATION" });
     await setBookingStatus(b.id, "cancelled", actor);
     await expect(moveBooking(b.id, slot(4, "10:00"), actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
+  });
+});
+
+describe("services, extras and closures (admin)", () => {
+  const service = (over: Partial<ServiceInput> = {}): ServiceInput => ({
+    id: null, name: "Braids", description: "", priceKobo: 2_000_000, durationMinutes: 180, active: true,
+    bookableAlone: true, availableAsAddOn: false, addOnPriceKobo: null, addOnDurationMinutes: null, addOnIds: [], ...over,
+  });
+
+  it("adds an extra to a main service, and the booking prices it with the extra's own terms", async () => {
+    await upsertService(service({ id: "svc_other", name: "Scalp", priceKobo: 500_000, durationMinutes: 30, bookableAlone: false, availableAsAddOn: true, addOnPriceKobo: 250_000, addOnDurationMinutes: 15 }), actor);
+    await upsertService(service({ id: "svc_main", name: "Retwist", priceKobo: 1_500_000, durationMinutes: 120, addOnIds: ["svc_wash", "svc_other"] }), actor);
+    const r = await createPendingBooking(bookingInput({ addOnIds: ["svc_other"] }));
+    const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
+    expect(b.totalKobo).toBe(1_750_000);
+    expect(b.endAt.getTime() - b.startAt.getTime()).toBe(135 * 60_000);
+  });
+
+  it("refuses an extra that isn't set up as one, and a service that is neither main nor extra", async () => {
+    await expect(upsertService(service({ addOnIds: ["svc_main"] }), actor)).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(upsertService(service({ bookableAlone: false }), actor)).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+
+  it("removes a service from every main service's extras when it stops being an extra", async () => {
+    await upsertService(service({ id: "svc_wash", name: "Wash", priceKobo: 300_000, durationMinutes: 30, bookableAlone: true, availableAsAddOn: false }), actor);
+    expect(await db.serviceAddOn.count({ where: { addOnServiceId: "svc_wash" } })).toBe(0);
+  });
+
+  it("a closure stops new bookings, reports bookings already in it, and removing it frees the time", async () => {
+    await createPendingBooking(bookingInput({ startAt: slot(3, "15:00") }));
+    const { affectedBookings } = await createBlock({ startAt: new Date(slot(3, "09:00")), endAt: new Date(slot(3, "19:00")), capacityReduction: null, reason: "Staff training" }, actor);
+    expect(affectedBookings).toBe(1);
+    await expect(createPendingBooking(bookingInput())).rejects.toMatchObject({ code: "SLOT_TAKEN" });
+    const block = await db.block.findFirstOrThrow();
+    await deleteBlock(block.id, actor);
+    await expect(createPendingBooking(bookingInput())).resolves.toMatchObject({ reference: expect.any(String) });
+  });
+
+  it("refuses a closure that ends before it starts", async () => {
+    await expect(createBlock({ startAt: new Date(slot(3, "12:00")), endAt: new Date(slot(3, "11:00")), capacityReduction: null, reason: "" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
   });
 });

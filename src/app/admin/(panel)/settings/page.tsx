@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Clock, Scissors } from "lucide-react";
+import { CalendarOff, Clock, Scissors } from "lucide-react";
 import { Suspense } from "react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData } from "@/server/queries";
+import { getAdminData, getUpcomingBlocks, requestNow } from "@/server/queries";
+import { BlocksManager } from "@/components/admin/blocks-manager";
+import { lagosDateKey } from "@/lib/time";
 import { PageHeader } from "@/components/admin/bits";
 import { AvailabilityForm, ServicesManager } from "@/components/admin/settings-forms";
 import { Skeleton, cx } from "@/components/ui/primitives";
@@ -13,6 +15,7 @@ export const metadata: Metadata = { title: "Settings" };
 const TABS = [
   { id: "services", label: "Services", icon: Scissors },
   { id: "availability", label: "Availability & deposit", icon: Clock },
+  { id: "closures", label: "Closures", icon: CalendarOff },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -26,11 +29,11 @@ export default function SettingsPage({ searchParams }: { searchParams: Promise<{
 
 async function SettingsView({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requireAdmin();
-  const [db, sp] = await Promise.all([getAdminData(), searchParams]);
+  const [db, sp, blocks, nowMs] = await Promise.all([getAdminData(), searchParams, getUpcomingBlocks(), requestNow()]);
   const tab: TabId = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "services";
   return (
     <>
-      <PageHeader title="Settings" description="Services, opening hours, capacity and the deposit rule. Changes apply to new bookings only." />
+      <PageHeader title="Settings" description="Services and extras, opening hours, capacity, closures and the deposit rule. Changes apply to new bookings only." />
 
       <nav aria-label="Settings sections" className="-mx-4 mb-6 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0">
         <ul className="flex min-w-max gap-1">
@@ -57,6 +60,8 @@ async function SettingsView({ searchParams }: { searchParams: Promise<{ tab?: st
       </nav>
 
       {tab === "services" && <ServicesManager services={db.services} />}
+
+      {tab === "closures" && <BlocksManager blocks={blocks} today={lagosDateKey(nowMs)} />}
 
       {tab === "availability" && (
         <AvailabilityForm settings={db.settings} />

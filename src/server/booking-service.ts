@@ -494,15 +494,48 @@ export interface ServiceInput {
   priceKobo: Kobo;
   durationMinutes: number;
   active: boolean;
+  /** Can be booked on its own as the main service. */
+  bookableAlone: boolean;
+  /** Can be added to a main service as an extra. */
+  availableAsAddOn: boolean;
+  /** Price and time when added as an extra; null uses the main price and duration. */
+  addOnPriceKobo: Kobo | null;
+  addOnDurationMinutes: number | null;
+  /** For a main service: the extras it offers. */
+  addOnIds: string[];
 }
 
 export async function upsertService(input: ServiceInput, actor: Actor) {
+  if (!input.bookableAlone && !input.availableAsAddOn) {
+    throw new BookingError("VALIDATION", "Choose at least one: bookable on its own, or offered as an extra.");
+  }
   return db.$transaction(async (tx) => {
-    const data = { name: input.name, description: input.description, priceKobo: input.priceKobo, durationMinutes: input.durationMinutes, active: input.active };
+    const data = {
+      name: input.name,
+      description: input.description,
+      priceKobo: input.priceKobo,
+      durationMinutes: input.durationMinutes,
+      active: input.active,
+      bookableAlone: input.bookableAlone,
+      availableAsAddOn: input.availableAsAddOn,
+      addOnPriceKobo: input.availableAsAddOn ? input.addOnPriceKobo : null,
+      addOnDurationMinutes: input.availableAsAddOn ? input.addOnDurationMinutes : null,
+    };
     const existing = input.id ? await tx.service.findUnique({ where: { id: input.id } }) : null;
+    if (input.id && !existing) throw new BookingError("NOT_FOUND", "That service no longer exists. Reload the page.");
     const saved = existing
       ? await tx.service.update({ where: { id: existing.id }, data })
       : await tx.service.create({ data: { ...data, sortOrder: ((await tx.service.aggregate({ _max: { sortOrder: true } }))._max.sortOrder ?? 0) + 1 } });
+
+    // Extras offered with this service. Only services marked as extras qualify, never itself.
+    const wanted = input.bookableAlone ? [...new Set(input.addOnIds)].filter((id) => id !== saved.id) : [];
+    const valid = wanted.length ? await tx.service.findMany({ where: { id: { in: wanted }, availableAsAddOn: true }, select: { id: true } }) : [];
+    if (valid.length !== wanted.length) throw new BookingError("VALIDATION", "One of the chosen extras isn't set up as an extra any more. Reload the page.");
+    await tx.serviceAddOn.deleteMany({ where: { mainServiceId: saved.id } });
+    if (valid.length) await tx.serviceAddOn.createMany({ data: valid.map((v) => ({ mainServiceId: saved.id, addOnServiceId: v.id })) });
+    // A service that stops being an extra is removed from every main service's list.
+    if (!input.availableAsAddOn) await tx.serviceAddOn.deleteMany({ where: { addOnServiceId: saved.id } });
+
     await audit(tx, {
       action: existing ? "service.updated" : "service.created",
       actorLabel: actor.label,
@@ -510,6 +543,63 @@ export async function upsertService(input: ServiceInput, actor: Actor) {
       entityType: "Service",
       entityId: saved.id,
       summary: existing ? `Service “${saved.name}” updated (existing bookings keep their prices)` : `Service “${saved.name}” added`,
+    });
+  });
+}
+
+/* ───────────────────────────── Blocks (closures) ───────────────────────────── */
+
+export interface BlockInput {
+  startAt: Date;
+  endAt: Date;
+  /** null closes the salon for the period; a number lowers capacity by that many. */
+  capacityReduction: number | null;
+  reason: string;
+}
+
+/**
+ * Closes the salon, or lowers capacity, for a period. Taken under the day locks so a booking
+ * can't slip in while it is being added. Existing bookings are kept; the count of bookings
+ * affected is returned so the owner can contact them.
+ */
+export async function createBlock(input: BlockInput, actor: Actor): Promise<{ affectedBookings: number }> {
+  if (!(input.endAt.getTime() > input.startAt.getTime())) throw new BookingError("VALIDATION", "The end must be after the start.");
+  if (input.endAt.getTime() - input.startAt.getTime() > 62 * DAY_MS) throw new BookingError("VALIDATION", "Add closures of up to two months at a time.");
+  if (input.capacityReduction !== null && (!Number.isInteger(input.capacityReduction) || input.capacityReduction < 1 || input.capacityReduction > 20)) {
+    throw new BookingError("VALIDATION", "Reduce capacity by a whole number from 1 to 20.");
+  }
+  return db.$transaction(async (tx) => {
+    for (let d = lagosDateKey(input.startAt); d <= lagosDateKey(input.endAt); d = addDays(d, 1)) await lockSalonDay(tx, d);
+    const block = await tx.block.create({
+      data: { startAt: input.startAt, endAt: input.endAt, capacityReduction: input.capacityReduction, reason: input.reason.trim().slice(0, 200), createdById: actor.id },
+    });
+    const affectedBookings = await tx.booking.count({
+      where: { status: { in: ["confirmed", "pending_payment", "needs_attention"] }, startAt: { lt: input.endAt }, endAt: { gt: input.startAt } },
+    });
+    await audit(tx, {
+      action: "block.created",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Block",
+      entityId: block.id,
+      summary: `${input.capacityReduction === null ? "Closed" : `Capacity lowered by ${input.capacityReduction}`} from ${formatLagos(input.startAt)} to ${formatLagos(input.endAt)}${block.reason ? ` (${block.reason})` : ""}`,
+    });
+    return { affectedBookings };
+  });
+}
+
+export async function deleteBlock(blockId: string, actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const block = await tx.block.findUnique({ where: { id: blockId } });
+    if (!block) throw new BookingError("NOT_FOUND", "That closure was already removed.");
+    await tx.block.delete({ where: { id: blockId } });
+    await audit(tx, {
+      action: "block.deleted",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Block",
+      entityId: blockId,
+      summary: `Closure from ${formatLagos(block.startAt)} to ${formatLagos(block.endAt)} removed; those times are bookable again`,
     });
   });
 }
