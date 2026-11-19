@@ -4,11 +4,13 @@ import { useActionState, useMemo, useState, useTransition } from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
 import type { Booking, Kobo } from "@/domain/types";
 import { formatNaira, parseNairaToKobo } from "@/lib/money";
+import { formatTime } from "@/lib/time";
 import {
   bookingNoteAction,
   completeBookingAction,
   customerNoteAction,
   manualPaymentAction,
+  moveBookingAction,
   setStatusAction,
   type ActionState,
 } from "@/app/admin/actions";
@@ -155,6 +157,30 @@ export function StatusActions({ bookingId, status }: { bookingId: string; status
       </div>
       {msg?.error && <p role="alert" className="text-sm text-danger">{msg.error}</p>}
     </div>
+  );
+}
+
+/* ───────────── Move to another time ───────────── */
+
+/** Free times for the chosen day (worked out on the server); the owner picks one and confirms. */
+export function MoveTimes({ bookingId, startTimes }: { bookingId: string; startTimes: string[] }) {
+  const [state, action, pending] = useActionState<ActionState, FormData>(moveBookingAction.bind(null, bookingId), null);
+  return (
+    <form action={action} className="space-y-3">
+      <fieldset>
+        <legend className="text-sm font-semibold">Free times</legend>
+        <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
+          {startTimes.map((t) => (
+            <label key={t} className="flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-line bg-surface text-sm font-medium tabular has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-ink">
+              <input type="radio" name="startAt" value={t} required className="sr-only" />
+              {formatTime(t)}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+      <Feedback state={state} />
+      <Button type="submit" size="sm" loading={pending}>Move to this time</Button>
+    </form>
   );
 }
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDatabase } from "../db";
 import { bookingInput, createServices, createSettings, slot } from "../factories";
-import { BookingError, createPendingBooking, recordManualPayment, recordOnlinePayment, setBookingStatus } from "@/server/booking-service";
+import { BookingError, createPendingBooking, moveBooking, recordManualPayment, recordOnlinePayment, setBookingStatus } from "@/server/booking-service";
 import { findBookingSummary, getCustomerBooking } from "@/server/queries";
 
 // next/server's connection() needs a request; tests call queries directly.
@@ -190,5 +190,71 @@ describe("admin changes", () => {
     const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
     await recordManualPayment(b.id, { amountKobo: b.depositDueKobo, method: "transfer", note: "", towardsDeposit: true }, actor);
     expect((await db.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("confirmed");
+  });
+
+  it("cannot reinstate over a live unpaid hold that fills the time", async () => {
+    const a = await createPendingBooking(bookingInput());
+    await confirm(a.reference);
+    const ba = await db.booking.findUniqueOrThrow({ where: { reference: a.reference } });
+    await setBookingStatus(ba.id, "cancelled", actor);
+    await createPendingBooking(bookingInput()); // someone else is now paying for this time
+    await expect(setBookingStatus(ba.id, "confirmed", actor)).rejects.toMatchObject({ code: "SLOT_TAKEN" });
+  });
+});
+
+describe("moving a booking", () => {
+  async function needsAttention() {
+    const late = await createPendingBooking(bookingInput());
+    await db.booking.update({ where: { reference: late.reference }, data: { holdExpiresAt: new Date(Date.now() - 60_000) } });
+    const other = await createPendingBooking(bookingInput());
+    await confirm(other.reference);
+    await confirm(late.reference);
+    return db.booking.findUniqueOrThrow({ where: { reference: late.reference } });
+  }
+
+  it("confirms a paid booking that needed a new time once it is moved to a free time, and schedules its messages", async () => {
+    const b = await needsAttention();
+    expect(b.status).toBe("needs_attention");
+    await moveBooking(b.id, slot(3, "14:00"), actor);
+    const moved = await db.booking.findUniqueOrThrow({ where: { id: b.id } });
+    expect(moved.status).toBe("confirmed");
+    expect(moved.startAt.toISOString()).toBe(slot(3, "14:00"));
+    expect(moved.endAt.getTime() - moved.startAt.getTime()).toBe(b.endAt.getTime() - b.startAt.getTime());
+    const reminder = await db.notification.findUniqueOrThrow({ where: { dedupeKey: `reminder:${b.id}` } });
+    expect(reminder.dueAt.getTime()).toBe(moved.startAt.getTime() - 86_400_000);
+  });
+
+  it("refuses a time that is full, and leaves the booking where it was", async () => {
+    const b = await needsAttention();
+    await expect(moveBooking(b.id, slot(3, "10:00"), actor)).rejects.toMatchObject({ code: "SLOT_TAKEN" });
+    expect((await db.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("needs_attention");
+  });
+
+  it("moves a confirmed booking and sends its reminder again for the new time", async () => {
+    const r = await createPendingBooking(bookingInput());
+    await confirm(r.reference);
+    const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
+    await db.notification.update({ where: { dedupeKey: `reminder:${b.id}` }, data: { status: "sent", sentAt: new Date() } });
+    await moveBooking(b.id, slot(6, "11:00"), actor);
+    const reminder = await db.notification.findUniqueOrThrow({ where: { dedupeKey: `reminder:${b.id}` } });
+    expect(reminder.status).toBe("pending");
+    expect(reminder.sentAt).toBeNull();
+  });
+
+  it("can move to a time that overlaps its own old time, because it never counts against itself", async () => {
+    const r = await createPendingBooking(bookingInput());
+    await confirm(r.reference);
+    const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
+    await expect(moveBooking(b.id, slot(3, "11:00"), actor)).resolves.toMatchObject({ status: "confirmed" });
+  });
+
+  it("refuses unpaid, cancelled and past moves", async () => {
+    const r = await createPendingBooking(bookingInput());
+    const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
+    await expect(moveBooking(b.id, slot(4, "10:00"), actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
+    await confirm(r.reference);
+    await expect(moveBooking(b.id, new Date(Date.now() - 3_600_000).toISOString(), actor)).rejects.toMatchObject({ code: "VALIDATION" });
+    await setBookingStatus(b.id, "cancelled", actor);
+    await expect(moveBooking(b.id, slot(4, "10:00"), actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
   });
 });

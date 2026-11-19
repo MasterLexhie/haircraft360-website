@@ -6,7 +6,7 @@ import { addOnTerms, balanceDue, itemsDuration, itemsTotal } from "@/domain/pric
 import { normalizeEmail, normalizePhone, placeholderEmailFor } from "@/domain/phone";
 import { validateContact } from "@/domain/validation";
 import { formatNaira } from "@/lib/money";
-import { addDays, lagosDateKey, lagosToUtcMs } from "@/lib/time";
+import { addDays, formatDateKey, formatTime, lagosDateKey, lagosToUtcMs } from "@/lib/time";
 import { randomToken, sha256Hex } from "@/lib/crypto";
 import { db, type Db, type Tx } from "./db";
 import { audit } from "./audit";
@@ -320,6 +320,70 @@ export async function setBookingStatus(bookingId: string, status: "cancelled" | 
     });
   });
 }
+
+const MOVABLE: BookingStatus[] = ["confirmed", "needs_attention"];
+
+/**
+ * Moves a booking to a new start time, keeping its length (BUILD_SPEC 6.2: the admin flow for a
+ * late payment is "reschedule", not "refund"). Uses the same capacity check as a new booking,
+ * under the locks for both days. A `needs_attention` booking becomes confirmed once it fits.
+ * The reminder follows the booking to its new time.
+ */
+export async function moveBooking(bookingId: string, newStartAt: string, actor: Actor) {
+  const startMs = Date.parse(newStartAt);
+  if (Number.isNaN(startMs)) throw new BookingError("VALIDATION", "Choose a new time.");
+  return db.$transaction(async (tx) => {
+    const b = await getBooking(tx, bookingId);
+    if (!MOVABLE.includes(b.status)) {
+      throw new BookingError("NOT_ALLOWED", `A ${b.status.replace(/_/g, " ")} booking can't be moved. Only confirmed bookings, or paid bookings that need a new time, can.`);
+    }
+    const nowMs = Date.now();
+    if (startMs < nowMs) throw new BookingError("VALIDATION", "Choose a time that hasn't passed yet.");
+    const durationMs = b.endAt.getTime() - b.startAt.getTime();
+    const startAt = new Date(startMs);
+    const endAt = new Date(startMs + durationMs);
+    const newDay = lagosDateKey(startAt);
+    // Lock both days in a fixed order so two moves in opposite directions can't deadlock.
+    for (const day of [...new Set([lagosDateKey(b.startAt), newDay])].sort()) await lockSalonDay(tx, day);
+
+    const settings = await loadSettings(tx);
+    const fits = isSlotBookable({
+      startAt: startAt.toISOString(),
+      durationMinutes: Math.round(durationMs / 60_000),
+      // The salon can fit someone in at short notice, so the customer lead time doesn't apply.
+      config: { ...settings.availability, minimumLeadMinutes: 0 },
+      ...(await occupancyAround(tx, newDay)),
+      nowMs,
+      excludeBookingId: b.id,
+    });
+    if (!fits) throw new BookingError("SLOT_TAKEN", "That time is full or outside opening hours. Choose another time.");
+
+    const status = b.status === "needs_attention" ? "confirmed" : b.status;
+    await tx.booking.update({
+      where: { id: b.id },
+      data: { startAt, endAt, status, accessExpiresAt: new Date(endAt.getTime() + ACCESS_DAYS_AFTER_APPOINTMENT * DAY_MS) },
+    });
+    if (b.status === "needs_attention") await createBookingNotifications(tx, b.id);
+    // A reminder that was already sent for the old time goes out again for the new one.
+    await tx.notification.updateMany({
+      where: { bookingId: b.id, type: "reminder" },
+      data: { dueAt: new Date(startMs - DAY_MS), status: "pending", attempts: 0, lastError: null, sentAt: null },
+    });
+    await audit(tx, {
+      action: "booking.moved",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Booking",
+      entityId: b.id,
+      bookingId: b.id,
+      customerId: b.customerId,
+      summary: `Moved from ${formatLagos(b.startAt)} to ${formatLagos(startAt)}${b.status === "needs_attention" ? "; booking confirmed" : ""}`,
+    });
+    return { status };
+  });
+}
+
+const formatLagos = (d: Date) => `${formatDateKey(lagosDateKey(d))} ${formatTime(d.toISOString())}`;
 
 export interface CompletionInput {
   extras: { name: string; priceKobo: Kobo; note: string }[];

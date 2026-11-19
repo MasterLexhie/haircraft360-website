@@ -6,7 +6,9 @@ import { normalizePhone, normalizeEmail } from "@/domain/phone";
 import { db } from "./db";
 import { toAuditEvent, toBooking, toCustomer, toPayment, toService } from "./mappers";
 import { loadSettings } from "./settings";
-import { findBookingByToken } from "./booking-service";
+import { findBookingByToken, occupancyBetween } from "./booking-service";
+import { slotsForDate, type DateStatus } from "@/domain/availability";
+import { addDays, lagosToUtcMs } from "@/lib/time";
 
 /**
  * Read-side queries for Server Components. Each waits for a request (`connection()`),
@@ -128,4 +130,24 @@ export function joinBooking(snapshot: Pick<AdminSnapshot, "customers" | "payment
     customer: snapshot.customers.find((c) => c.id === b.customerId)!,
     payments: snapshot.payments.filter((p) => p.bookingId === b.id),
   };
+}
+
+/**
+ * Free start times on one day for moving a booking (admin). The booking never counts against
+ * itself, and the customer lead time doesn't apply: the salon can fit someone in at short notice.
+ */
+export async function getMoveSlots(booking: { id: string; startAt: string; endAt: string }, dateKey: string): Promise<{ status: DateStatus; startTimes: string[] }> {
+  await connection();
+  const nowMs = Date.now();
+  const settings = await loadSettings();
+  const occupancy = await occupancyBetween(db, new Date(lagosToUtcMs(addDays(dateKey, -1), 0)), new Date(lagosToUtcMs(addDays(dateKey, 2), 0)));
+  const { status, slots } = slotsForDate({
+    dateKey,
+    durationMinutes: Math.round((Date.parse(booking.endAt) - Date.parse(booking.startAt)) / 60_000),
+    config: { ...settings.availability, minimumLeadMinutes: 0 },
+    ...occupancy,
+    nowMs,
+    excludeBookingId: booking.id,
+  });
+  return { status, startTimes: slots.filter((s) => s.available && s.startAt !== booking.startAt).map((s) => s.startAt) };
 }

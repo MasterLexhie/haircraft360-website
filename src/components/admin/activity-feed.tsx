@@ -52,6 +52,7 @@ function describe(action: string): { title: string; icon: LucideIcon; tone: Tone
       case "cancelled": return { title: "Booking cancelled", icon: CalendarX, tone: "danger" };
       case "no_show": return { title: "Marked as no-show", icon: CalendarX, tone: "danger" };
       case "reinstated": return { title: "Booking reinstated", icon: CalendarCheck, tone: "accent" };
+      case "moved": return { title: "Booking moved", icon: CalendarCheck, tone: "accent" };
     }
     return { title: "Booking updated", icon: CalendarCheck, tone: "neutral" };
   }

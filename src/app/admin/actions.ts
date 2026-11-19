@@ -5,6 +5,7 @@ import { requireAdmin } from "@/server/auth";
 import {
   BookingError,
   completeBooking,
+  moveBooking,
   recordManualPayment,
   setBookingStatus,
   updateBookingNote,
@@ -80,6 +81,21 @@ export async function setStatusAction(bookingIdRaw: string, statusRaw: "cancelle
     await setBookingStatus(bookingId, status.data, actor);
     refresh();
     return { ok: true, message: "Status updated." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function moveBookingAction(bookingIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const bookingId = validId(bookingIdRaw);
+  if (!bookingId) return INVALID;
+  const startAt = z.iso.datetime().safeParse(formData.get("startAt"));
+  if (!startAt.success) return { error: "Choose one of the free times." };
+  try {
+    const { status } = await moveBooking(bookingId, startAt.data, actor);
+    refresh();
+    return { ok: true, message: status === "confirmed" ? "Booking moved and confirmed. Let the customer know their new time." : "Booking moved." };
   } catch (e) {
     return fail(e);
   }

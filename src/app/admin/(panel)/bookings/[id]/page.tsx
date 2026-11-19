@@ -4,30 +4,32 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Lock, Mail, Phone } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData, joinBooking, requestNow } from "@/server/queries";
+import { getAdminData, getMoveSlots, joinBooking, requestNow } from "@/server/queries";
 import { balanceDue, paidKobo } from "@/domain/pricing";
 import { formatPhone } from "@/domain/phone";
 import { bookingStatusLabel } from "@/domain/labels";
 import { formatNaira } from "@/lib/money";
-import { formatDateTime, formatDuration, formatLongDate, formatTime } from "@/lib/time";
+import { formatDateKey, formatDateTime, formatDuration, formatLongDate, formatTime, isValidDateKey, lagosDateKey } from "@/lib/time";
 import { BookingStatusBadge, KeyValue, PageHeader, Panel, PaymentStateBadge } from "@/components/admin/bits";
-import { BalanceLink, CompletionForm, ManualPaymentForm, PrivateNoteForm, StatusActions } from "@/components/admin/booking-forms";
+import { BalanceLink, CompletionForm, ManualPaymentForm, MoveTimes, PrivateNoteForm, StatusActions } from "@/components/admin/booking-forms";
 import { PaymentHistory } from "@/components/booking/payment-history";
-import { Alert, Skeleton } from "@/components/ui/primitives";
+import { Alert, Button, Field, Skeleton, inputClass } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Booking detail" };
 
-export default function BookingDetailPage({ params }: { params: Promise<{ id: string }> }) {
+type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ move?: string }> };
+
+export default function BookingDetailPage({ params, searchParams }: Props) {
   return (
     <Suspense fallback={<Skeleton className="h-[40rem]" />}>
-      <Detail params={params} />
+      <Detail params={params} searchParams={searchParams} />
     </Suspense>
   );
 }
 
-async function Detail({ params }: { params: Promise<{ id: string }> }) {
+async function Detail({ params, searchParams }: Props) {
   await requireAdmin();
-  const [{ id }, db, nowMs] = await Promise.all([params, getAdminData(), requestNow()]);
+  const [{ id }, { move }, db, nowMs] = await Promise.all([params, searchParams, getAdminData(), requestNow()]);
   const b = db.bookings.find((x) => x.id === id);
   if (!b) notFound();
   const { booking, customer, payments } = joinBooking(db, b);
@@ -37,6 +39,10 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
   const minutes = (Date.parse(booking.endAt) - Date.parse(booking.startAt)) / 60_000;
   const isPast = Date.parse(booking.endAt) < nowMs;
   const canComplete = booking.status === "confirmed" || booking.status === "completed";
+  const canMove = booking.status === "confirmed" || booking.status === "needs_attention";
+  const today = lagosDateKey(nowMs);
+  const bookingDay = lagosDateKey(booking.startAt);
+  const moveDay = move && isValidDateKey(move) && move >= today ? move : bookingDay >= today ? bookingDay : today;
 
   return (
     <>
@@ -54,7 +60,8 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
       )}
       {booking.status === "needs_attention" && (
         <Alert tone="danger" className="mb-6" title="Payment received, but the time needs changing">
-          The deposit arrived after this time was taken. Contact the customer and move the booking to another time.
+          The deposit arrived after this time was taken. Contact the customer, agree a new time and{" "}
+          <a href="#move" className="font-semibold underline">move the booking</a>. It is confirmed once moved.
         </Alert>
       )}
       {booking.status === "confirmed" && isPast && (
@@ -112,6 +119,24 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
             </details>
           </Panel>
 
+          {canMove && (
+            <section id="move" className="scroll-mt-20">
+              <Panel title="Move to another time">
+                <form method="get" action={`/admin/bookings/${booking.id}#move`} className="flex flex-wrap items-end gap-3">
+                  <Field id="move-day" label="Day">
+                    <input id="move-day" name="move" type="date" min={today} defaultValue={moveDay} className={inputClass} />
+                  </Field>
+                  <Button type="submit" variant="secondary" size="sm">Show free times</Button>
+                </form>
+                <div className="mt-4">
+                  <Suspense fallback={<Skeleton className="h-24" />}>
+                    <MoveOptions booking={booking} dateKey={moveDay} minutes={minutes} />
+                  </Suspense>
+                </div>
+              </Panel>
+            </section>
+          )}
+
           {canComplete && (
             <section id="complete" className="scroll-mt-20">
               <Panel title={booking.status === "completed" ? "Add to this appointment" : "Complete this appointment"}>
@@ -162,6 +187,19 @@ async function Detail({ params }: { params: Promise<{ id: string }> }) {
           </Panel>
         </div>
       </div>
+    </>
+  );
+}
+
+async function MoveOptions({ booking, dateKey, minutes }: { booking: { id: string; startAt: string; endAt: string }; dateKey: string; minutes: number }) {
+  const { status, startTimes } = await getMoveSlots(booking, dateKey);
+  if (status === "closed") return <p className="text-sm text-ink-3">The salon is closed on {formatDateKey(dateKey, { long: true })}. Choose another day.</p>;
+  if (status === "beyond_horizon") return <p className="text-sm text-ink-3">That day is beyond the booking window set in Settings. Choose an earlier day.</p>;
+  if (!startTimes.length) return <p className="text-sm text-ink-3">No free times for {formatDuration(minutes)} on {formatDateKey(dateKey, { long: true })}. Choose another day.</p>;
+  return (
+    <>
+      <p className="mb-3 text-sm text-ink-2">{formatDateKey(dateKey, { long: true })}: times with room for {formatDuration(minutes)}.</p>
+      <MoveTimes bookingId={booking.id} startTimes={startTimes} />
     </>
   );
 }
