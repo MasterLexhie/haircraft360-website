@@ -1,8 +1,7 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { refresh } from "next/cache";
-import { checkDemoCredentials, clearSessionCookie, requireAdmin, setSessionCookie } from "@/server/auth";
+import { requireAdmin } from "@/server/auth";
 import {
   BookingError,
   completeBooking,
@@ -29,25 +28,7 @@ function fail(err: unknown): ActionState {
 /** Every admin action starts here: the permission check runs inside the action, not only in proxy.ts. */
 async function adminActor(): Promise<Actor> {
   const admin = await requireAdmin();
-  return { id: null, label: admin.name };
-}
-
-/* ───────────── Auth (replaced in Milestone 2) ───────────── */
-
-export async function loginAction(_: ActionState, formData: FormData): Promise<ActionState> {
-  const email = String(formData.get("email") ?? "");
-  const password = String(formData.get("password") ?? "");
-  if (!checkDemoCredentials(email, password)) {
-    return { error: "That email and password don't match the demo owner account." };
-  }
-  await setSessionCookie();
-  const next = String(formData.get("next") ?? "");
-  redirect(next.startsWith("/admin") ? next : "/admin");
-}
-
-export async function logoutAction() {
-  await clearSessionCookie();
-  redirect("/admin/login");
+  return { id: admin.id, label: admin.name };
 }
 
 /* ───────────── Bookings ───────────── */

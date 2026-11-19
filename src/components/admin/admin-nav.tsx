@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LayoutDashboard, Settings2, Users } from "lucide-react";
+import { CalendarDays, LayoutDashboard, Settings2, UserRoundCog, Users } from "lucide-react";
 import { cx } from "@/components/ui/primitives";
 
 const ITEMS = [
@@ -10,6 +10,7 @@ const ITEMS = [
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings2 },
+  { href: "/admin/account", label: "Account", icon: UserRoundCog },
 ];
 
 /** Pathname-aware nav. Must render inside <Suspense> (dynamic routes). */
@@ -29,7 +30,7 @@ export function AdminNavList({
 }) {
   return (
     <nav aria-label="Admin">
-      <ul className={orientation === "vertical" ? "space-y-1" : "grid grid-cols-4 gap-1"}>
+      <ul className={orientation === "vertical" ? "space-y-1" : "grid grid-cols-5 gap-1"}>
         {ITEMS.map((item) => {
           const active = item.exact ? pathname === item.href : !!pathname?.startsWith(item.href);
           return (

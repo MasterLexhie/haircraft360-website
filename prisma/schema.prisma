@@ -446,11 +446,18 @@ model AdminUser {
   /// PBKDF2 hash in the form pbkdf2-sha256$<iterations>$<salt b64url>$<hash b64url>.
   passwordHash      String
   passwordChangedAt DateTime  @default(now()) @db.Timestamptz(3)
-  /// Base32 TOTP secret. Null until 2FA setup is finished.
+  /// TOTP secret, encrypted with a key derived from AUTH_SECRET. Set during setup;
+  /// 2FA is only active once totpEnabledAt is set.
   totpSecret        String?
   totpEnabledAt     DateTime? @db.Timestamptz(3)
   /// SHA-256 hashes of unused one-time backup codes.
   backupCodeHashes  String[]  @default([])
+  /// Last TOTP time step accepted, so a code can never be used twice.
+  lastTotpStep      Int?
+  /// Consecutive failed sign-ins. Waits grow after 5; reset on success. No hard lockout.
+  failedLoginCount  Int       @default(0)
+  loginBlockedUntil DateTime? @db.Timestamptz(3)
+  lastLoginAt       DateTime? @db.Timestamptz(3)
   createdAt         DateTime  @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
 

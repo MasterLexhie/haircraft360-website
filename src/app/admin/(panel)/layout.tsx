@@ -1,9 +1,9 @@
 import Image from "next/image";
-import { LogOut, ShieldAlert } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Suspense } from "react";
 import { AdminNav, AdminNavList } from "@/components/admin/admin-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
-import { logoutAction } from "../actions";
+import { logoutAction } from "../auth-actions";
 
 /**
  * App-shell layout: the frame is exactly the viewport height. The sidebar
@@ -29,10 +29,6 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         </header>
 
         <div id="admin-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-          <p className="flex items-center gap-2 border-b border-warning/20 bg-warning-soft px-4 py-2 text-xs text-warning sm:px-6">
-            <ShieldAlert aria-hidden className="size-3.5 shrink-0" />
-            Demo admin. Sign-in is not production security, all records are demo data, and no payment is real.
-          </p>
           <main className="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
         </div>
 

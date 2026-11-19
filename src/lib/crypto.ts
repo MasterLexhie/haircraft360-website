@@ -75,3 +75,29 @@ export async function verifyPassword(password: string, stored: string): Promise<
   const actual = await pbkdf2(password, fromBase64Url(saltRaw), iterations);
   return timingSafeEqual(toBase64Url(actual), hashRaw);
 }
+
+/* ───────────────────────────── Encryption at rest ───────────────────────────── */
+
+async function aesKey(secret: string, purpose: string): Promise<CryptoKey> {
+  const raw = await crypto.subtle.digest("SHA-256", encoder.encode(`${purpose}:${secret}`));
+  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+/**
+ * AES-GCM encryption for small secrets stored in the database (2FA seeds).
+ * The key is derived from `secret` (AUTH_SECRET) and a purpose label, so a
+ * database leak alone does not reveal them. Output: `v1.<iv>.<ciphertext>`.
+ */
+export async function encryptString(plain: string, secret: string, purpose: string): Promise<string> {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const data = await crypto.subtle.encrypt({ name: "AES-GCM", iv: iv as BufferSource }, await aesKey(secret, purpose), encoder.encode(plain));
+  return `v1.${toBase64Url(iv)}.${toBase64Url(new Uint8Array(data))}`;
+}
+
+export async function decryptString(sealed: string, secret: string, purpose: string): Promise<string> {
+  const [version, ivRaw, dataRaw] = sealed.split(".");
+  if (version !== "v1" || !ivRaw || !dataRaw) throw new Error("Unrecognised encrypted value.");
+  const key = await aesKey(secret, purpose);
+  const plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromBase64Url(ivRaw) as BufferSource }, key, fromBase64Url(dataRaw) as BufferSource);
+  return new TextDecoder().decode(plain);
+}

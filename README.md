@@ -22,8 +22,20 @@ npm run db:seed                # fake sample data; refuses to run against a non-
 npm run dev                    # http://localhost:3000
 ```
 
-The seed prints a generated admin password once (or set `SEED_ADMIN_PASSWORD`). Until Milestone 2
-replaces it, the admin still uses the temporary demo login in `src/mock/demo-config.ts`.
+The seed creates `owner@example.test` and prints a generated password once (or set
+`SEED_ADMIN_PASSWORD`). The first sign-in asks you to link an authenticator app; every sign-in
+after that needs a code from it, or a one-time backup code.
+
+Admin accounts are managed with a script (there is no reset by email):
+
+```bash
+npm run admin -- list
+npm run admin -- create owner@salon.ng "Salon owner"
+npm run admin -- reset-password owner@salon.ng
+npm run admin -- reset-2fa owner@salon.ng
+```
+
+`AUTH_SECRET` also encrypts the stored 2FA secrets. If it ever changes, every admin needs `reset-2fa`.
 
 Set `ENABLE_MOCK_CHECKOUT="true"` in `.env.local` to confirm bookings through the mock checkout.
 Never set it in a hosted environment.
@@ -40,6 +52,7 @@ Never set it in a hosted environment.
 | `npm run db:deploy` | Apply existing migrations (CI and production) |
 | `npm run db:seed` | Load fake sample data locally |
 | `npm run db:studio` | Browse the local database |
+| `npm run admin` | Create admins, reset passwords or 2FA |
 
 CI (`.github/workflows/ci.yml`) runs lint, type check, migrations, tests and build on every push.
 

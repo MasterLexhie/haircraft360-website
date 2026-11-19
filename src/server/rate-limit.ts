@@ -17,7 +17,8 @@ export interface Limit {
 }
 
 export const LIMITS = {
-  loginPerIp: { limit: 5, windowSeconds: 15 * 60 },
+  /** Failed sign-in attempts (password or code) per IP. Successful steps do not count. */
+  loginFailuresPerIp: { limit: 5, windowSeconds: 15 * 60 },
   bookingPerIp: { limit: 5, windowSeconds: 10 * 60 },
   paymentInitPerIp: { limit: 10, windowSeconds: 10 * 60 },
   findBookingPerIp: { limit: 10, windowSeconds: 15 * 60 },
@@ -48,6 +49,19 @@ export async function hit(key: string, { limit, windowSeconds }: Limit, nowMs = 
     ok: count <= limit,
     remaining: Math.max(limit - count, 0),
     retryAfterSeconds: Math.max(1, Math.ceil((expiresAt.getTime() - nowMs) / 1000)),
+  };
+}
+
+/** Checks a key without counting this request (used where only failures should count). */
+export async function peek(key: string, { limit, windowSeconds }: Limit, nowMs = Date.now()): Promise<RateLimitResult> {
+  const windowMs = windowSeconds * 1000;
+  const windowStart = new Date(Math.floor(nowMs / windowMs) * windowMs);
+  const row = await db.rateLimitBucket.findUnique({ where: { key_windowStart: { key, windowStart } } });
+  const count = row?.count ?? 0;
+  return {
+    ok: count < limit,
+    remaining: Math.max(limit - count, 0),
+    retryAfterSeconds: Math.max(1, Math.ceil((windowStart.getTime() + windowMs - nowMs) / 1000)),
   };
 }
 

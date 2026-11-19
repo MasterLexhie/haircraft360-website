@@ -72,7 +72,7 @@ export function AdminSidebar({ logoutAction }: { logoutAction: () => Promise<voi
             <span className="text-[0.78rem] font-semibold uppercase tracking-[0.18em] text-accent-text">
               Haircraft<span className="font-display text-base normal-case italic tracking-normal">360</span>
             </span>
-            <span className="whitespace-nowrap text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-ink-3">Salon admin · demo</span>
+            <span className="whitespace-nowrap text-[0.62rem] font-semibold uppercase tracking-[0.2em] text-ink-3">Salon admin</span>
           </span>
         )}
         {toggleButton}
