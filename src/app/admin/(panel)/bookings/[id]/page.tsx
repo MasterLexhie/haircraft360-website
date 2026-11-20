@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Form from "next/form";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -122,12 +123,13 @@ async function Detail({ params, searchParams }: Props) {
           {canMove && (
             <section id="move" className="scroll-mt-20">
               <Panel title="Move to another time">
-                <form method="get" action={`/admin/bookings/${booking.id}#move`} className="flex flex-wrap items-end gap-3">
+                {/* A soft navigation that keeps the scroll position, so the new times appear in place. */}
+                <Form action={`/admin/bookings/${booking.id}`} scroll={false} replace className="flex flex-wrap items-end gap-3">
                   <Field id="move-day" label="Day">
                     <input id="move-day" name="move" type="date" min={today} defaultValue={moveDay} className={inputClass} />
                   </Field>
                   <Button type="submit" variant="secondary" size="sm">Show free times</Button>
-                </form>
+                </Form>
                 <div className="mt-4">
                   <Suspense fallback={<Skeleton className="h-24" />}>
                     <MoveOptions booking={booking} dateKey={moveDay} minutes={minutes} />
@@ -199,7 +201,7 @@ async function MoveOptions({ booking, dateKey, minutes }: { booking: { id: strin
   return (
     <>
       <p className="mb-3 text-sm text-ink-2">{formatDateKey(dateKey, { long: true })}: times with room for {formatDuration(minutes)}.</p>
-      <MoveTimes bookingId={booking.id} startTimes={startTimes} />
+      <MoveTimes key={dateKey} bookingId={booking.id} startTimes={startTimes} />
     </>
   );
 }
