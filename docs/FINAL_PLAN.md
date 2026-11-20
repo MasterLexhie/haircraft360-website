@@ -439,6 +439,9 @@ Spec 6.11 in full, plus:
 - Customers see the fee and the total before Paystack's window opens: on the review step, the booking page and `/pay`.
 - To confirm on the first live settlement: whether VAT is added to Paystack's fee, and whether stamp duty applies to transfers of ₦10,000 or more.
 
+**WhatsApp messages are marked sent by the owner (decided 20 Nov 2026)**
+- Spec 6.4 marks a WhatsApp reminder as sent when the owner taps its button. Changed: "Open in WhatsApp" only opens the chat with the message filled in, and the owner taps "Mark as sent" once it has really gone. A message stays on Reminders due until then, so the list shows only what was actually sent.
+
 **Follow-ups found in the payments review (20 Nov 2026)**
 - M5: the cron run should also verify payment attempts left open for more than an hour. That is the backstop if both the webhook and the customer's browser miss a payment.
 - M7: the attention box needs rows for webhook events marked `failed` (for example a currency or amount mismatch), and for overpaid bookings, such as an online balance that landed after cash was recorded.

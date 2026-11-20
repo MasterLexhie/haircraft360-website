@@ -176,7 +176,7 @@ export async function balanceLinkAction(bookingIdRaw: string): Promise<ActionSta
   }
 }
 
-/** The owner sent a WhatsApp confirmation or reminder: take it off Reminders due. */
+/** The owner marked a WhatsApp confirmation or reminder as sent: take it off Reminders due. */
 export async function whatsappSentAction(notificationIdRaw: string): Promise<ActionState> {
   const actor = await adminActor();
   const id = validId(notificationIdRaw);

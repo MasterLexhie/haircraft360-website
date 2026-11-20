@@ -12,7 +12,7 @@ import { BookingError, type Actor } from "./booking-service";
 
 /**
  * Reminders due (BUILD_SPEC 6.4 and 6.7): customers without a usable email get their
- * confirmation and reminder on WhatsApp, sent by the owner with one tap. Listed: everything
+ * confirmation and reminder on WhatsApp, sent by the owner, who marks each one sent. Listed: everything
  * due by the end of today in Lagos, so the morning's list covers the whole day.
  */
 
@@ -62,7 +62,7 @@ export async function manualMessagesDue(nowMs = Date.now()): Promise<ManualMessa
   return out;
 }
 
-/** The owner tapped "Send on WhatsApp": mark it sent so it leaves the list. */
+/** The owner sent it in WhatsApp and tapped "Mark as sent": it leaves the list. Opening WhatsApp alone changes nothing. */
 export async function markWhatsappSent(notificationId: string, actor: Actor): Promise<void> {
   await db.$transaction(async (tx) => {
     const row = await tx.notification.findUnique({ where: { id: notificationId }, include: { booking: { select: { id: true, reference: true, customerId: true } } } });
