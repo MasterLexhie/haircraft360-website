@@ -20,8 +20,6 @@ export default function FinanceDayPage({ params }: { params: Promise<{ date: str
   );
 }
 
-const money = (kobo: number) => (kobo < 0 ? `minus ${formatNaira(-kobo)}` : formatNaira(kobo));
-
 async function FinanceDay({ params }: { params: Promise<{ date: string }> }) {
   await requireAdmin();
   const { date } = await params;
@@ -33,7 +31,7 @@ async function FinanceDay({ params }: { params: Promise<{ date: string }> }) {
       <PageHeader
         back={{ href: `/admin/finances?period=custom&from=${date}&to=${date}`, label: "Finances" }}
         title={formatDateKey(date, { long: true })}
-        description={`Revenue ${formatNaira(totals.revenueKobo)} · Expenses ${formatNaira(totals.expensesKobo)} · Net ${money(totals.netKobo)}`}
+        description={`Revenue ${formatNaira(totals.revenueKobo)} · Expenses ${formatNaira(totals.expensesKobo)} · Net ${formatNaira(totals.netKobo)}`}
       />
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title={`Money in (${payments.length})`}>
@@ -53,7 +51,7 @@ async function FinanceDay({ params }: { params: Promise<{ date: string }> }) {
                     </span>
                     {p.note && <span className="block text-ink-2">{p.note}</span>}
                   </span>
-                  <span className={cx("tabular shrink-0 font-semibold", p.amountKobo < 0 && "text-danger")}>{money(p.amountKobo)}</span>
+                  <span className={cx("tabular shrink-0 font-semibold", p.amountKobo < 0 && "text-danger")}>{formatNaira(p.amountKobo)}</span>
                 </li>
               ))}
             </ul>

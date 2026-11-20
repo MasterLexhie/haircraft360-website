@@ -102,7 +102,7 @@ export function ManualPaymentForm({ bookingId, awaitingDeposit }: { bookingId: s
   return (
     <form action={action} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field id="mp-amount" label="Amount (₦)" hint={correction ? "Use a minus to take money off, for example -5000." : undefined} error={state?.fieldErrors?.amount}>
+        <Field id="mp-amount" label="Amount (₦)" hint={correction ? "Put - in front to take money off, for example -5000." : undefined} error={state?.fieldErrors?.amount}>
           <input id="mp-amount" name="amount" inputMode={correction ? "text" : "decimal"} required className={cx(inputClass, "tabular")} aria-describedby={correction ? "mp-amount-hint" : undefined} />
         </Field>
         <Field id="mp-method" label="Received by" error={state?.fieldErrors?.method}>

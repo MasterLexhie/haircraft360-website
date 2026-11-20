@@ -24,8 +24,6 @@ export default function FinancesPage({ searchParams }: { searchParams: Promise<S
   );
 }
 
-const money = (kobo: number) => (kobo < 0 ? `minus ${formatNaira(-kobo)}` : formatNaira(kobo));
-
 async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
   await requireAdmin();
   const [params, nowMs] = await Promise.all([searchParams, requestNow()]);
@@ -50,7 +48,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
       <dl className="mb-8 grid gap-3 sm:grid-cols-3">
         <Card label="Revenue" value={formatNaira(t.revenueKobo)} />
         <Card label="Expenses" value={formatNaira(t.expensesKobo)} />
-        <Card label="Net" value={money(t.netKobo)} tone={t.netKobo < 0 ? "text-danger" : "text-success"} />
+        <Card label="Net" value={formatNaira(t.netKobo)} tone={t.netKobo < 0 ? "text-danger" : "text-success"} />
       </dl>
 
       {/* Desktop table */}
@@ -77,7 +75,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
                   </td>
                   <td className="px-4 py-2.5 text-right tabular">{formatNaira(d.revenueKobo)}</td>
                   <td className="px-4 py-2.5 text-right tabular">{formatNaira(d.expensesKobo)}</td>
-                  <td className={cx("px-4 py-2.5 text-right tabular font-semibold", d.netKobo < 0 && "text-danger")}>{money(d.netKobo)}</td>
+                  <td className={cx("px-4 py-2.5 text-right tabular font-semibold", d.netKobo < 0 && "text-danger")}>{formatNaira(d.netKobo)}</td>
                 </tr>
               );
             })}
@@ -87,7 +85,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
               <th scope="row" className="px-4 py-3">Total</th>
               <td className="px-4 py-3 text-right tabular">{formatNaira(t.revenueKobo)}</td>
               <td className="px-4 py-3 text-right tabular">{formatNaira(t.expensesKobo)}</td>
-              <td className={cx("px-4 py-3 text-right tabular", t.netKobo < 0 && "text-danger")}>{money(t.netKobo)}</td>
+              <td className={cx("px-4 py-3 text-right tabular", t.netKobo < 0 && "text-danger")}>{formatNaira(t.netKobo)}</td>
             </tr>
           </tfoot>
         </table>
@@ -104,14 +102,14 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
                   In {formatNaira(d.revenueKobo)} · Out {formatNaira(d.expensesKobo)}
                 </span>
               </span>
-              <span className={cx("tabular font-semibold", d.netKobo < 0 && "text-danger")}>{money(d.netKobo)}</span>
+              <span className={cx("tabular font-semibold", d.netKobo < 0 && "text-danger")}>{formatNaira(d.netKobo)}</span>
               <ChevronRight aria-hidden className="size-4 text-ink-3" />
             </Link>
           </li>
         ))}
         <li className="flex items-center gap-3 bg-sand/40 px-4 py-3 font-semibold">
           <span className="flex-1">Total</span>
-          <span className={cx("tabular", t.netKobo < 0 && "text-danger")}>{money(t.netKobo)}</span>
+          <span className={cx("tabular", t.netKobo < 0 && "text-danger")}>{formatNaira(t.netKobo)}</span>
           <span className="size-4" />
         </li>
       </ul>

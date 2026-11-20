@@ -175,7 +175,7 @@ export async function manualPaymentAction(bookingIdRaw: string, _: ActionState, 
   const parsed = parseNairaToKobo(amountRaw.replace(/^[-−]/, ""));
   if (parsed === null || parsed <= 0) {
     return purpose === "correction"
-      ? { error: "Enter the correction, for example -5000 to take ₦5,000 off.", fieldErrors: { amount: "Enter an amount, with a minus to take money off." } }
+      ? { error: "Enter the correction, for example -5000 to take ₦5,000 off.", fieldErrors: { amount: "Enter an amount, with - in front to take money off." } }
       : { error: "Enter the amount received, for example 5000.", fieldErrors: { amount: "Enter an amount above ₦0." } };
   }
   const note = String(formData.get("note") ?? "");

@@ -579,7 +579,7 @@ export async function recordManualPayment(bookingId: string, input: ManualPaymen
       bookingId: b.id,
       customerId: b.customerId,
       summary: correction
-        ? `Correction of ${input.amountKobo < 0 ? "minus " : ""}${formatNaira(Math.abs(input.amountKobo))} recorded: ${input.note.trim().slice(0, 200)}`
+        ? `Correction of ${formatNaira(input.amountKobo)} recorded: ${input.note.trim().slice(0, 200)}`
         : `Manual ${input.method} payment of ${formatNaira(input.amountKobo)} recorded${confirmed ? "; booking confirmed" : ""}`,
     });
   });
