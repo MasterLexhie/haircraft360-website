@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { LogOut, UserRoundCog } from "lucide-react";
+import { LogOut, Settings2, UserRoundCog } from "lucide-react";
 import { Suspense } from "react";
 import { AdminNav, AdminNavList } from "@/components/admin/admin-nav";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
@@ -23,12 +23,15 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
             <span className="text-[0.75rem] font-semibold uppercase tracking-[0.18em] text-accent-text">Haircraft<span className="font-display text-sm normal-case italic tracking-normal">360</span> admin</span>
           </span>
           <span className="flex items-center gap-1">
+            <Link href="/admin/settings" className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--radius)] px-2 text-sm text-ink-2 hover:bg-sand">
+              <Settings2 aria-hidden className="size-4" /> <span className="sr-only min-[480px]:not-sr-only">Settings</span>
+            </Link>
             <Link href="/admin/account" className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--radius)] px-2 text-sm text-ink-2 hover:bg-sand">
-              <UserRoundCog aria-hidden className="size-4" /> <span className="sr-only min-[400px]:not-sr-only">Account</span>
+              <UserRoundCog aria-hidden className="size-4" /> <span className="sr-only min-[480px]:not-sr-only">Account</span>
             </Link>
             <form action={logoutAction}>
               <button className="inline-flex min-h-10 items-center gap-1.5 rounded-[var(--radius)] px-2 text-sm text-ink-2 hover:bg-sand">
-                <LogOut aria-hidden className="size-4" /> <span className="sr-only min-[400px]:not-sr-only">Sign out</span>
+                <LogOut aria-hidden className="size-4" /> <span className="sr-only min-[480px]:not-sr-only">Sign out</span>
               </button>
             </form>
           </span>
