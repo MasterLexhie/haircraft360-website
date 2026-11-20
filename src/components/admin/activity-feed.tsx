@@ -35,6 +35,7 @@ function describe(action: string): { title: string; icon: LucideIcon; tone: Tone
   if (kind === "payment") {
     const what = a === "deposit" ? "Deposit" : a === "balance_online" || a === "balance" ? "Balance" : "Payment";
     if (a === "manual") return { title: "Payment recorded by the salon", icon: Banknote, tone: "success" };
+    if (a === "adjustment") return { title: "Payment correction", icon: Banknote, tone: "neutral" };
     if (b === "received" || b === "success") return { title: `${what} received`, icon: Banknote, tone: "success" };
     if (b === "failed") return { title: `${what} payment failed`, icon: CircleX, tone: "danger" };
     if (b === "abandoned") return { title: `${what} checkout abandoned`, icon: CircleX, tone: "danger" };

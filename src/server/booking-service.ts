@@ -448,21 +448,38 @@ const MANUAL_PAYMENT_STATUSES: BookingStatus[] = ["pending_payment", "confirmed"
  * Cash, transfer to the salon's own account, or other. Appended to the ledger as `manual`.
  * A manual deposit on an unpaid booking confirms it, with the same capacity check as online payment.
  */
-export async function recordManualPayment(bookingId: string, input: { amountKobo: Kobo; method: PaymentMethod; note: string; towardsDeposit: boolean }, actor: Actor) {
-  if (!Number.isInteger(input.amountKobo) || input.amountKobo <= 0) throw new BookingError("VALIDATION", "Enter an amount above ₦0.");
+export interface ManualPaymentInput {
+  /** Positive, except a correction, which may be negative (for example to undo a mistyped entry). */
+  amountKobo: Kobo;
+  method: PaymentMethod;
+  note: string;
+  purpose: "deposit" | "balance" | "correction";
+}
+
+/**
+ * Money taken by the salon, or a correction. Ledger rows are never edited: a mistake is
+ * fixed by adding a correction (`adjustment`) row, which needs a note saying why.
+ */
+export async function recordManualPayment(bookingId: string, input: ManualPaymentInput, actor: Actor) {
+  const towardsDeposit = input.purpose === "deposit";
+  const correction = input.purpose === "correction";
+  if (!Number.isInteger(input.amountKobo) || input.amountKobo === 0 || (!correction && input.amountKobo < 0)) {
+    throw new BookingError("VALIDATION", "Enter an amount above ₦0.");
+  }
+  if (correction && !input.note.trim()) throw new BookingError("VALIDATION", "Say why this correction is needed, so the record makes sense later.");
   return db.$transaction(async (tx) => {
     const b = await getBooking(tx, bookingId);
     if (!MANUAL_PAYMENT_STATUSES.includes(b.status)) {
       throw new BookingError("NOT_ALLOWED", `Payments can't be recorded on a ${b.status.replace(/_/g, " ")} booking.`);
     }
-    if (input.towardsDeposit && b.status !== "pending_payment") {
+    if (towardsDeposit && b.status !== "pending_payment") {
       throw new BookingError("NOT_ALLOWED", "The deposit for this booking is already settled. Record it as a balance payment.");
     }
     await tx.payment.create({
-      data: { bookingId, type: "manual", method: input.method, amountKobo: input.amountKobo, recordedById: actor.id, note: input.note.trim().slice(0, 500) },
+      data: { bookingId, type: correction ? "adjustment" : "manual", method: input.method, amountKobo: input.amountKobo, recordedById: actor.id, note: input.note.trim().slice(0, 500) },
     });
     let confirmed = false;
-    if (input.towardsDeposit) {
+    if (towardsDeposit) {
       await lockSalonDay(tx, lagosDateKey(b.startAt));
       const settings = await loadSettings(tx);
       const holdLive = b.holdExpiresAt !== null && b.holdExpiresAt.getTime() > Date.now();
@@ -474,14 +491,16 @@ export async function recordManualPayment(bookingId: string, input: { amountKobo
       }
     }
     await audit(tx, {
-      action: "payment.manual.recorded",
+      action: correction ? "payment.adjustment.recorded" : "payment.manual.recorded",
       actorLabel: actor.label,
       actorId: actor.id,
       entityType: "Booking",
       entityId: b.id,
       bookingId: b.id,
       customerId: b.customerId,
-      summary: `Manual ${input.method} payment of ${formatNaira(input.amountKobo)} recorded${confirmed ? "; booking confirmed" : ""}`,
+      summary: correction
+        ? `Correction of ${input.amountKobo < 0 ? "minus " : ""}${formatNaira(Math.abs(input.amountKobo))} recorded: ${input.note.trim().slice(0, 200)}`
+        : `Manual ${input.method} payment of ${formatNaira(input.amountKobo)} recorded${confirmed ? "; booking confirmed" : ""}`,
     });
   });
 }

@@ -96,11 +96,13 @@ export function PrivateNoteForm({ kind, id, defaultValue }: { kind: "booking" | 
 
 export function ManualPaymentForm({ bookingId, awaitingDeposit }: { bookingId: string; awaitingDeposit: boolean }) {
   const [state, action, pending] = useActionState<ActionState, FormData>(manualPaymentAction.bind(null, bookingId), null);
+  const [purpose, setPurpose] = useState(awaitingDeposit ? "deposit" : "balance");
+  const correction = purpose === "correction";
   return (
     <form action={action} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-3">
-        <Field id="mp-amount" label="Amount (₦)" error={state?.fieldErrors?.amount}>
-          <input id="mp-amount" name="amount" inputMode="decimal" required className={cx(inputClass, "tabular")} />
+        <Field id="mp-amount" label="Amount (₦)" hint={correction ? "Use a minus to take money off, for example -5000." : undefined} error={state?.fieldErrors?.amount}>
+          <input id="mp-amount" name="amount" inputMode={correction ? "text" : "decimal"} required className={cx(inputClass, "tabular")} aria-describedby={correction ? "mp-amount-hint" : undefined} />
         </Field>
         <Field id="mp-method" label="Received by" error={state?.fieldErrors?.method}>
           <select id="mp-method" name="method" className={inputClass} defaultValue="transfer">
@@ -111,18 +113,19 @@ export function ManualPaymentForm({ bookingId, awaitingDeposit }: { bookingId: s
           </select>
         </Field>
         <Field id="mp-purpose" label="Towards">
-          <select id="mp-purpose" name="purpose" className={inputClass} defaultValue={awaitingDeposit ? "deposit" : "balance"}>
+          <select id="mp-purpose" name="purpose" className={inputClass} value={purpose} onChange={(e) => setPurpose(e.target.value)}>
             {awaitingDeposit && <option value="deposit">Deposit (confirms the booking)</option>}
             <option value="balance">Balance</option>
+            <option value="correction">Correction to an earlier entry</option>
           </select>
         </Field>
       </div>
-      <Field id="mp-note" label="Note" optional>
-        <input id="mp-note" name="note" className={cx(inputClass, "text-sm")} />
+      <Field id="mp-note" label={correction ? "Why the correction" : "Note"} optional={!correction} error={state?.fieldErrors?.note}>
+        <input id="mp-note" name="note" required={correction} className={cx(inputClass, "text-sm")} />
       </Field>
       <p className="text-xs text-ink-3">Saved with your name and the time. Payments are never edited; record a correction if something was wrong.</p>
       <Feedback state={state} />
-      <Button type="submit" variant="secondary" size="sm" loading={pending}>Record payment</Button>
+      <Button type="submit" variant="secondary" size="sm" loading={pending}>{correction ? "Record correction" : "Record payment"}</Button>
     </form>
   );
 }

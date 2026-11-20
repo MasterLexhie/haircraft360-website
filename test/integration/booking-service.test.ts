@@ -182,13 +182,13 @@ describe("admin changes", () => {
     const r = await createPendingBooking(bookingInput());
     const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
     await setBookingStatus(b.id, "cancelled", actor);
-    await expect(recordManualPayment(b.id, { amountKobo: 100_000, method: "cash", note: "", towardsDeposit: false }, actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
+    await expect(recordManualPayment(b.id, { amountKobo: 100_000, method: "cash", note: "", purpose: "balance" }, actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
   });
 
   it("a manual deposit confirms an unpaid booking", async () => {
     const r = await createPendingBooking(bookingInput());
     const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
-    await recordManualPayment(b.id, { amountKobo: b.depositDueKobo, method: "transfer", note: "", towardsDeposit: true }, actor);
+    await recordManualPayment(b.id, { amountKobo: b.depositDueKobo, method: "transfer", note: "", purpose: "deposit" }, actor);
     expect((await db.booking.findUniqueOrThrow({ where: { id: b.id } })).status).toBe("confirmed");
   });
 
@@ -296,5 +296,25 @@ describe("services, extras and closures (admin)", () => {
 
   it("refuses a closure that ends before it starts", async () => {
     await expect(createBlock({ startAt: new Date(slot(3, "12:00")), endAt: new Date(slot(3, "11:00")), capacityReduction: null, reason: "" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
+  });
+});
+
+describe("manual payments and corrections", () => {
+  it("adds a correction as a new ledger row; earlier rows are never changed", async () => {
+    const r = await createPendingBooking(bookingInput());
+    const booking = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
+    await recordManualPayment(booking.id, { amountKobo: 540_000, method: "cash", note: "", purpose: "deposit" }, actor);
+    await recordManualPayment(booking.id, { amountKobo: 50_000, method: "cash", note: "", purpose: "balance" }, actor);
+    await recordManualPayment(booking.id, { amountKobo: -50_000, method: "cash", note: "Typed twice", purpose: "correction" }, actor);
+    const rows = await db.payment.findMany({ orderBy: { createdAt: "asc" } });
+    expect(rows.map((r) => [r.type, r.amountKobo])).toEqual([["manual", 540_000], ["manual", 50_000], ["adjustment", -50_000]]);
+    expect(rows.reduce((s, r) => s + r.amountKobo, 0)).toBe(540_000);
+  });
+
+  it("needs a reason for a correction, and refuses negative ordinary payments", async () => {
+    const r = await createPendingBooking(bookingInput());
+    const booking = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
+    await expect(recordManualPayment(booking.id, { amountKobo: -100, method: "cash", note: " ", purpose: "correction" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(recordManualPayment(booking.id, { amountKobo: -100, method: "cash", note: "", purpose: "balance" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
   });
 });

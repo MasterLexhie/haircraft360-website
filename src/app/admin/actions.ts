@@ -136,18 +136,25 @@ export async function manualPaymentAction(bookingIdRaw: string, _: ActionState, 
   const actor = await adminActor();
   const bookingId = validId(bookingIdRaw);
   if (!bookingId) return INVALID;
-  const amount = parseNairaToKobo(String(formData.get("amount") ?? ""));
-  if (amount === null || amount <= 0) return { error: "Enter the amount received, for example 5000.", fieldErrors: { amount: "Enter an amount above ₦0." } };
+  const purposeRaw = String(formData.get("purpose") ?? "balance");
+  const purpose = purposeRaw === "deposit" || purposeRaw === "correction" ? purposeRaw : "balance";
+  const amountRaw = String(formData.get("amount") ?? "").trim();
+  // A correction may take money off (a leading minus); payments are always positive.
+  const negative = purpose === "correction" && /^[-−]/.test(amountRaw);
+  const parsed = parseNairaToKobo(amountRaw.replace(/^[-−]/, ""));
+  if (parsed === null || parsed <= 0) {
+    return purpose === "correction"
+      ? { error: "Enter the correction, for example -5000 to take ₦5,000 off.", fieldErrors: { amount: "Enter an amount, with a minus to take money off." } }
+      : { error: "Enter the amount received, for example 5000.", fieldErrors: { amount: "Enter an amount above ₦0." } };
+  }
+  const note = String(formData.get("note") ?? "");
+  if (purpose === "correction" && !note.trim()) return { error: "Say why this correction is needed.", fieldErrors: { note: "Required for a correction." } };
   const method = String(formData.get("method") ?? "") as PaymentMethod;
   if (!METHODS.includes(method)) return { error: "Choose how the payment was received.", fieldErrors: { method: "Choose a method." } };
   try {
-    await recordManualPayment(
-      bookingId,
-      { amountKobo: amount, method, note: String(formData.get("note") ?? ""), towardsDeposit: formData.get("purpose") === "deposit" },
-      actor,
-    );
+    await recordManualPayment(bookingId, { amountKobo: negative ? -parsed : parsed, method, note, purpose }, actor);
     refresh();
-    return { ok: true, message: "Payment recorded." };
+    return { ok: true, message: purpose === "correction" ? "Correction recorded." : "Payment recorded." };
   } catch (e) {
     return fail(e);
   }
