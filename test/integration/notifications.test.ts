@@ -123,9 +123,10 @@ describe("skip rules", () => {
   });
 
   it("skips a reminder that would land right after the confirmation", async () => {
-    const tomorrow = new Date(Date.now() + 20 * HOUR);
-    tomorrow.setUTCMinutes(0, 0, 0);
-    const b = await confirmedBooking({ startAt: tomorrow.toISOString() });
+    // An open hour (test hours are 09:00 to 19:00) between 1 and 23 hours away, so the reminder is already due.
+    const hours = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"];
+    const soon = [0, 1].flatMap((d) => hours.map((h) => slot(d, h))).find((t) => Date.parse(t) > Date.now() + HOUR && Date.parse(t) < Date.now() + 23 * HOUR)!;
+    const b = await confirmedBooking({ startAt: soon });
     const r = await runScheduler();
     expect(r).toMatchObject({ sent: 1, skipped: 1 });
     expect(await reminderOf(b.id)).toMatchObject({ status: "skipped", lastError: expect.stringContaining("confirmation covers it") });

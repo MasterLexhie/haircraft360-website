@@ -8,6 +8,7 @@ vi.mock("next/server", () => ({ connection: async () => {} }));
 
 const { createPendingBooking, recordManualPayment, findBookingByToken } = await import("@/server/booking-service");
 const { manualMessagesDue, markWhatsappSent } = await import("@/server/whatsapp-messages");
+const { DAILY_LIMIT_NOTE } = await import("@/server/notifications");
 
 const actor = { id: null, label: "Test admin" };
 const HOUR = 3_600_000;
@@ -69,9 +70,28 @@ describe("Reminders due", () => {
     expect(morning.map((m) => m.type)).toEqual(["reminder"]);
   });
 
-  it("refuses a message that isn't a WhatsApp one", async () => {
+  it("refuses an email that is still on its way normally", async () => {
     const b = await confirmed();
     const row = await db.notification.findUniqueOrThrow({ where: { dedupeKey: `confirmation:${b.id}` } });
+    await expect(markWhatsappSent(row.id, actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
+    expect(await db.notification.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: "pending", channel: "email" });
+  });
+
+  it("sends a failed or daily-limit email on WhatsApp instead, so it isn't emailed later", async () => {
+    const a = await confirmed();
+    const b = await confirmed({ startAt: slot(4, "12:00") });
+    const failed = await db.notification.update({ where: { dedupeKey: `confirmation:${a.id}` }, data: { status: "failed", lastError: "Mailbox does not exist" } });
+    const delayed = await db.notification.update({ where: { dedupeKey: `confirmation:${b.id}` }, data: { lastError: DAILY_LIMIT_NOTE, nextAttemptAt: new Date(Date.now() + HOUR) } });
+    await markWhatsappSent(failed.id, actor);
+    await markWhatsappSent(delayed.id, actor);
+    for (const id of [failed.id, delayed.id]) {
+      expect(await db.notification.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "sent", channel: "whatsapp_manual", providerMessageId: "whatsapp" });
+    }
+    expect(await db.auditLog.count({ where: { action: "notification.confirmation.whatsapp_sent", summary: { contains: "instead of email" } } })).toBe(2);
+  });
+
+  it("refuses a message that isn't for a booking", async () => {
+    const row = await db.notification.create({ data: { dedupeKey: "alert:x", type: "owner_alert", channel: "email", dueAt: new Date() } });
     await expect(markWhatsappSent(row.id, actor)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 });

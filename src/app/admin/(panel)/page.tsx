@@ -1,16 +1,18 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { AlertCircle, ArrowRight, Banknote, CalendarClock, CalendarDays, Hourglass, Wallet } from "lucide-react";
+import { CalendarClock, CalendarDays, Hourglass, Wallet } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData, joinBooking, requestNow } from "@/server/queries";
+import { getAdminData, joinBooking, requestNow, type AdminBookingRow } from "@/server/queries";
+import { getAttention } from "@/server/attention";
+import { dailyTotals } from "@/server/finances";
 import { balanceDue } from "@/domain/pricing";
+import { changeLabel, monthToDateComparison } from "@/domain/periods";
 import { formatNaira } from "@/lib/money";
-import { SALON_TZ, addDays, dayOfWeek, formatDateKey, formatDateTime, formatShortDate, formatTime, lagosDateKey, lagosToUtcMs } from "@/lib/time";
-import type { Payment } from "@/domain/types";
-import { BookingStatusBadge, PageHeader, Panel, PaymentStateBadge } from "@/components/admin/bits";
-import { ActivityFeed } from "@/components/admin/activity-feed";
-import { EmptyState, Skeleton } from "@/components/ui/primitives";
+import { addDays, formatDateTime, formatMonthYear, formatShortDate, formatTime, lagosDateKey } from "@/lib/time";
+import { BookingStatusBadge, PageHeader, Panel, PaymentStateBadge, VisitBadge } from "@/components/admin/bits";
+import { AttentionBox } from "@/components/admin/attention";
+import { EmptyState, Skeleton, cx } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Admin dashboard" };
 
@@ -22,56 +24,81 @@ export default function DashboardPage() {
   );
 }
 
+/** Bookings that count as real appointments for the month's figures. */
+const BOOKED = new Set(["confirmed", "completed", "needs_attention"]);
+
 async function Dashboard() {
   await requireAdmin();
-  const db = await getAdminData();
   const nowMs = await requestNow();
   const today = lagosDateKey(nowMs);
+  const span = monthToDateComparison(today);
+  const [db, attention, thisMonth, lastMonth] = await Promise.all([
+    getAdminData(),
+    getAttention(nowMs),
+    dailyTotals(span.fromKey, span.toKey),
+    dailyTotals(span.lastFromKey, span.lastToKey),
+  ]);
   const weekEnd = addDays(today, 7);
   const rows = db.bookings.map((b) => joinBooking(db, b));
 
-  const todays = rows.filter((r) => ["confirmed", "completed"].includes(r.booking.status) && lagosDateKey(r.booking.startAt) === today).sort((a, b) => a.booking.startAt.localeCompare(b.booking.startAt));
+  const todays = rows.filter((r) => ["confirmed", "completed"].includes(r.booking.status) && lagosDateKey(r.booking.startAt) === today);
   const upcoming = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.startAt) > nowMs && lagosDateKey(r.booking.startAt) <= weekEnd);
+  const nextUp = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.startAt) > nowMs).slice(0, 5);
   const awaiting = rows.filter((r) => r.booking.status === "pending_payment" && r.booking.holdExpiresAt !== null && Date.parse(r.booking.holdExpiresAt) > nowMs);
-  const needsAttention = rows.filter((r) => r.booking.status === "needs_attention");
   const unpaid = rows.filter((r) => r.booking.status === "completed" && balanceDue(r.booking, r.payments) > 0);
   const unpaidSum = unpaid.reduce((s, r) => s + balanceDue(r.booking, r.payments), 0);
-  const toComplete = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.endAt) < nowMs);
-  const nextUp = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.startAt) > nowMs).sort((a, b) => a.booking.startAt.localeCompare(b.booking.startAt)).slice(0, 5);
-  const takings = takingsFor(db.payments, today);
-  const activity = [...db.audit].sort((a, b) => b.at.localeCompare(a.at)).slice(0, 30);
 
+  // This calendar month's appointments, for popular services and new versus returning.
+  const monthKey = today.slice(0, 7);
+  const monthRows = rows.filter((r) => BOOKED.has(r.booking.status) && lagosDateKey(r.booking.startAt).startsWith(monthKey));
+  const popular = topServices(monthRows);
+  const mix = newVersusReturning(monthRows);
+  const monthName = formatMonthYear(today);
+
+  const money = [
+    { label: "Revenue", now: thisMonth.revenueKobo, before: lastMonth.revenueKobo, goodWhenUp: true },
+    { label: "Expenses", now: thisMonth.expensesKobo, before: lastMonth.expensesKobo, goodWhenUp: false },
+    { label: "Net", now: thisMonth.netKobo, before: lastMonth.netKobo, goodWhenUp: true },
+  ];
   const stats = [
-    { label: "Today", value: todays.length, sub: "appointments", icon: CalendarDays, href: `/admin/bookings?from=${today}&to=${today}` },
+    { label: "Today", value: todays.length, sub: todays.length === 1 ? "appointment" : "appointments", icon: CalendarDays, href: `/admin/bookings?from=${today}&to=${today}` },
     { label: "Next 7 days", value: upcoming.length, sub: "confirmed", icon: CalendarClock, href: `/admin/bookings?status=confirmed&from=${today}&to=${weekEnd}` },
-    { label: "Awaiting deposit", value: awaiting.length, sub: "slots on hold", icon: Hourglass, href: "/admin/bookings?status=pending_payment" },
-    { label: "Balances due", value: unpaid.length, sub: unpaidSum ? `${formatNaira(unpaidSum)} outstanding` : "nothing outstanding", icon: Wallet, href: "/admin/bookings?payment=balance_due" },
+    { label: "Awaiting deposit", value: awaiting.length, sub: "times on hold", icon: Hourglass, href: "/admin/bookings?status=pending_payment" },
+    { label: "Balances due", value: unpaid.length, sub: unpaidSum ? `${formatNaira(unpaidSum)} to collect` : "nothing to collect", icon: Wallet, href: "/admin/bookings?payment=balance_due" },
   ];
 
   return (
     <>
       <PageHeader title="Dashboard" description={`${formatDateTime(nowMs)} (Ibadan time)`} />
 
-      <section aria-labelledby="takings-title" className="mb-6">
+      <AttentionBox attention={attention} />
+
+      <section aria-labelledby="month-title" className="mb-6">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 id="takings-title" className="type-caps text-[0.78rem] text-accent-text">Money received</h2>
-          <p className="text-xs text-ink-3">Deposits, balances and payments recorded by the salon, by the date they were received.</p>
+          <h2 id="month-title" className="type-caps text-[0.78rem] text-accent-text">{monthName} so far</h2>
+          <Link href="/admin/finances" className="text-sm font-semibold underline">Finances</Link>
         </div>
         <ul className="grid gap-3 sm:grid-cols-3">
-          {takings.map((t, i) => (
-            <li
-              key={t.label}
-              className={i === 0 ? "on-night rounded-[var(--radius)] bg-accent p-4 text-on-accent" : "rounded-[var(--radius)] border border-line bg-surface p-4"}
-            >
-              <span className={`flex items-center justify-between text-xs font-semibold uppercase tracking-[0.1em] ${i === 0 ? "text-on-night-2" : "text-ink-3"}`}>
-                {t.label} <Banknote aria-hidden className="size-4" />
-              </span>
-              <span className={`mt-2 block tabular font-display text-3xl ${i === 0 ? "text-on-accent" : "text-accent-text"}`}>{formatNaira(t.totalKobo)}</span>
-              <span className={`text-xs ${i === 0 ? "text-on-night-2" : "text-ink-2"}`}>
-                {t.count} payment{t.count === 1 ? "" : "s"} · {t.range}
-              </span>
-            </li>
-          ))}
+          {money.map((m, i) => {
+            const change = changeLabel(m.now, m.before);
+            const up = m.now > m.before;
+            const good = change && change !== "same" ? up === m.goodWhenUp : null;
+            return (
+              <li key={m.label} className={i === 2 ? "on-night rounded-[var(--radius)] bg-accent p-4 text-on-accent" : "rounded-[var(--radius)] border border-line bg-surface p-4"}>
+                <span className={cx("block text-xs font-semibold uppercase tracking-[0.1em]", i === 2 ? "text-on-night-2" : "text-ink-3")}>{m.label}</span>
+                <span className={cx("mt-2 block tabular font-display text-3xl", i === 2 ? "text-on-accent" : "text-accent-text")}>{formatNaira(m.now)}</span>
+                <span className={cx("mt-1 block text-xs", i === 2 ? "text-on-night-2" : "text-ink-2")}>
+                  {formatNaira(m.before)} by this date last month
+                  {change && (
+                    <>
+                      {" · "}
+                      <span className={cx("font-semibold", i !== 2 && good === true && "text-success", i !== 2 && good === false && "text-danger")}>{change}</span>
+                    </>
+                  )}
+                </span>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
@@ -89,102 +116,102 @@ async function Dashboard() {
         ))}
       </ul>
 
-      {toComplete.length > 0 && (
-        <div className="mt-6 flex flex-col gap-3 rounded-[var(--radius)] border border-warning/30 bg-warning-soft p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex items-start gap-2 text-sm text-ink">
-            <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-            {toComplete.length} past appointment{toComplete.length > 1 ? "s need" : " needs"} marking as completed.
-          </p>
-          <Link href={`/admin/bookings/${toComplete[0].booking.id}#complete`} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold underline">
-            Record completion <ArrowRight aria-hidden className="size-4" />
-          </Link>
-        </div>
-      )}
-
-      {needsAttention.length > 0 && (
-        <div className="mt-6 flex flex-col gap-3 rounded-[var(--radius)] border border-danger/30 bg-danger-soft p-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="flex items-start gap-2 text-sm text-ink">
-            <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-danger" />
-            {needsAttention.length} paid booking{needsAttention.length > 1 ? "s need" : " needs"} a new time: the payment arrived after the time was taken.
-          </p>
-          <Link href={`/admin/bookings/${needsAttention[0].booking.id}`} className="inline-flex min-h-10 items-center gap-1 text-sm font-semibold underline">
-            Open booking <ArrowRight aria-hidden className="size-4" />
-          </Link>
-        </div>
-      )}
-
       <div className="mt-6 grid gap-6 lg:grid-cols-[1.4fr_1fr]">
         <div className="space-y-6">
           <Panel title="Today's schedule">
-            {todays.length === 0 ? (
-              <EmptyState title="No appointments today">Upcoming confirmed bookings are listed below.</EmptyState>
-            ) : (
-              <ScheduleList rows={todays} />
-            )}
+            {todays.length === 0 ? <EmptyState title="No appointments today">Upcoming confirmed bookings are listed below.</EmptyState> : <ScheduleList rows={todays} />}
           </Panel>
           <Panel title="Coming up" action={<Link href="/admin/bookings?status=confirmed" className="text-sm font-semibold underline">All</Link>}>
             {nextUp.length === 0 ? <EmptyState title="Nothing upcoming yet">New online bookings appear here once their deposit is paid.</EmptyState> : <ScheduleList rows={nextUp} showDate />}
           </Panel>
-          {unpaid.length > 0 && (
-            <Panel title="Balances to collect">
+        </div>
+
+        <div className="space-y-6">
+          <Panel title="Balances to collect">
+            {unpaid.length === 0 ? (
+              <p className="text-sm text-ink-3">Every completed appointment is paid in full.</p>
+            ) : (
               <ul className="divide-y divide-line">
                 {unpaid.map((r) => (
                   <li key={r.booking.id}>
                     <Link href={`/admin/bookings/${r.booking.id}`} className="flex items-center justify-between gap-3 py-2.5 text-sm hover:bg-sand/50">
-                      <span><span className="font-medium">{r.customer.displayName}</span> <span className="text-ink-3">· {r.booking.reference}</span></span>
-                      <span className="tabular font-semibold text-danger">{formatNaira(balanceDue(r.booking, r.payments) ?? 0)}</span>
+                      <span className="min-w-0">
+                        <span className="font-medium">{r.booking.contactName}</span> <span className="text-ink-3">· {r.booking.reference}</span>
+                      </span>
+                      <span className="tabular shrink-0 font-semibold text-danger">{formatNaira(balanceDue(r.booking, r.payments))}</span>
                     </Link>
                   </li>
                 ))}
               </ul>
-            </Panel>
-          )}
-        </div>
+            )}
+          </Panel>
 
-        {/* Stretches to the height of the stacked panels on the left (desktop); the list scrolls inside. */}
-        <Panel title="Recent activity" className="flex flex-col" bodyClassName="relative flex-1 lg:min-h-80">
-          {activity.length === 0 ? (
-            <div className="p-4 sm:p-5">
-              <EmptyState title="No activity yet">Bookings, payments and changes will appear here.</EmptyState>
-            </div>
-          ) : (
-            <div
-              tabIndex={0}
-              aria-label="Recent activity list"
-              className="max-h-[30rem] overflow-y-auto overscroll-contain p-4 sm:p-5 lg:absolute lg:inset-0 lg:max-h-none"
-            >
-              <ActivityFeed events={activity} today={today} bookingRefs={new Map(db.bookings.map((b) => [b.id, b.reference]))} />
-            </div>
-          )}
-        </Panel>
+          <Panel title={`Popular services, ${monthName}`}>
+            {popular.length === 0 ? (
+              <p className="text-sm text-ink-3">No appointments this month yet.</p>
+            ) : (
+              <ol className="space-y-2 text-sm">
+                {popular.map((p, i) => (
+                  <li key={p.name} className="flex items-center justify-between gap-3">
+                    <span className="min-w-0 truncate"><span className="tabular text-ink-3">{i + 1}.</span> {p.name}</span>
+                    <span className="tabular shrink-0 text-ink-2">{p.count} booked</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Panel>
+
+          <Panel title={`Customers, ${monthName}`}>
+            {mix.new + mix.returning === 0 ? (
+              <p className="text-sm text-ink-3">No appointments this month yet.</p>
+            ) : (
+              <>
+                <dl className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <dt className="text-xs text-ink-3">New</dt>
+                    <dd className="tabular font-display text-2xl text-accent-text">{mix.new}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-ink-3">Returning</dt>
+                    <dd className="tabular font-display text-2xl text-accent-text">{mix.returning}</dd>
+                  </div>
+                </dl>
+                <div aria-hidden className="mt-3 flex h-2 overflow-hidden rounded-full bg-sand">
+                  <span className="bg-info" style={{ width: `${(mix.new / (mix.new + mix.returning)) * 100}%` }} />
+                  <span className="bg-accent" style={{ width: `${(mix.returning / (mix.new + mix.returning)) * 100}%` }} />
+                </div>
+                <p className="mt-2 text-xs text-ink-3">Returning means they had a completed visit before this month&apos;s booking.</p>
+              </>
+            )}
+          </Panel>
+        </div>
       </div>
     </>
   );
 }
 
-/** Sums successful payments received today, this week (Mon–Sun) and this month, in Ibadan time. */
-function takingsFor(payments: Payment[], today: string) {
-  const weekStart = addDays(today, -((dayOfWeek(today) + 6) % 7));
-  const monthStart = `${today.slice(0, 8)}01`;
-  const received = payments
-    .filter((p) => p.status === "success")
-    .map((p) => ({ day: lagosDateKey(p.createdAt), amount: p.amountKobo }));
-  const sum = (from: string) => {
-    const hits = received.filter((p) => p.day >= from && p.day <= today);
-    return { totalKobo: hits.reduce((s, p) => s + p.amount, 0), count: hits.length };
-  };
-  const monthName = new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric", timeZone: SALON_TZ }).format(lagosToUtcMs(today, 12 * 60));
-  return [
-    { label: "Today", range: formatDateKey(today), ...sum(today) },
-    { label: "This week", range: `from ${formatDateKey(weekStart)}`, ...sum(weekStart) },
-    { label: "This month", range: monthName, ...sum(monthStart) },
-  ];
+/** Main services booked this month, most booked first. */
+function topServices(rows: AdminBookingRow[]): { name: string; count: number }[] {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    for (const item of r.booking.items) if (item.kind === "main") counts.set(item.name, (counts.get(item.name) ?? 0) + 1);
+  }
+  return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 5);
 }
 
-function ScheduleList({ rows, showDate }: { rows: ReturnType<typeof joinBooking>[]; showDate?: boolean }) {
+/** Each customer once, judged by their first appointment of the month. */
+function newVersusReturning(rows: AdminBookingRow[]): { new: number; returning: number } {
+  const first = new Map<string, AdminBookingRow>();
+  for (const r of rows) if (!first.has(r.customer.id)) first.set(r.customer.id, r);
+  let returning = 0;
+  for (const r of first.values()) if (r.visit.returning) returning++;
+  return { new: first.size - returning, returning };
+}
+
+function ScheduleList({ rows, showDate }: { rows: AdminBookingRow[]; showDate?: boolean }) {
   return (
     <ul className="divide-y divide-line">
-      {rows.map(({ booking, customer, payments }) => (
+      {rows.map(({ booking, payments, visit }) => (
         <li key={booking.id}>
           <Link href={`/admin/bookings/${booking.id}`} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3 hover:bg-sand/50">
             <span className="w-24 shrink-0 tabular text-sm font-semibold">
@@ -192,10 +219,14 @@ function ScheduleList({ rows, showDate }: { rows: ReturnType<typeof joinBooking>
               {formatTime(booking.startAt)}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{customer.displayName}</span>
+              <span className="block truncate font-medium">{booking.contactName}</span>
               <span className="block truncate text-xs text-ink-3">{booking.items.filter((l) => l.kind !== "extra").map((l) => l.name).join(", ")}</span>
             </span>
-            <span className="flex gap-1.5"><BookingStatusBadge status={booking.status} /><PaymentStateBadge booking={booking} payments={payments} /></span>
+            <span className="flex flex-wrap gap-1.5">
+              <BookingStatusBadge status={booking.status} />
+              <PaymentStateBadge booking={booking} payments={payments} />
+              <VisitBadge visit={visit} />
+            </span>
           </Link>
         </li>
       ))}
@@ -207,7 +238,8 @@ function DashboardSkeleton() {
   return (
     <div role="status" aria-label="Loading dashboard" className="space-y-6">
       <Skeleton className="h-9 w-48" />
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-28" />)}</div>
+      <Skeleton className="h-24" />
+      <div className="grid gap-3 sm:grid-cols-3">{Array.from({ length: 3 }, (_, i) => <Skeleton key={i} className="h-28" />)}</div>
       <Skeleton className="h-72" />
     </div>
   );

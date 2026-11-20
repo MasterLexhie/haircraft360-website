@@ -69,3 +69,24 @@ export function resolvePeriod(todayKey: string, params: { period?: string; from?
       return thisMonth();
   }
 }
+
+/**
+ * This month so far, and the same days of last month, for the dashboard's comparison.
+ * On the 31st after a 30-day month, last month's span stops at its last day.
+ */
+export function monthToDateComparison(todayKey: string): { fromKey: string; toKey: string; lastFromKey: string; lastToKey: string } {
+  const fromKey = firstOfMonth(todayKey);
+  const lastMonthEnd = addDays(fromKey, -1);
+  const lastFromKey = firstOfMonth(lastMonthEnd);
+  const sameDay = `${lastFromKey.slice(0, 8)}${todayKey.slice(8)}`;
+  const lastToKey = isValidDateKey(sameDay) && sameDay <= lastMonthEnd ? sameDay : lastMonthEnd;
+  return { fromKey, toKey: todayKey, lastFromKey, lastToKey };
+}
+
+/** "12% more" / "5% less" / "same", comparing this period with an earlier one; null when there's nothing to compare with. */
+export function changeLabel(nowKobo: number, beforeKobo: number): string | null {
+  if (beforeKobo === 0) return nowKobo === 0 ? "same" : null;
+  const pct = Math.round(((nowKobo - beforeKobo) / Math.abs(beforeKobo)) * 100);
+  if (pct === 0) return "same";
+  return `${Math.abs(pct)}% ${pct > 0 ? "more" : "less"}`;
+}

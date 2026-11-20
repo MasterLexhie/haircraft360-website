@@ -92,6 +92,11 @@ export function formatDateKey(dateKey: string, opts: { long?: boolean } = {}): s
   return opts.long ? formatLongDate(noonUtc) : formatDate(noonUtc);
 }
 
+/** "2026-11-20" -> "November 2026" */
+export function formatMonthYear(dateKey: string): string {
+  return new Intl.DateTimeFormat("en-NG", { month: "long", year: "numeric", timeZone: SALON_TZ }).format(lagosToUtcMs(dateKey, 12 * 60));
+}
+
 /** "08:00" -> "8:00 am" */
 export function formatHHMM(value: string): string {
   const mins = parseHHMM(value);

@@ -34,6 +34,8 @@ const CLAIM_MS = 10 * 60_000;
 /** Waits after the 1st, 2nd and 3rd failure; the 4th failure is final. */
 export const RETRY_AFTER_MS = [1 * HOUR_MS, 3 * HOUR_MS, 9 * HOUR_MS] as const;
 export const MAX_ATTEMPTS = RETRY_AFTER_MS.length + 1;
+/** Written on emails held back by the provider's daily limit; the dashboard looks for it. */
+export const DAILY_LIMIT_NOTE = "Daily email limit reached; sending resumes after the reset";
 /** A reminder this close to the confirmation adds nothing: the confirmation covers it. */
 const REMINDER_MIN_GAP_MS = 12 * HOUR_MS;
 
@@ -201,7 +203,7 @@ export async function sendDueNotifications(opts: { nowMs?: number; deadlineMs?: 
         await db.notification.update({
           where: { id: row.id },
           data: {
-            lastError: kind === "daily_limit" ? "Daily email limit reached; sending resumes after the reset" : "Email service asked us to slow down",
+            lastError: kind === "daily_limit" ? DAILY_LIMIT_NOTE : "Email service asked us to slow down",
             nextAttemptAt: kind === "daily_limit" ? nextUtcMidnight(nowMs) : null,
           },
         });
@@ -228,7 +230,7 @@ export async function sendDueNotifications(opts: { nowMs?: number; deadlineMs?: 
     // The rest wait for the reset too, so the owner sees them as delayed, not failed.
     await db.notification.updateMany({
       where: { ...dueNow(now), channel: "email" },
-      data: { lastError: "Daily email limit reached; sending resumes after the reset", nextAttemptAt: nextUtcMidnight(nowMs) },
+      data: { lastError: DAILY_LIMIT_NOTE, nextAttemptAt: nextUtcMidnight(nowMs) },
     });
   }
   return result;

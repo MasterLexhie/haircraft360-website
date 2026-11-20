@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daysBetween, resolvePeriod } from "@/domain/periods";
+import { changeLabel, daysBetween, monthToDateComparison, resolvePeriod } from "@/domain/periods";
 
 // Friday 20 November 2026
 const today = "2026-11-20";
@@ -30,5 +30,23 @@ describe("report periods", () => {
   it("counts days inclusively", () => {
     expect(daysBetween("2026-11-01", "2026-11-30")).toBe(30);
     expect(daysBetween(today, today)).toBe(1);
+  });
+});
+
+describe("month so far against last month", () => {
+  it("compares the same days", () => {
+    expect(monthToDateComparison("2026-11-20")).toEqual({ fromKey: "2026-11-01", toKey: "2026-11-20", lastFromKey: "2026-10-01", lastToKey: "2026-10-20" });
+  });
+  it("stops at the end of a shorter month", () => {
+    expect(monthToDateComparison("2026-03-31")).toMatchObject({ lastFromKey: "2026-02-01", lastToKey: "2026-02-28" });
+    expect(monthToDateComparison("2026-01-15")).toMatchObject({ lastFromKey: "2025-12-01", lastToKey: "2025-12-15" });
+  });
+  it("labels the change in plain words", () => {
+    expect(changeLabel(112_000, 100_000)).toBe("12% more");
+    expect(changeLabel(95_000, 100_000)).toBe("5% less");
+    expect(changeLabel(100_000, 100_000)).toBe("same");
+    expect(changeLabel(0, 0)).toBe("same");
+    expect(changeLabel(5_000, 0)).toBeNull();
+    expect(changeLabel(-5_000, -10_000)).toBe("50% more");
   });
 });
