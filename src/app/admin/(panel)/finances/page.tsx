@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ChevronRight, Receipt } from "lucide-react";
+import { ChevronRight, Plus, Receipt } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { requestNow } from "@/server/queries";
 import { dailyTotals } from "@/server/finances";
@@ -42,9 +42,14 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
         title="Finances"
         description="Revenue is money received from customers. Expenses are money paid out. Net is what's left."
         actions={
-          <Link href="/admin/finances/expenses" className={buttonClass("night", "md")}>
-            <Receipt aria-hidden className="size-4" /> Expenses: add or view
-          </Link>
+          <>
+            <Link href="/admin/finances/expenses/new" className={buttonClass("night", "md")}>
+              <Plus aria-hidden className="size-4" /> Add expense
+            </Link>
+            <Link href="/admin/finances/expenses" className={buttonClass("secondary", "md")}>
+              <Receipt aria-hidden className="size-4" /> Expenses
+            </Link>
+          </>
         }
       />
 

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { Receipt } from "lucide-react";
+import { Plus, Receipt } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { requestNow } from "@/server/queries";
 import { activeExpenseCategories, listExpenses } from "@/server/expenses";
@@ -9,16 +9,15 @@ import { resolvePeriod } from "@/domain/periods";
 import { paymentMethodLabel } from "@/domain/labels";
 import { formatNaira } from "@/lib/money";
 import { formatDateKey, lagosDateKey } from "@/lib/time";
-import { PageHeader, Panel } from "@/components/admin/bits";
+import { PageHeader } from "@/components/admin/bits";
 import { PeriodPicker } from "@/components/admin/period-picker";
-import { ExpenseForm } from "@/components/admin/expense-forms";
 import { Pagination } from "@/components/admin/pagination";
 import { pageHref, paginate } from "@/domain/paginate";
-import { EmptyState, Skeleton, cx, inputClass } from "@/components/ui/primitives";
+import { Alert, EmptyState, Skeleton, buttonClass, cx, inputClass } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Expenses" };
 
-type Search = { period?: string; from?: string; to?: string; category?: string; page?: string };
+type Search = { period?: string; from?: string; to?: string; category?: string; page?: string; added?: string };
 
 const EXPENSES_PER_PAGE = 20;
 
@@ -43,11 +42,18 @@ async function Expenses({ searchParams }: { searchParams: Promise<Search> }) {
 
   return (
     <>
-      <PageHeader back={{ href: "/admin/finances", label: "Finances" }} title="Expenses" description="Money out of the business. Add each one when it's paid." />
+      <PageHeader
+        back={{ href: "/admin/finances", label: "Finances" }}
+        title="Expenses"
+        description="Money out of the business. Add each one when it's paid."
+        actions={
+          <Link href="/admin/finances/expenses/new" className={buttonClass("night", "md")}>
+            <Plus aria-hidden className="size-4" /> Add expense
+          </Link>
+        }
+      />
 
-      <Panel title="Add an expense" className="mb-8">
-        <ExpenseForm categories={categories} todayKey={todayKey} />
-      </Panel>
+      {params.added === "1" && <Alert tone="success" role="status" className="mb-6" title="Expense added" />}
 
       <PeriodPicker action="/admin/finances/expenses" period={period}>
         <label className="block">

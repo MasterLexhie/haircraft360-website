@@ -21,13 +21,19 @@ export interface ExpenseFormValues {
   note: string;
 }
 
+/** Where "Save expense" goes after adding: the list, which shows "Expense added". */
+export const EXPENSES_AFTER_ADD = "/admin/finances/expenses?added=1";
+
 /**
  * Add an expense (no `expense`) or edit one. Built for a phone: amount first with a number
- * keypad, date defaulting to today. After adding, the amount and note clear but the date and
- * category stay, so several expenses can go in quickly.
+ * keypad, date defaulting to today. Adding has two buttons: "Save expense" goes back to the
+ * list; "Save and add another" stays, clearing amount and note but keeping the date, category
+ * and method, so several expenses go in quickly.
  */
 export function ExpenseForm({ expense, categories, todayKey }: { expense?: ExpenseFormValues; categories: { id: string; name: string }[]; todayKey: string }) {
+  const router = useRouter();
   const [state, action, pending] = useActionState<ActionState, FormData>(expenseSaveAction.bind(null, expense?.id ?? null), null);
+  const [intent, setIntent] = useState<"done" | "another">("done");
   const amountRef = useRef<HTMLInputElement>(null);
   const noteRef = useRef<HTMLTextAreaElement>(null);
   const prefix = expense ? "edit" : "new";
@@ -40,17 +46,23 @@ export function ExpenseForm({ expense, categories, todayKey }: { expense?: Expen
   // next save would send the wrong values. Here only amount and note clear after adding.
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    const submitter = (e.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
+    // Enter in a field submits as "Save expense".
+    setIntent(submitter?.value === "another" ? "another" : "done");
     const data = new FormData(e.currentTarget);
     startTransition(() => action(data));
   }
 
   useEffect(() => {
-    if (state?.ok && !expense) {
-      if (amountRef.current) amountRef.current.value = "";
-      if (noteRef.current) noteRef.current.value = "";
-      amountRef.current?.focus();
+    if (!state?.ok || expense) return;
+    if (intent === "done") {
+      router.push(EXPENSES_AFTER_ADD);
+      return;
     }
-  }, [state, expense]);
+    if (amountRef.current) amountRef.current.value = "";
+    if (noteRef.current) noteRef.current.value = "";
+    amountRef.current?.focus();
+  }, [state, expense, intent, router]);
 
   if (categories.length === 0) {
     return <p className="text-sm text-ink-2">There are no expense categories yet. Add them in Settings first.</p>;
@@ -99,10 +111,22 @@ export function ExpenseForm({ expense, categories, todayKey }: { expense?: Expen
         <textarea ref={noteRef} id={`${prefix}-note`} name="note" rows={2} maxLength={500} defaultValue={expense?.note ?? ""} placeholder="For example: 2 bottles of shampoo" className={cx(inputClass, "min-h-16 text-sm")} />
       </Field>
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant="night" loading={pending}>
-          {expense ? "Save changes" : "Add expense"}
-        </Button>
-        <ActionFeedback state={state} />
+        {expense ? (
+          <Button type="submit" variant="night" loading={pending}>
+            Save changes
+          </Button>
+        ) : (
+          <>
+            <Button type="submit" name="intent" value="done" variant="night" loading={pending && intent === "done"} disabled={pending}>
+              Save expense
+            </Button>
+            <Button type="submit" name="intent" value="another" variant="secondary" loading={pending && intent === "another"} disabled={pending}>
+              Save and add another
+            </Button>
+          </>
+        )}
+        {/* "Save expense" success is shown on the list it goes back to; errors always show here. */}
+        {(expense || intent === "another" || state?.error) && <ActionFeedback state={state} />}
       </div>
     </form>
   );
