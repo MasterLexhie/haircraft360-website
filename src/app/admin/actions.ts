@@ -21,6 +21,7 @@ import {
 } from "@/server/booking-service";
 import { createBalanceLink } from "@/server/payments/links";
 import { markWhatsappSent } from "@/server/whatsapp-messages";
+import { createExpense, softDeleteExpense, updateExpense } from "@/server/expenses";
 import { parseNairaToKobo } from "@/lib/money";
 import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
 import { recordId } from "@/domain/schemas";
@@ -31,7 +32,7 @@ import { capacityByWeekdaySchema, weeklyHoursSchema, type CapacityByWeekday, typ
 export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string } | null;
 
 function fail(err: unknown): ActionState {
-  if (err instanceof BookingError) return { error: err.message };
+  if (err instanceof BookingError) return { error: err.message, fieldErrors: err.fieldErrors };
   throw err;
 }
 
@@ -213,6 +214,45 @@ export async function whatsappSentAction(notificationIdRaw: string): Promise<Act
     await markWhatsappSent(id, actor);
     refresh();
     return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/* ───────────── Expenses ───────────── */
+
+/** Adds an expense, or saves changes to one when an ID is given. */
+export async function expenseSaveAction(expenseIdRaw: string | null, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const expenseId = expenseIdRaw === null ? null : validId(expenseIdRaw);
+  if (expenseIdRaw !== null && !expenseId) return INVALID;
+  const amount = parseNairaToKobo(String(formData.get("amount") ?? ""));
+  if (amount === null || amount <= 0) return { error: "Enter the amount, for example 5000.", fieldErrors: { amount: "Enter an amount above ₦0." } };
+  const input = {
+    dateKey: String(formData.get("date") ?? ""),
+    amountKobo: amount,
+    categoryId: String(formData.get("category") ?? ""),
+    method: String(formData.get("method") ?? "") as PaymentMethod,
+    note: String(formData.get("note") ?? ""),
+  };
+  try {
+    if (expenseId) await updateExpense(expenseId, input, actor);
+    else await createExpense(input, actor);
+    refresh();
+    return { ok: true, message: expenseId ? "Expense saved." : "Expense added." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function expenseDeleteAction(expenseIdRaw: string): Promise<ActionState> {
+  const actor = await adminActor();
+  const expenseId = validId(expenseIdRaw);
+  if (!expenseId) return INVALID;
+  try {
+    await softDeleteExpense(expenseId, actor);
+    refresh();
+    return { ok: true, message: "Expense deleted." };
   } catch (e) {
     return fail(e);
   }
