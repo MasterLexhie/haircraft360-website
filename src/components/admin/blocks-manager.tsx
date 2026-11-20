@@ -1,25 +1,12 @@
 "use client";
 
-import { useActionState, useState, useTransition } from "react";
+import { startTransition, useActionState, useState, useTransition, type FormEvent } from "react";
 import { CalendarOff, Trash2 } from "lucide-react";
 import { blockAction, deleteBlockAction, type ActionState } from "@/app/admin/actions";
 import type { BlockRow } from "@/server/queries";
-import { formatDateKey, formatTime, lagosDateKey, lagosMinutes } from "@/lib/time";
+import { describeClosurePeriod } from "@/domain/closures";
 import { ActionFeedback } from "@/components/admin/action-feedback";
 import { Badge, Button, Field, cx, inputClass } from "@/components/ui/primitives";
-
-/** "Mon, 24 Nov, all day", "Mon, 24 Nov, 12:00 pm to 3:00 pm", or a multi-day range. */
-function describePeriod(b: BlockRow): string {
-  const startDay = lagosDateKey(b.startAt);
-  const endMs = Date.parse(b.endAt);
-  // A whole-day closure ends at midnight, which belongs to the day before.
-  const endsAtMidnight = lagosMinutes(endMs) === 0;
-  const lastDay = lagosDateKey(endsAtMidnight ? endMs - 1 : endMs);
-  const wholeDays = lagosMinutes(b.startAt) === 0 && endsAtMidnight;
-  if (wholeDays) return startDay === lastDay ? `${formatDateKey(startDay)}, all day` : `${formatDateKey(startDay)} to ${formatDateKey(lastDay)}, all day`;
-  if (startDay === lastDay) return `${formatDateKey(startDay)}, ${formatTime(b.startAt)} to ${formatTime(b.endAt)}`;
-  return `${formatDateKey(startDay)} ${formatTime(b.startAt)} to ${formatDateKey(lastDay)} ${formatTime(b.endAt)}`;
-}
 
 /**
  * Closures (BUILD_SPEC Blocks): close the salon or lower capacity for a period, for example a
@@ -33,12 +20,31 @@ export function BlocksManager({ blocks, today }: { blocks: BlockRow[]; today: st
   const [removeState, setRemoveState] = useState<ActionState>(null);
   const fe = state?.fieldErrors ?? {};
 
+  // Submitted by hand so React doesn't reset the form natively: a native reset left the radio
+  // showing "Close the salon" while the state still said "reduce". After a save, the state goes
+  // back to its defaults and the form remounts, so the screen and the submitted values agree.
+  const [formKey, setFormKey] = useState(0);
+  const [seenState, setSeenState] = useState(state);
+  if (state !== seenState) {
+    setSeenState(state);
+    if (state?.ok) {
+      setWholeDay(true);
+      setMode("close");
+      setFormKey((k) => k + 1);
+    }
+  }
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const data = new FormData(e.currentTarget);
+    startTransition(() => action(data));
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section aria-labelledby="add-block" className="rounded-[var(--radius)] border border-line bg-surface p-5">
         <h2 id="add-block" className="text-base font-semibold">Add a closure</h2>
         <p className="mt-1 text-sm text-ink-3">For holidays, training or a stylist away. Those times stop being offered online straight away.</p>
-        <form action={action} className="mt-5 space-y-4">
+        <form key={formKey} onSubmit={submit} className="mt-5 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field id="b-start" label="First day" error={fe.startDate}>
               <input id="b-start" name="startDate" type="date" min={today} defaultValue={today} required className={inputClass} />
@@ -96,7 +102,7 @@ export function BlocksManager({ blocks, today }: { blocks: BlockRow[]; today: st
               <li key={b.id} className="flex items-start gap-3 px-5 py-3.5 text-sm">
                 <CalendarOff aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-3" />
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-ink">{describePeriod(b)}</p>
+                  <p className="font-medium text-ink">{describeClosurePeriod(b.startAt, b.endAt)}</p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-ink-3">
                     <Badge tone={b.capacityReduction === null ? "danger" : "warning"}>
                       {b.capacityReduction === null ? "Closed" : `${b.capacityReduction} fewer at once`}
@@ -113,7 +119,7 @@ export function BlocksManager({ blocks, today }: { blocks: BlockRow[]; today: st
                   }}
                 >
                   <Trash2 aria-hidden className="size-4" />
-                  <span className="sr-only">Remove closure: {describePeriod(b)}</span>
+                  <span className="sr-only">Remove closure: {describeClosurePeriod(b.startAt, b.endAt)}</span>
                 </Button>
               </li>
             ))}

@@ -1,6 +1,7 @@
 import "server-only";
 import type { BookingStatus, Kobo, PaymentMethod, Settings } from "@/domain/types";
 import { isSlotBookable } from "@/domain/availability";
+import { describeClosurePeriod } from "@/domain/closures";
 import { depositDue } from "@/domain/deposit";
 import { addOnTerms, balanceDue, itemsDuration, itemsTotal } from "@/domain/pricing";
 import { normalizeEmail, normalizePhone, placeholderEmailFor } from "@/domain/phone";
@@ -582,7 +583,7 @@ export async function createBlock(input: BlockInput, actor: Actor): Promise<{ af
       actorId: actor.id,
       entityType: "Block",
       entityId: block.id,
-      summary: `${input.capacityReduction === null ? "Closed" : `Capacity lowered by ${input.capacityReduction}`} from ${formatLagos(input.startAt)} to ${formatLagos(input.endAt)}${block.reason ? ` (${block.reason})` : ""}`,
+      summary: `${input.capacityReduction === null ? "Closed" : `${input.capacityReduction} fewer customers at once`}: ${describeClosurePeriod(input.startAt, input.endAt)}${block.reason ? ` (${block.reason})` : ""}`,
     });
     return { affectedBookings };
   });
@@ -599,7 +600,7 @@ export async function deleteBlock(blockId: string, actor: Actor) {
       actorId: actor.id,
       entityType: "Block",
       entityId: blockId,
-      summary: `Closure from ${formatLagos(block.startAt)} to ${formatLagos(block.endAt)} removed; those times are bookable again`,
+      summary: `Closure removed: ${describeClosurePeriod(block.startAt, block.endAt)}. Those times are bookable again`,
     });
   });
 }
