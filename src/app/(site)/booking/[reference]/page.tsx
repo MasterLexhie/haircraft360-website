@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock, Hourglass, MapPin, Phone, ReceiptText } from "lucide-react";
+import { AlertTriangle, CalendarDays, CalendarPlus, CheckCircle2, Clock, Hourglass, MapPin, Phone, ReceiptText } from "lucide-react";
 import { getCustomerBooking } from "@/server/queries";
 import { bookingStatusLabel } from "@/domain/labels";
 import { balanceDue, paidKobo } from "@/domain/pricing";
@@ -10,7 +10,9 @@ import { formatDuration, formatLongDate, formatTime } from "@/lib/time";
 import { PaymentHistory } from "@/components/booking/payment-history";
 import { PaymentFee } from "@/components/booking/payment-fee";
 import { customerPaysFees } from "@/server/payments/paystack";
-import { Alert, Badge, ButtonLink, Card, Skeleton } from "@/components/ui/primitives";
+import { Alert, Badge, ButtonLink, buttonClass, Card, Skeleton } from "@/components/ui/primitives";
+import { calendarEventFor } from "@/server/booking-calendar";
+import { googleCalendarUrl } from "@/lib/calendar";
 import { PayButton } from "../pay-button";
 import { PendingRefresher } from "../pending-refresher";
 
@@ -43,12 +45,13 @@ async function BookingView({ params, searchParams }: Props) {
     );
   }
 
-  const { booking, payments } = data;
+  const { booking, payments, upcoming } = data;
   const status = bookingStatusLabel[booking.status];
   const paidTotal = paidKobo(payments);
   const due = balanceDue(booking, payments);
   const minutes = (Date.parse(booking.endAt) - Date.parse(booking.startAt)) / 60_000;
   const token = t!;
+  const calendar = upcoming ? calendarEventFor(booking, { balanceKobo: due }) : null;
 
   const hero =
     booking.status === "confirmed"
@@ -123,6 +126,16 @@ async function BookingView({ params, searchParams }: Props) {
             </dd>
           </div>
         </dl>
+        {calendar && (
+          <div className="mt-5 flex flex-wrap gap-2">
+            <a href={`/api/bookings/${booking.reference}/calendar?t=${encodeURIComponent(token)}`} className={buttonClass("secondary", "md")}>
+              <CalendarPlus aria-hidden className="size-4" /> Add to calendar
+            </a>
+            <a href={googleCalendarUrl(calendar)} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "md")}>
+              Google Calendar<span className="sr-only"> (opens in a new tab)</span>
+            </a>
+          </div>
+        )}
 
         <h2 className="mt-6 border-t border-line pt-5 text-sm font-semibold uppercase tracking-[0.12em] text-ink-3">Services</h2>
         <ul className="mt-2 divide-y divide-line">

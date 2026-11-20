@@ -60,6 +60,7 @@ export function toBooking(row: P.Booking & { items: P.BookingItem[] }): Booking 
     completedAt: isoOrNull(row.completedAt),
     cancelledAt: isoOrNull(row.cancelledAt),
     createdAt: iso(row.createdAt),
+    updatedAt: iso(row.updatedAt),
     items: [...row.items].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || kindOrder[a.kind] - kindOrder[b.kind]).map(toBookingItem),
   };
 }

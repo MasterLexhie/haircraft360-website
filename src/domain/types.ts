@@ -67,6 +67,7 @@ export interface Booking {
   completedAt: string | null;
   cancelledAt: string | null;
   createdAt: string;
+  updatedAt: string;
   items: BookingItem[];
 }
 

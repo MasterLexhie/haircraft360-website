@@ -45,7 +45,12 @@ export async function getCustomerBooking(reference: string, token: string | unde
   const booking = await findBookingByToken(reference, token);
   if (!booking) return null;
   const payments = await db.payment.findMany({ where: { bookingId: booking.id }, orderBy: { createdAt: "asc" } });
-  return { booking: withoutPrivate(booking), payments: payments.map((p) => ({ ...toPayment(p), recordedByName: null })) };
+  return {
+    booking: withoutPrivate(booking),
+    payments: payments.map((p) => ({ ...toPayment(p), recordedByName: null })),
+    /** Confirmed and still ahead: the calendar buttons show. */
+    upcoming: booking.status === "confirmed" && Date.parse(booking.startAt) > Date.now(),
+  };
 }
 
 export type PublicBooking = Omit<Booking, "privateNote" | "customerId">;
