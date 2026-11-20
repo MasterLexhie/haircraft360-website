@@ -1,42 +1,26 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { CreditCard } from "lucide-react";
+import { startPayment, usePaystackPayment } from "@/components/booking/use-paystack-payment";
+import { PaymentProgress } from "@/components/booking/payment-progress";
 import { Alert, Button } from "@/components/ui/primitives";
 
-/** Starts a payment for the deposit or the outstanding balance. Each press opens a fresh attempt. */
+/** Pays the deposit or the balance from the customer's booking page. Each press opens a fresh transaction. */
 export function PayButton({ reference, token, purpose, label }: { reference: string; token: string; purpose: "deposit" | "balance"; label: string }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  async function go() {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/bookings/${reference}/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, purpose }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error?.message ?? "Couldn't open checkout.");
-        router.refresh();
-        return;
-      }
-      router.push(`/checkout/${data.checkoutReference}?t=${encodeURIComponent(token)}`);
-    } catch {
-      setError("We couldn't reach the checkout service. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { pay, phase, error } = usePaystackPayment((outcome) => {
+    if (outcome === "cancelled" || outcome === "error") return;
+    const t = encodeURIComponent(token);
+    router.replace(`/booking/${reference}?t=${t}${outcome === "paid" ? `&paid=${purpose}` : outcome === "pending" ? "&paid=pending" : ""}`, { scroll: false });
+    router.refresh();
+  });
   return (
     <div className="space-y-3">
-      <Button size="lg" className="w-full sm:w-auto" onClick={go} loading={busy}>
+      <Button size="lg" className="w-full sm:w-auto" onClick={() => pay(() => startPayment(`/api/bookings/${reference}/checkout`, { token, purpose }))} loading={phase !== "idle"}>
         <CreditCard aria-hidden className="size-5" /> {label}
       </Button>
+      <PaymentProgress phase={phase} />
       {error && <Alert tone="danger" role="alert" title={error} />}
     </div>
   );

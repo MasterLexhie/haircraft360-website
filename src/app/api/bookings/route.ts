@@ -1,5 +1,5 @@
 import { BookingError, createPendingBooking } from "@/server/booking-service";
-import { isMockCheckoutEnabled, startMockCheckout } from "@/server/payments/mock";
+import { startBookingPayment, type StartedPayment } from "@/server/payments/checkout";
 import { clientIpFrom, hit, LIMITS, retryMessage } from "@/server/rate-limit";
 import { badRequest, createBookingSchema, readJson } from "@/domain/schemas";
 
@@ -19,9 +19,15 @@ export async function POST(request: Request) {
   if (body.website?.trim()) return badRequest("Please check your details and try again.");
   try {
     const result = await createPendingBooking(body);
-    // Until Paystack is connected (Milestone 4), local development pays through the mock checkout.
-    const checkout = isMockCheckoutEnabled() ? await startMockCheckout(result.reference, result.accessToken, "deposit") : null;
-    return Response.json({ reference: result.reference, accessToken: result.accessToken, checkoutReference: checkout?.checkoutReference ?? null }, { status: 201 });
+    // Opens the deposit payment straight away to save a round trip. If Paystack is down the
+    // booking still stands (held), and the customer can pay from their booking page.
+    let payment: StartedPayment | null = null;
+    try {
+      payment = await startBookingPayment(result.reference, result.accessToken, "deposit");
+    } catch (err) {
+      if (!(err instanceof BookingError)) throw err;
+    }
+    return Response.json({ reference: result.reference, accessToken: result.accessToken, payment }, { status: 201 });
   } catch (err) {
     if (err instanceof BookingError) {
       const status = err.code === "SLOT_TAKEN" ? 409 : err.code === "TOO_MANY_HOLDS" ? 429 : 400;

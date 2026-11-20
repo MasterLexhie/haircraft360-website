@@ -30,10 +30,10 @@ export const startCheckoutSchema = z.object({
   purpose: z.enum(["deposit", "balance"]).default("deposit"),
 });
 
-export const completeMockCheckoutSchema = z.object({
-  token,
-  outcome: z.enum(["success", "failed"]),
-});
+export const payLinkSchema = z.object({ token });
+
+/** Our payment references, for example HC-7KQ2M-D-AB23CD. */
+export const attemptReferenceParam = z.string().trim().regex(/^HC-[A-Z0-9]{3,10}-[DB]-[A-Z0-9]{4,10}$/);
 
 export const availabilityQuerySchema = z.object({
   duration: z.coerce.number().int().min(15).max(12 * 60),

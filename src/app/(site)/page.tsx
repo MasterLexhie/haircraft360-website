@@ -146,7 +146,7 @@ function Welcome() {
           ))}
         </ol>
         <p className="mx-auto mt-8 max-w-2xl text-center text-xs text-ink-3">
-          Prototype: the deposit amount is a demo rule and checkout is simulated. Real deposit and cancellation terms are awaiting the owner.
+          Prototype: the deposit amount is a demo rule. Real deposit and cancellation terms are awaiting the owner.
         </p>
       </div>
     </section>

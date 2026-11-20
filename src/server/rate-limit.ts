@@ -21,6 +21,8 @@ export const LIMITS = {
   loginFailuresPerIp: { limit: 5, windowSeconds: 15 * 60 },
   bookingPerIp: { limit: 5, windowSeconds: 10 * 60 },
   paymentInitPerIp: { limit: 10, windowSeconds: 10 * 60 },
+  /** Checks after the popup closes. A few per payment, so this is generous. */
+  paymentVerifyPerIp: { limit: 30, windowSeconds: 10 * 60 },
   findBookingPerIp: { limit: 10, windowSeconds: 15 * 60 },
 } satisfies Record<string, Limit>;
 

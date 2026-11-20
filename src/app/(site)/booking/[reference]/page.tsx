@@ -70,6 +70,21 @@ async function BookingView({ params, searchParams }: Props) {
         </Alert>
       )}
       {paid === "balance" && due === 0 && <Alert tone="success" role="status" className="mb-6" title="Balance received: you're paid in full" />}
+      {paid === "pending" && (booking.status === "pending_payment" || due > 0) && (
+        <Alert tone="info" role="status" className="mb-6" title="We're waiting for Paystack to confirm your payment">
+          Bank transfers can take a few minutes. Refresh this page in a little while. If money left your account, don&apos;t pay again: it will show here once it lands.
+        </Alert>
+      )}
+      {paid === "failed" && booking.status === "pending_payment" && (
+        <Alert tone="danger" role="alert" className="mb-6" title="The payment didn't go through">
+          Nothing was charged. You can try again below while your time is held.
+        </Alert>
+      )}
+      {paid === "error" && booking.status === "pending_payment" && (
+        <Alert tone="warning" role="alert" className="mb-6" title="Your time is held, but the payment window didn't open">
+          Use the button below to pay the deposit before the hold ends.
+        </Alert>
+      )}
 
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex gap-4">

@@ -15,6 +15,8 @@ import { Alert, Button, Field, cx, describedBy, inputClass } from "@/components/
 import { ServiceMeta } from "./service-bits";
 import { BookingSummaryPanel, MoneyRows, describeDepositRule, type SummaryLine } from "./booking-summary";
 import { DateTimeStep } from "./date-time-step";
+import { PaymentProgress } from "./payment-progress";
+import { usePaystackPayment, type StartedPayment } from "./use-paystack-payment";
 
 const STEPS = ["Service", "Extras", "Date & time", "Your details", "Review"] as const;
 const SERVICE = 0;
@@ -73,6 +75,14 @@ export function BookingWizard({
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [stepError, setStepError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set once the booking exists, so the deposit popup's outcome knows where to go next.
+  const created = useRef<{ reference: string; accessToken: string } | null>(null);
+  const payment = usePaystackPayment((outcome) => {
+    const b = created.current;
+    if (!b) return;
+    const paid = outcome === "paid" ? "&paid=deposit" : outcome === "cancelled" ? "" : `&paid=${outcome}`;
+    router.push(`/booking/${b.reference}?t=${encodeURIComponent(b.accessToken)}${paid}`);
+  });
   const [slotRefresh, setSlotRefresh] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [summaryFocus, setSummaryFocus] = useState(0);
@@ -240,8 +250,11 @@ export function BookingWizard({
       try {
         sessionStorage.removeItem(DRAFT_KEY);
       } catch {}
-      const t = encodeURIComponent(data.accessToken);
-      router.push(data.checkoutReference ? `/checkout/${data.checkoutReference}?t=${t}` : `/booking/${data.reference}?t=${t}`);
+      created.current = { reference: data.reference, accessToken: data.accessToken };
+      const started = data.payment as StartedPayment | null;
+      // Paystack couldn't be reached: the time is still held and the booking page offers to pay.
+      if (!started) router.push(`/booking/${data.reference}?t=${encodeURIComponent(data.accessToken)}&paid=error`);
+      else void payment.pay(async () => started);
     } catch {
       setStepError("We couldn't reach the booking service. Check your connection and try again. Nothing has been charged.");
     } finally {
@@ -475,8 +488,9 @@ export function BookingWizard({
 
                 <p className="flex items-start gap-2 text-sm text-ink-2">
                   <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
-                  Your time is held for {holdMinutes} minutes while you pay the deposit. Questions? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
+                  Your time is held for {holdMinutes} minutes while you pay the deposit. Card, bank transfer and USSD are accepted through Paystack. Questions? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
                 </p>
+                <PaymentProgress phase={payment.phase} />
               </div>
             )}
           </div>
@@ -496,8 +510,8 @@ export function BookingWizard({
                 <p className="tabular text-sm font-semibold">{main ? `Total ${formatNaira(totalKobo)}` : "Nothing selected"}</p>
               </div>
               {isLast ? (
-                <Button size="lg" onClick={submit} loading={submitting} className="flex-1 md:flex-none">
-                  {submitting ? "Reserving…" : <>Pay deposit <span className="tabular">{formatNaira(deposit)}</span></>}
+                <Button size="lg" onClick={submit} loading={submitting || payment.busy} className="flex-1 md:flex-none">
+                  {payment.phase === "confirming" ? "Confirming payment…" : submitting || payment.busy ? "Reserving…" : <>Pay deposit <span className="tabular">{formatNaira(deposit)}</span></>}
                 </Button>
               ) : (
                 <Button size="lg" onClick={next} className="shrink-0">

@@ -7,11 +7,12 @@ const isDev = process.env.NODE_ENV === "development";
  * page to render per request and are incompatible with partial prerendering
  * (node_modules/next/dist/docs/01-app/02-guides/content-security-policy.md), so inline
  * scripts are allowed and everything else is locked to this site plus Paystack.
- * The Paystack hosts are confirmed against Paystack's docs when payments land (Milestone 4).
+ * Paystack: the popup is bundled from @paystack/inline-js and opens checkout.paystack.com in an
+ * iframe; on Safari it loads Apple's Apple Pay script. api.paystack.co is called from the popup.
  */
 const csp = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://js.paystack.co`,
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://applepay.cdn-apple.com`,
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
   "font-src 'self'",
@@ -57,7 +58,6 @@ const nextConfig: NextConfig = {
       { source: "/admin/:path*", headers: noindex },
       { source: "/admin", headers: noindex },
       { source: "/booking/:path*", headers: noindex },
-      { source: "/checkout/:path*", headers: noindex },
       { source: "/pay/:path*", headers: noindex },
       { source: "/api/:path*", headers: noindex },
     ];

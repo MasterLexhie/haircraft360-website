@@ -23,7 +23,7 @@ import { toBooking } from "./mappers";
 
 export class BookingError extends Error {
   constructor(
-    public code: "VALIDATION" | "SLOT_TAKEN" | "NOT_FOUND" | "HOLD_EXPIRED" | "NOT_ALLOWED" | "NOTHING_DUE" | "TOO_MANY_HOLDS",
+    public code: "VALIDATION" | "SLOT_TAKEN" | "NOT_FOUND" | "HOLD_EXPIRED" | "NOT_ALLOWED" | "NOTHING_DUE" | "TOO_MANY_HOLDS" | "PAYMENT_UNAVAILABLE",
     message: string,
     public fieldErrors?: Record<string, string>,
   ) {
@@ -210,6 +210,8 @@ export interface ReceivedPayment {
   amountKobo: Kobo;
   paystackReference: string;
   actorLabel: string;
+  /** What we asked Paystack to charge. A deposit that arrives short is recorded but doesn't confirm. */
+  expectedKobo?: Kobo;
 }
 
 /**
@@ -219,6 +221,8 @@ export interface ReceivedPayment {
  *
  * Late payment (hold expired): confirms if the time is still free, otherwise
  * `needs_attention` so the owner can move the booking (the salon does not refund deposits).
+ * A deposit below the amount asked is still recorded (the money arrived) but sets
+ * `needs_attention` so the owner can collect the difference before confirming.
  */
 export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: ReceivedPayment): Promise<{ duplicate: boolean; status: BookingStatus }> {
   const existing = await tx.payment.findUnique({ where: { paystackReference: payment.paystackReference } });
@@ -231,14 +235,28 @@ export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: Re
     data: { bookingId, type: payment.type, method: payment.method, amountKobo: payment.amountKobo, paystackReference: payment.paystackReference },
   });
 
+  const expected = payment.expectedKobo ?? payment.amountKobo;
+  const shortBy = Math.max(expected - payment.amountKobo, 0);
+  const overBy = Math.max(payment.amountKobo - expected, 0);
+
   let status = booking.status;
+  let outcome = "";
   if (payment.type === "deposit" && (booking.status === "pending_payment" || booking.status === "expired")) {
     const holdLive = booking.status === "pending_payment" && booking.holdExpiresAt !== null && booking.holdExpiresAt.getTime() > nowMs;
     const settings = await loadSettings(tx);
-    status = holdLive || (await timeStillFree(tx, settings, booking, nowMs)) ? "confirmed" : "needs_attention";
+    const free = holdLive || (await timeStillFree(tx, settings, booking, nowMs));
+    status = free && shortBy === 0 ? "confirmed" : "needs_attention";
     await tx.booking.update({ where: { id: bookingId }, data: { status, holdExpiresAt: null } });
     if (status === "confirmed") await createBookingNotifications(tx, bookingId);
+    outcome =
+      status === "confirmed"
+        ? ". Booking confirmed"
+        : shortBy > 0
+          ? `. ${formatNaira(shortBy)} less than the deposit asked: collect the difference, then confirm${free ? "" : ". The time was also taken: the booking needs a new time"}`
+          : ". Paid after the time was taken: the booking needs a new time";
   }
+  if (payment.type === "balance_online" && shortBy > 0) outcome = `. ${formatNaira(shortBy)} less than asked`;
+  if (overBy > 0) outcome += `. ${formatNaira(overBy)} more than asked`;
   await audit(tx, {
     action: `payment.${payment.type}.received`,
     actorLabel: payment.actorLabel,
@@ -246,7 +264,7 @@ export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: Re
     entityId: bookingId,
     bookingId,
     customerId: booking.customerId,
-    summary: `${payment.type === "deposit" ? "Deposit" : "Balance"} of ${formatNaira(payment.amountKobo)} received (${payment.paystackReference})${status === "needs_attention" ? ". Paid after the time was taken: the booking needs a new time" : status === "confirmed" && booking.status !== "confirmed" ? ". Booking confirmed" : ""}`,
+    summary: `${payment.type === "deposit" ? "Deposit" : "Balance"} of ${formatNaira(payment.amountKobo)} received (${payment.paystackReference})${outcome}`,
   });
   return { duplicate: false, status };
 }
