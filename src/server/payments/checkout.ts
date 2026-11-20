@@ -2,7 +2,7 @@ import "server-only";
 import type { PaymentMethod } from "@/domain/types";
 import { balanceDue } from "@/domain/pricing";
 import { placeholderDomain, placeholderEmailFor } from "@/domain/phone";
-import { sha256Hex } from "@/lib/crypto";
+import { tokenOpensBooking } from "../booking-access";
 import { db } from "../db";
 import { shortCode } from "../ids";
 import { BookingError, recordOnlinePayment } from "../booking-service";
@@ -62,7 +62,7 @@ export async function openAttempt(
 /** Deposit or balance, from the customer's own booking link. */
 export async function startBookingPayment(reference: string, token: string, purpose: "deposit" | "balance_online"): Promise<StartedPayment> {
   const booking = await db.booking.findUnique({ where: { reference }, include: { payments: true } });
-  if (!booking || !token || booking.accessTokenHash !== (await sha256Hex(token)) || booking.accessExpiresAt.getTime() < Date.now()) {
+  if (!booking || !(await tokenOpensBooking(booking, token))) {
     throw new BookingError("NOT_FOUND", "We couldn't find that booking.");
   }
   if (purpose === "deposit") {

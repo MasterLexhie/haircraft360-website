@@ -3,6 +3,7 @@ import { balanceDue } from "@/domain/pricing";
 import { formatNaira } from "@/lib/money";
 import { randomToken, sha256Hex } from "@/lib/crypto";
 import { db } from "../db";
+import { siteUrl } from "../booking-access";
 import { audit } from "../audit";
 import { BookingError, type Actor } from "../booking-service";
 import { BALANCE_STATUSES, balanceToPay, openAttempt, type StartedPayment } from "./checkout";
@@ -45,8 +46,7 @@ export async function createBalanceLink(bookingId: string, actor: Actor): Promis
       summary: `Balance link made for ${formatNaira(amountKobo)}, valid for ${PAYMENT_LINK_DAYS} days`,
     });
   });
-  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-  return { url: `${base}/pay/${token}`, expiresAt: expiresAt.toISOString(), amountKobo };
+  return { url: `${siteUrl()}/pay/${token}`, expiresAt: expiresAt.toISOString(), amountKobo };
 }
 
 /** What the /pay page shows: only this booking's own details. */

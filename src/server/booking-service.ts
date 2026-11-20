@@ -10,6 +10,7 @@ import { formatNaira } from "@/lib/money";
 import { addDays, formatDateKey, formatTime, lagosDateKey, lagosToUtcMs } from "@/lib/time";
 import { randomToken, sha256Hex } from "@/lib/crypto";
 import { db, type Db, type Tx } from "./db";
+import { tokenOpensBooking } from "./booking-access";
 import { audit } from "./audit";
 import { matchOrCreateCustomer } from "./customers";
 import { loadSettings } from "./settings";
@@ -691,6 +692,6 @@ export async function updateSettings(patch: Partial<Pick<Settings, "availability
 export async function findBookingByToken(reference: string, token: string | undefined) {
   if (!token) return null;
   const booking = await db.booking.findUnique({ where: { reference }, include: { items: true } });
-  if (!booking || booking.accessTokenHash !== (await sha256Hex(token)) || booking.accessExpiresAt.getTime() < Date.now()) return null;
+  if (!booking || !(await tokenOpensBooking(booking, token))) return null;
   return toBooking(booking);
 }

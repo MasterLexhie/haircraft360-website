@@ -202,30 +202,32 @@ model ServiceAddOn {
 // ───────────────────────────── Bookings ─────────────────────────────
 
 model Booking {
-  id              String        @id @default(cuid())
+  id               String        @id @default(cuid())
   /// Short human reference shown to customers, for example HC-7KQ2M.
-  reference       String        @unique
+  reference        String        @unique
   /// SHA-256 of the customer's booking link token.
-  accessTokenHash String        @unique
-  accessExpiresAt DateTime      @db.Timestamptz(3)
-  customerId      String
+  accessTokenHash  String        @unique
+  /// SHA-256 of the link token used in emails and WhatsApp messages (see src/server/booking-access.ts).
+  messageTokenHash String?       @unique
+  accessExpiresAt  DateTime      @db.Timestamptz(3)
+  customerId       String
   /// What the customer typed for this booking. Customer pages show only these, never the stored profile.
-  contactName     String
-  contactPhone    String
-  contactEmail    String?
-  startAt         DateTime      @db.Timestamptz(3)
+  contactName      String
+  contactPhone     String
+  contactEmail     String?
+  startAt          DateTime      @db.Timestamptz(3)
   /// Includes every item's duration. The buffer is added at availability time, not stored here.
-  endAt           DateTime      @db.Timestamptz(3)
-  status          BookingStatus @default(pending_payment)
-  holdExpiresAt   DateTime?     @db.Timestamptz(3)
-  totalKobo       Int
-  depositDueKobo  Int
-  customerNote    String        @default("")
-  privateNote     String        @default("")
-  completedAt     DateTime?     @db.Timestamptz(3)
-  cancelledAt     DateTime?     @db.Timestamptz(3)
-  createdAt       DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt       DateTime      @updatedAt @db.Timestamptz(3)
+  endAt            DateTime      @db.Timestamptz(3)
+  status           BookingStatus @default(pending_payment)
+  holdExpiresAt    DateTime?     @db.Timestamptz(3)
+  totalKobo        Int
+  depositDueKobo   Int
+  customerNote     String        @default("")
+  privateNote      String        @default("")
+  completedAt      DateTime?     @db.Timestamptz(3)
+  cancelledAt      DateTime?     @db.Timestamptz(3)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
 
   customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   items           BookingItem[]
@@ -400,13 +402,13 @@ model Settings {
 
 /// Admin-created period that reduces capacity (or closes the salon when capacityReduction is null).
 model Block {
-  id                String     @id @default(cuid())
-  startAt           DateTime   @db.Timestamptz(3)
-  endAt             DateTime   @db.Timestamptz(3)
+  id                String   @id @default(cuid())
+  startAt           DateTime @db.Timestamptz(3)
+  endAt             DateTime @db.Timestamptz(3)
   capacityReduction Int?
-  reason            String     @default("")
+  reason            String   @default("")
   createdById       String?
-  createdAt         DateTime   @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
 
   createdBy AdminUser? @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
