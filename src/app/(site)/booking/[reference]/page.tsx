@@ -12,6 +12,7 @@ import { PaymentFee } from "@/components/booking/payment-fee";
 import { customerPaysFees } from "@/server/payments/paystack";
 import { Alert, Badge, ButtonLink, Card, Skeleton } from "@/components/ui/primitives";
 import { PayButton } from "../pay-button";
+import { PendingRefresher } from "../pending-refresher";
 
 export const metadata: Metadata = { title: "Your booking", robots: { index: false, follow: false } };
 
@@ -154,6 +155,7 @@ async function BookingView({ params, searchParams }: Props) {
         {booking.status === "pending_payment" && <PaymentFee amountKobo={booking.depositDueKobo} show={customerPaysFees()} />}
         {booking.status === "completed" && due > 0 && <PaymentFee amountKobo={due} show={customerPaysFees()} />}
 
+        {booking.status === "pending_payment" && <PendingRefresher />}
         <div className="mt-5">
           {booking.status === "pending_payment" && (
             <PayButton reference={booking.reference} token={token} purpose="deposit" label={`Pay deposit ${formatNaira(booking.depositDueKobo)}`} />
