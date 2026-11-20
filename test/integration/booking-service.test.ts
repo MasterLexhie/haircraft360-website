@@ -215,7 +215,7 @@ describe("moving a booking", () => {
   it("confirms a paid booking that needed a new time once it is moved to a free time, and schedules its messages", async () => {
     const b = await needsAttention();
     expect(b.status).toBe("needs_attention");
-    await moveBooking(b.id, slot(3, "14:00"), actor);
+    await expect(moveBooking(b.id, slot(3, "14:00"), actor)).resolves.toEqual({ status: "confirmed", confirmedByMove: true });
     const moved = await db.booking.findUniqueOrThrow({ where: { id: b.id } });
     expect(moved.status).toBe("confirmed");
     expect(moved.startAt.toISOString()).toBe(slot(3, "14:00"));
@@ -245,7 +245,7 @@ describe("moving a booking", () => {
     const r = await createPendingBooking(bookingInput());
     await confirm(r.reference);
     const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
-    await expect(moveBooking(b.id, slot(3, "11:00"), actor)).resolves.toMatchObject({ status: "confirmed" });
+    await expect(moveBooking(b.id, slot(3, "11:00"), actor)).resolves.toEqual({ status: "confirmed", confirmedByMove: false });
   });
 
   it("refuses unpaid, cancelled and past moves", async () => {

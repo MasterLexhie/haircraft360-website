@@ -380,7 +380,7 @@ export async function moveBooking(bookingId: string, newStartAt: string, actor: 
       customerId: b.customerId,
       summary: `Moved from ${formatLagos(b.startAt)} to ${formatLagos(startAt)}${b.status === "needs_attention" ? "; booking confirmed" : ""}`,
     });
-    return { status };
+    return { status, confirmedByMove: b.status === "needs_attention" };
   });
 }
 

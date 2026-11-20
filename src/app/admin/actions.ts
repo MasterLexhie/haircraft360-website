@@ -96,9 +96,9 @@ export async function moveBookingAction(bookingIdRaw: string, _: ActionState, fo
   const startAt = z.iso.datetime().safeParse(formData.get("startAt"));
   if (!startAt.success) return { error: "Choose one of the free times." };
   try {
-    const { status } = await moveBooking(bookingId, startAt.data, actor);
+    const { confirmedByMove } = await moveBooking(bookingId, startAt.data, actor);
     refresh();
-    return { ok: true, message: status === "confirmed" ? "Booking moved and confirmed. Let the customer know their new time." : "Booking moved." };
+    return { ok: true, message: confirmedByMove ? "Booking moved and confirmed. Let the customer know their new time." : "Booking moved. Let the customer know their new time." };
   } catch (e) {
     return fail(e);
   }
