@@ -11,3 +11,11 @@ export function fillTemplate(template: string, vars: MessageVars): string {
     return value === undefined ? whole : value;
   });
 }
+
+export const MESSAGE_PLACEHOLDERS = ["name", "service", "date", "time", "total", "deposit", "balance", "link", "salon", "address"] as const;
+
+/** Placeholders in a template that won't be filled in, such as a typo like {nmae}. */
+export function unknownPlaceholders(template: string): string[] {
+  const known = new Set<string>(MESSAGE_PLACEHOLDERS);
+  return [...new Set([...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!))].filter((k) => !known.has(k));
+}

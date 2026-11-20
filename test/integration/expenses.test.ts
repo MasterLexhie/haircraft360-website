@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDatabase } from "../db";
 import { createSettings } from "../factories";
 import { lagosDateKey, addDays } from "@/lib/time";
-import { createExpense, listExpenses, softDeleteExpense, updateExpense, type ExpenseInput } from "@/server/expenses";
+import { activeExpenseCategories, createExpense, listExpenseCategories, listExpenses, saveExpenseCategory, softDeleteExpense, updateExpense, type ExpenseInput } from "@/server/expenses";
 
 const actor = { id: null, label: "Test admin" };
 const today = lagosDateKey(Date.now());
@@ -71,5 +71,28 @@ describe("expenses", () => {
     expect(all.rows.map((r) => r.dateKey)).toEqual([today, today, yesterday]);
     const suppliesOnly = await listExpenses({ fromKey: yesterday, toKey: today, categoryId: supplies });
     expect(suppliesOnly.totalKobo).toBe(300_000);
+  });
+});
+
+describe("expense categories", () => {
+  it("adds one at the end, refuses a duplicate name in any case, and logs it", async () => {
+    await saveExpenseCategory({ id: null, name: "  Laundry   bills ", active: true }, actor);
+    expect((await activeExpenseCategories()).map((c) => c.name)).toEqual(["Supplies", "Rent", "Laundry bills"]);
+    await expect(saveExpenseCategory({ id: null, name: "rent", active: true }, actor)).rejects.toMatchObject({ code: "VALIDATION", fieldErrors: { name: expect.any(String) } });
+    expect(await db.auditLog.count({ where: { action: "expense_category.created", summary: "Expense category added: Laundry bills" } })).toBe(1);
+  });
+
+  it("renames and hides one, keeping it on old expenses", async () => {
+    const id = await createExpense(input(), actor);
+    await saveExpenseCategory({ id: supplies, name: "Products", active: false }, actor);
+    expect((await activeExpenseCategories()).map((c) => c.name)).toEqual(["Rent"]);
+    expect((await listExpenses({ fromKey: today, toKey: today })).rows.find((r) => r.id === id)?.categoryName).toBe("Products");
+    expect((await listExpenseCategories()).find((c) => c.id === supplies)).toMatchObject({ active: false, expenseCount: 1 });
+    expect((await db.auditLog.findFirstOrThrow({ where: { action: "expense_category.updated" } })).summary).toBe("Expense category renamed from Supplies to Products and hidden");
+  });
+
+  it("keeps at least one category in the add form", async () => {
+    await saveExpenseCategory({ id: supplies, name: "Supplies", active: false }, actor);
+    await expect(saveExpenseCategory({ id: rent, name: "Rent", active: false }, actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
   });
 });

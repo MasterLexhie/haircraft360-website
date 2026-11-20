@@ -43,6 +43,61 @@ export async function activeExpenseCategories() {
   return db.expenseCategory.findMany({ where: { active: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }], select: { id: true, name: true } });
 }
 
+/* ───────────── Categories (Settings) ───────────── */
+
+export interface ExpenseCategoryRow {
+  id: string;
+  name: string;
+  active: boolean;
+  expenseCount: number;
+}
+
+export async function listExpenseCategories(): Promise<ExpenseCategoryRow[]> {
+  const rows = await db.expenseCategory.findMany({
+    orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
+    include: { _count: { select: { expenses: { where: { deletedAt: null } } } } },
+  });
+  return rows.map((c) => ({ id: c.id, name: c.name, active: c.active, expenseCount: c._count.expenses }));
+}
+
+export const MAX_CATEGORY_NAME = 40;
+
+/**
+ * Adds a category, or renames or hides one. Categories are never deleted, since past expenses
+ * keep pointing at them: a hidden one leaves the add form but stays on old expenses and in filters.
+ */
+export async function saveExpenseCategory(input: { id: string | null; name: string; active: boolean }, actor: Actor): Promise<void> {
+  const name = input.name.replace(/\s+/g, " ").trim();
+  if (!name || name.length > MAX_CATEGORY_NAME) {
+    const message = name ? `Keep the name under ${MAX_CATEGORY_NAME} characters.` : "Enter a name.";
+    throw new BookingError("VALIDATION", message, { name: message });
+  }
+  await db.$transaction(async (tx) => {
+    const clash = await tx.expenseCategory.findFirst({ where: { name: { equals: name, mode: "insensitive" }, ...(input.id && { NOT: { id: input.id } }) } });
+    if (clash) throw new BookingError("VALIDATION", `There's already a category called “${clash.name}”.`, { name: "That name is taken." });
+    if (!input.id) {
+      const last = await tx.expenseCategory.aggregate({ _max: { sortOrder: true } });
+      const created = await tx.expenseCategory.create({ data: { name, active: true, sortOrder: (last._max.sortOrder ?? 0) + 1 } });
+      await audit(tx, { action: "expense_category.created", actorLabel: actor.label, actorId: actor.id, entityType: "ExpenseCategory", entityId: created.id, summary: `Expense category added: ${name}` });
+      return;
+    }
+    const before = await tx.expenseCategory.findUnique({ where: { id: input.id } });
+    if (!before) throw new BookingError("NOT_FOUND", "That category couldn't be found. Reload the page.");
+    if (before.active && !input.active) {
+      const stillActive = await tx.expenseCategory.count({ where: { active: true, NOT: { id: before.id } } });
+      if (!stillActive) throw new BookingError("NOT_ALLOWED", "Keep at least one category, so expenses can be added.");
+    }
+    await tx.expenseCategory.update({ where: { id: before.id }, data: { name, active: input.active } });
+    const changes = [
+      before.name !== name && `renamed from ${before.name} to ${name}`,
+      before.active !== input.active && (input.active ? "shown again" : "hidden"),
+    ].filter(Boolean);
+    if (changes.length) {
+      await audit(tx, { action: "expense_category.updated", actorLabel: actor.label, actorId: actor.id, entityType: "ExpenseCategory", entityId: before.id, summary: `Expense category ${changes.join(" and ")}` });
+    }
+  });
+}
+
 async function checked(input: ExpenseInput, nowMs: number): Promise<{ categoryName: string; note: string }> {
   const fieldErrors: Record<string, string> = {};
   if (!isValidDateKey(input.dateKey)) fieldErrors.date = "Choose a date.";

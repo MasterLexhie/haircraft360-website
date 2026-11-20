@@ -95,3 +95,80 @@ export const DEFAULT_SALON_DETAILS: SalonDetails = {
   tiktokUrl: "",
   facebookUrl: "",
 };
+
+/* ───────────────────── Owner input for templates and salon details ───────────────────── */
+
+type Parsed<T> = { ok: true; value: T } | { ok: false; fieldErrors: Record<string, string> };
+
+export const TEMPLATE_FIELDS = ["confirmationWhatsapp", "reminderWhatsapp", "balanceLinkWhatsapp", "confirmationEmailIntro", "reminderEmailIntro"] as const satisfies readonly (keyof MessageTemplates)[];
+
+/** Checks the owner's wording: not empty, not too long, no unknown {placeholders}, and the balance message keeps its {link}. */
+export function parseTemplatesInput(raw: Record<string, string>, unknown: (t: string) => string[]): Parsed<MessageTemplates> {
+  const fieldErrors: Record<string, string> = {};
+  const value = {} as MessageTemplates;
+  for (const key of TEMPLATE_FIELDS) {
+    const text = (raw[key] ?? "").replace(/\r\n/g, "\n").trim();
+    const max = key.endsWith("EmailIntro") ? 2000 : 1000;
+    const bad = unknown(text);
+    if (!text) fieldErrors[key] = "Write a message, or put back the suggested one.";
+    else if (text.length > max) fieldErrors[key] = `Keep it under ${max} characters.`;
+    else if (bad.length) fieldErrors[key] = `${bad.map((b) => `{${b}}`).join(", ")} isn't a placeholder we can fill in. Check the spelling.`;
+    else if (key === "balanceLinkWhatsapp" && !text.includes("{link}")) fieldErrors[key] = "Keep {link} in this message, so the customer can pay.";
+    value[key] = text;
+  }
+  return Object.keys(fieldErrors).length ? { ok: false, fieldErrors } : { ok: true, value };
+}
+
+const isWebAddress = (s: string) => /^https:\/\/[^\s/$.?#].[^\s]*$/i.test(s);
+
+/**
+ * The salon's own details (D4c), shown on the site, in emails and in the calendar file. Phones
+ * are typed as the owner writes them and stored in international format.
+ */
+export function parseSalonDetailsInput(raw: Record<string, string>, normalizePhone: (s: string) => string | null): Parsed<SalonDetails> {
+  const get = (k: string) => (raw[k] ?? "").trim();
+  const fieldErrors: Record<string, string> = {};
+  const limits: Record<string, number> = { name: 80, addressLine1: 120, addressLine2: 120, city: 80, state: 80, postcode: 20, email: 120, mapsUrl: 500, instagramUrl: 300, tiktokUrl: 300, facebookUrl: 300 };
+  for (const [k, max] of Object.entries(limits)) if (get(k).length > max) fieldErrors[k] = `Keep it under ${max} characters.`;
+  if (!get("name")) fieldErrors.name = "Enter the salon's name.";
+
+  const phone = (k: "phone" | "whatsapp") => {
+    const typed = get(k);
+    if (!typed) return "";
+    const e164 = normalizePhone(typed);
+    if (!e164) fieldErrors[k] = "Enter a phone number like 0803 123 4567.";
+    return e164 ?? "";
+  };
+  const phoneE164 = phone("phone");
+  const whatsappE164 = phone("whatsapp");
+
+  const email = get("email").toLowerCase();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) fieldErrors.email = "Enter an email address like hello@example.com.";
+  for (const k of ["mapsUrl", "instagramUrl", "tiktokUrl", "facebookUrl"]) {
+    if (get(k) && !isWebAddress(get(k))) fieldErrors[k] = "Paste the full address, starting with https://";
+  }
+  if (Object.keys(fieldErrors).length) return { ok: false, fieldErrors };
+  return {
+    ok: true,
+    value: {
+      name: get("name"),
+      addressLine1: get("addressLine1"),
+      addressLine2: get("addressLine2"),
+      city: get("city"),
+      state: get("state"),
+      postcode: get("postcode"),
+      phoneE164,
+      whatsappE164,
+      email,
+      mapsUrl: get("mapsUrl"),
+      instagramUrl: get("instagramUrl"),
+      tiktokUrl: get("tiktokUrl"),
+      facebookUrl: get("facebookUrl"),
+    },
+  };
+}
+
+/** One line for emails and the calendar file. */
+export function salonAddress(d: SalonDetails): string {
+  return [d.addressLine1, d.addressLine2, [d.city, d.postcode].filter(Boolean).join(" "), d.state].map((s) => s.trim()).filter(Boolean).join(", ");
+}

@@ -22,13 +22,15 @@ import {
 } from "@/server/booking-service";
 import { createBalanceLink } from "@/server/payments/links";
 import { balanceLinkWhatsapp, markWhatsappSent } from "@/server/whatsapp-messages";
-import { createExpense, softDeleteExpense, updateExpense } from "@/server/expenses";
+import { createExpense, saveExpenseCategory, softDeleteExpense, updateExpense } from "@/server/expenses";
+import { unknownPlaceholders } from "@/domain/messages";
+import { normalizePhone } from "@/domain/phone";
 import { parseNairaToKobo } from "@/lib/money";
 import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
 import { recordId } from "@/domain/schemas";
 import { z } from "zod";
 import type { PaymentMethod } from "@/domain/types";
-import { capacityByWeekdaySchema, weeklyHoursSchema, type CapacityByWeekday, type WeekdayKey, type WeeklyHours } from "@/domain/settings";
+import { capacityByWeekdaySchema, parseSalonDetailsInput, parseTemplatesInput, weeklyHoursSchema, type CapacityByWeekday, type WeekdayKey, type WeeklyHours } from "@/domain/settings";
 
 export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string; whatsappUrl?: string } | null;
 
@@ -444,6 +446,45 @@ export async function settingsAction(_: ActionState, formData: FormData): Promis
     );
     refresh();
     return { ok: true, message: "Settings saved. New bookings use these values; existing bookings are unchanged." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/* ───────────── Settings: message wording, salon details, expense categories ───────────── */
+
+function formStrings(formData: FormData): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of formData.entries()) if (typeof v === "string") out[k] = v.slice(0, 4000);
+  return out;
+}
+
+export async function templatesAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const parsed = parseTemplatesInput(formStrings(formData), unknownPlaceholders);
+  if (!parsed.ok) return { error: "Please fix the highlighted messages.", fieldErrors: parsed.fieldErrors };
+  await updateSettings({ messageTemplates: parsed.value }, actor);
+  refresh();
+  return { ok: true, message: "Messages saved. New messages use this wording." };
+}
+
+export async function salonDetailsAction(_: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const parsed = parseSalonDetailsInput(formStrings(formData), normalizePhone);
+  if (!parsed.ok) return { error: "Please fix the highlighted fields.", fieldErrors: parsed.fieldErrors };
+  await updateSettings({ salonDetails: parsed.value }, actor);
+  refresh();
+  return { ok: true, message: "Salon details saved." };
+}
+
+export async function expenseCategoryAction(categoryIdRaw: string | null, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const id = categoryIdRaw === null ? null : validId(categoryIdRaw);
+  if (categoryIdRaw !== null && !id) return INVALID;
+  try {
+    await saveExpenseCategory({ id, name: String(formData.get("name") ?? "").slice(0, 200), active: id === null || formData.get("active") === "on" }, actor);
+    refresh();
+    return { ok: true, message: id ? "Category saved." : "Category added." };
   } catch (e) {
     return fail(e);
   }

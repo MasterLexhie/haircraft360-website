@@ -751,7 +751,9 @@ export async function deleteBlock(blockId: string, actor: Actor) {
   });
 }
 
-export async function updateSettings(patch: Partial<Pick<Settings, "availability" | "deposit">>, actor: Actor) {
+const SETTINGS_PART_NAMES = { availability: "availability", deposit: "deposit", messageTemplates: "message wording", salonDetails: "salon details" } as const;
+
+export async function updateSettings(patch: Partial<Pick<Settings, "availability" | "deposit" | "messageTemplates" | "salonDetails">>, actor: Actor) {
   return db.$transaction(async (tx) => {
     const a = patch.availability;
     const d = patch.deposit;
@@ -768,9 +770,12 @@ export async function updateSettings(patch: Partial<Pick<Settings, "availability
           bookingHorizonDays: a.bookingHorizonDays,
         }),
         ...(d && { depositType: d.type, depositFixedKobo: d.fixedKobo, depositPercent: d.percent, depositScope: d.scope, depositMinimumKobo: d.minimumKobo }),
+        ...(patch.messageTemplates && { messageTemplates: patch.messageTemplates }),
+        ...(patch.salonDetails && { salonDetails: patch.salonDetails }),
       },
     });
-    await audit(tx, { action: "settings.updated", actorLabel: actor.label, actorId: actor.id, entityType: "Settings", entityId: "1", summary: `Updated ${Object.keys(patch).join(" and ")} settings` });
+    const parts = (Object.keys(patch) as (keyof typeof SETTINGS_PART_NAMES)[]).map((k) => SETTINGS_PART_NAMES[k]);
+    await audit(tx, { action: "settings.updated", actorLabel: actor.label, actorId: actor.id, entityType: "Settings", entityId: "1", summary: `Updated ${parts.join(" and ")} settings` });
   });
 }
 
