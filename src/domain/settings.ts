@@ -73,7 +73,7 @@ export const DEFAULT_CAPACITY_BY_WEEKDAY: CapacityByWeekday = { "0": 0, "1": 2, 
 
 export const DEFAULT_MESSAGE_TEMPLATES: MessageTemplates = {
   confirmationWhatsapp:
-    "Hello {name}, your {service} appointment at {salon} is confirmed for {date} at {time}. Deposit received, balance due on the day: {balance}. See you soon!",
+    "Hello {name}, your {service} appointment at {salon} is confirmed for {date} at {time}. Deposit received, balance due on the day: {balance}. View your booking: {link}",
   reminderWhatsapp: "Hello {name}, a reminder of your {service} appointment at {salon} tomorrow, {date} at {time}. Address: {address}.",
   balanceLinkWhatsapp: "Hello {name}, thank you for visiting {salon}. Your balance is {balance}. You can pay securely here: {link}",
   confirmationEmailIntro: "Thank you for booking with {salon}. Your appointment is confirmed.",

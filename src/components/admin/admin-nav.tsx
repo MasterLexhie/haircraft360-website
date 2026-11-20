@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LayoutDashboard, Settings2, UserRoundCog, Users } from "lucide-react";
+import { CalendarDays, LayoutDashboard, MessageCircle, Settings2, UserRoundCog, Users } from "lucide-react";
 import { cx } from "@/components/ui/primitives";
 
 const ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
+  { href: "/admin/reminders", label: "Reminders due", icon: MessageCircle },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings2 },
   { href: "/admin/account", label: "Account", icon: UserRoundCog },

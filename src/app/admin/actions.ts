@@ -18,6 +18,7 @@ import {
   type CompletionInput,
 } from "@/server/booking-service";
 import { createBalanceLink } from "@/server/payments/links";
+import { markWhatsappSent } from "@/server/whatsapp-messages";
 import { parseNairaToKobo } from "@/lib/money";
 import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
 import { recordId } from "@/domain/schemas";
@@ -170,6 +171,20 @@ export async function balanceLinkAction(bookingIdRaw: string): Promise<ActionSta
     const { url } = await createBalanceLink(bookingId, actor);
     refresh();
     return { ok: true, message: "Link ready. Copy it and send it to the customer.", link: url };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** The owner sent a WhatsApp confirmation or reminder: take it off Reminders due. */
+export async function whatsappSentAction(notificationIdRaw: string): Promise<ActionState> {
+  const actor = await adminActor();
+  const id = validId(notificationIdRaw);
+  if (!id) return INVALID;
+  try {
+    await markWhatsappSent(id, actor);
+    refresh();
+    return { ok: true };
   } catch (e) {
     return fail(e);
   }
