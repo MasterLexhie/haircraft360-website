@@ -4,7 +4,7 @@ import { balanceDue, paidKobo } from "@/domain/pricing";
 import { fillTemplate, type MessageVars } from "@/domain/messages";
 import { business, fullAddress } from "@/config/business";
 import { formatNaira } from "@/lib/money";
-import { formatLongDate, formatTime } from "@/lib/time";
+import { addDays, formatDateKey, formatLongDate, formatTime, lagosDateKey, lagosMinutes, lagosToUtcMs } from "@/lib/time";
 import { buildIcs, googleCalendarUrl } from "@/lib/calendar";
 import { db } from "./db";
 import { loadSettings } from "./settings";
@@ -12,7 +12,9 @@ import { toBooking } from "./mappers";
 import { bookingUrl, ensureMessageToken, siteUrl } from "./booking-access";
 import { calendarEventFor } from "./booking-calendar";
 import { EmailSendError, sendEmail, type EmailMessage } from "./email/transport";
-import { confirmationEmail, ownerAlertEmail, reminderEmail, type SalonInfo } from "./email/templates";
+import { confirmationEmail, dailySummaryEmail, ownerAlertEmail, reminderEmail, type SalonInfo } from "./email/templates";
+import { settlePayment } from "./payments/checkout";
+import { isPaystackConfigured } from "./payments/paystack";
 
 /**
  * The scheduler's sender (BUILD_SPEC 6.4). Notification rows are made with the booking
@@ -92,8 +94,8 @@ async function render(row: Row): Promise<EmailMessage> {
   if (row.type === "owner_alert" || row.type === "owner_daily_summary") {
     const to = process.env.OWNER_NOTIFICATION_EMAIL?.trim();
     if (!to) throw new EmailSendError("OWNER_NOTIFICATION_EMAIL is not set.", "permanent");
-    const payload = (row.payload ?? {}) as { message?: string; email?: { subject: string; html: string; text: string } };
-    if (row.type === "owner_daily_summary" && payload.email) return { to, ...payload.email };
+    const payload = (row.payload ?? {}) as { message?: string; dateKey?: string };
+    if (row.type === "owner_daily_summary") return { to, ...dailySummaryEmail(await dailySummaryData(payload.dateKey ?? lagosDateKey(row.dueAt), row.dueAt.getTime())) };
     return { to, ...ownerAlertEmail(salonInfo(), payload.message ?? "Something on your admin account needs a look.", `${siteUrl()}/admin`) };
   }
 
@@ -237,9 +239,108 @@ export async function recordHeartbeat(nowMs = Date.now()): Promise<void> {
   await db.settings.update({ where: { id: 1 }, data: { schedulerHeartbeat: new Date(nowMs) } });
 }
 
-/** One scheduler run: heartbeat, then sending. */
-export async function runScheduler(opts: { nowMs?: number; budgetMs?: number } = {}): Promise<SendResult> {
+/* ───────────────────────────── Owner's daily summary ───────────────────────────── */
+
+/** The summary goes out from this time of day (Lagos), with the first run after it. */
+export const SUMMARY_FROM_MINUTES = 7 * 60;
+
+/** Queues today's summary once the morning comes. One per day, however many runs. */
+export async function queueDailySummary(nowMs = Date.now()): Promise<boolean> {
+  if (lagosMinutes(nowMs) < SUMMARY_FROM_MINUTES) return false;
+  const dateKey = lagosDateKey(nowMs);
+  const dedupeKey = `summary:${dateKey}`;
+  const existing = await db.notification.findUnique({ where: { dedupeKey }, select: { id: true } });
+  if (existing) return false;
+  await db.notification.upsert({
+    where: { dedupeKey },
+    create: { dedupeKey, type: "owner_daily_summary", channel: "email", dueAt: new Date(nowMs), payload: { dateKey } },
+    update: {},
+  });
+  return true;
+}
+
+/** What the owner's summary says, read when it is sent. */
+export async function dailySummaryData(dateKey: string, nowMs = Date.now()) {
+  const from = new Date(lagosToUtcMs(dateKey, 0));
+  const to = new Date(lagosToUtcMs(addDays(dateKey, 1), 0));
+  const since = new Date(nowMs - 24 * HOUR_MS);
+  const weekAgo = new Date(nowMs - 7 * 24 * HOUR_MS);
+  const [today, fresh, needsTime, failedMessages, manualDue, failedWebhooks] = await Promise.all([
+    db.booking.findMany({ where: { startAt: { gte: from, lt: to }, status: { in: ["confirmed", "completed"] } }, include: { items: true, payments: true }, orderBy: { startAt: "asc" } }),
+    db.booking.findMany({ where: { createdAt: { gte: since }, status: { in: ["confirmed", "needs_attention"] } }, include: { items: true }, orderBy: { startAt: "asc" } }),
+    db.booking.count({ where: { status: "needs_attention" } }),
+    db.notification.count({ where: { status: "failed", updatedAt: { gte: weekAgo }, type: { in: ["confirmation", "reminder"] } } }),
+    db.notification.count({ where: { status: "pending", channel: "whatsapp_manual", dueAt: { lte: new Date(nowMs) } } }),
+    db.webhookEvent.count({ where: { status: "failed", receivedAt: { gte: weekAgo } } }),
+  ]);
+  const services = (items: { name: string; kind: string }[]) =>
+    items
+      .filter((i) => i.kind !== "extra")
+      .map((i) => i.name)
+      .join(", ");
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const attention = [
+    needsTime ? `${plural(needsTime, "booking was", "bookings were")} paid after the time was taken: choose a new time` : "",
+    manualDue ? `${plural(manualDue, "WhatsApp message is", "WhatsApp messages are")} waiting to be sent (Reminders due)` : "",
+    failedMessages ? `${plural(failedMessages, "customer", "customers")} couldn't be reached by email this week: WhatsApp them instead` : "",
+    failedWebhooks ? `${plural(failedWebhooks, "payment notice", "payment notices")} couldn't be processed: contact your developer` : "",
+  ].filter(Boolean);
+  return {
+    salon: salonInfo(),
+    dateLabel: formatDateKey(dateKey, { long: true }),
+    today: today.map((b) => ({ time: formatTime(b.startAt.toISOString()), name: b.contactName, services: services(b.items), balanceKobo: balanceDue(b, b.payments) })),
+    newBookings: fresh.map((b) => ({ when: `${formatLongDate(b.startAt.toISOString())}, ${formatTime(b.startAt.toISOString())}`, name: b.contactName, services: services(b.items) })),
+    attention,
+    adminUrl: `${siteUrl()}/admin`,
+  };
+}
+
+/* ───────────────────────────── Payments backstop ───────────────────────────── */
+
+const BACKSTOP_BATCH = 5;
+const BACKSTOP_RECHECK_MS = 6 * HOUR_MS;
+
+/**
+ * Asks Paystack about payments started 1 to 25 hours ago that are still open. If both the
+ * webhook and the customer's browser missed a payment, this records it. Each attempt is
+ * asked about at most every 6 hours, and only a few per run, to keep runs short.
+ */
+export async function checkOpenPayments(nowMs = Date.now(), deadlineMs = nowMs + 8_000): Promise<number> {
+  if (!isPaystackConfigured()) return 0;
+  const attempts = await db.paymentAttempt.findMany({
+    where: {
+      status: "initialized",
+      createdAt: { gte: new Date(nowMs - 25 * HOUR_MS), lte: new Date(nowMs - HOUR_MS) },
+      OR: [{ lastCheckedAt: null }, { lastCheckedAt: { lte: new Date(nowMs - BACKSTOP_RECHECK_MS) } }],
+    },
+    orderBy: { createdAt: "asc" },
+    take: BACKSTOP_BATCH,
+    select: { id: true, reference: true },
+  });
+  let recovered = 0;
+  for (const a of attempts) {
+    if (Date.now() > deadlineMs) break;
+    await db.paymentAttempt.update({ where: { id: a.id }, data: { lastCheckedAt: new Date(nowMs) } });
+    try {
+      if ((await settlePayment(a.reference, "Payment check")) === "paid") recovered++;
+    } catch (err) {
+      console.error(`[notifications] payment check ${a.reference} failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return recovered;
+}
+
+export interface RunResult extends SendResult {
+  /** Payments found and recorded by the backstop. */
+  paymentsRecorded: number;
+}
+
+/** One scheduler run: heartbeat, the morning summary, the payments backstop, then sending. */
+export async function runScheduler(opts: { nowMs?: number; budgetMs?: number } = {}): Promise<RunResult> {
   const nowMs = opts.nowMs ?? Date.now();
+  const deadline = Date.now() + (opts.budgetMs ?? 20_000);
   await recordHeartbeat(nowMs);
-  return sendDueNotifications({ nowMs, deadlineMs: Date.now() + (opts.budgetMs ?? 20_000) });
+  await queueDailySummary(nowMs);
+  const paymentsRecorded = await checkOpenPayments(nowMs, Math.min(deadline, Date.now() + 8_000));
+  return { ...(await sendDueNotifications({ nowMs, deadlineMs: deadline })), paymentsRecorded };
 }

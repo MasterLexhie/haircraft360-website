@@ -299,6 +299,8 @@ model PaymentAttempt {
   accessCode    String?
   status        PaymentAttemptStatus  @default(initialized)
   paymentLinkId String?
+  /// When the scheduler last asked Paystack about it (backstop for a missed webhook).
+  lastCheckedAt DateTime?             @db.Timestamptz(3)
   createdAt     DateTime              @default(now()) @db.Timestamptz(3)
   updatedAt     DateTime              @updatedAt @db.Timestamptz(3)
 

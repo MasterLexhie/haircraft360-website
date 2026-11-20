@@ -16,6 +16,7 @@ async function handle(request: Request): Promise<Response> {
   try {
     const r = await runScheduler({ budgetMs: 20_000 });
     const parts = [`ok sent=${r.sent}`, `skipped=${r.skipped}`, `retrying=${r.retrying}`, `failed=${r.failed}`];
+    if (r.paymentsRecorded) parts.push(`payments=${r.paymentsRecorded}`);
     if (r.stopped) parts.push(`stopped=${r.stopped}`);
     return new Response(parts.join(" "), { headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store" } });
   } catch (err) {

@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDatabase } from "../db";
 import { bookingInput, createServices, createSettings, slot } from "../factories";
 import type { EmailMessage } from "@/server/email/transport";
+import { lagosDateKey, lagosToUtcMs } from "@/lib/time";
+import { paid, usePaystackFake } from "../fake-paystack";
 
 const mail = vi.hoisted(() => ({
   sent: [] as { msg: EmailMessage; key: string }[],
@@ -25,7 +27,8 @@ vi.mock("next/server", () => ({ connection: async () => {} }));
 
 const { EmailSendError } = await import("@/server/email/transport");
 const { createPendingBooking, moveBooking, recordManualPayment, setBookingStatus, findBookingByToken } = await import("@/server/booking-service");
-const { runScheduler, sendDueNotifications, MAX_ATTEMPTS } = await import("@/server/notifications");
+const { runScheduler, sendDueNotifications, queueDailySummary, checkOpenPayments, MAX_ATTEMPTS } = await import("@/server/notifications");
+const { startBookingPayment } = await import("@/server/payments/checkout");
 const { POST: cronRoute } = await import("@/app/api/cron/notifications/route");
 
 const actor = { id: null, label: "Test admin" };
@@ -41,9 +44,14 @@ beforeEach(async () => {
   await resetDatabase();
   await createSettings();
   await createServices();
+  // Today's owner summary counts as sent, so these tests don't depend on the time of day.
+  await db.notification.create({ data: { dedupeKey: `summary:${lagosDateKey(Date.now())}`, type: "owner_daily_summary", channel: "email", status: "sent", dueAt: new Date() } });
 });
 
-afterEach(() => vi.unstubAllEnvs());
+afterEach(() => {
+  vi.unstubAllEnvs();
+  vi.unstubAllGlobals();
+});
 
 /** A booking confirmed by a cash deposit, which queues its confirmation and reminder. */
 async function confirmedBooking(overrides: Record<string, unknown> = {}) {
@@ -199,5 +207,62 @@ describe("cron route", () => {
     const res = await call("Bearer test-cron-secret");
     expect(res.status).toBe(200);
     expect(await res.text()).toBe("ok sent=1 skipped=0 retrying=0 failed=0");
+  });
+});
+
+describe("owner's daily summary", () => {
+  beforeEach(async () => {
+    await db.notification.deleteMany({ where: { type: "owner_daily_summary" } });
+  });
+
+  it("is queued once a day, from 7am Lagos time", async () => {
+    const today = lagosDateKey(Date.now());
+    expect(await queueDailySummary(lagosToUtcMs(today, 6 * 60 + 59))).toBe(false);
+    expect(await queueDailySummary(lagosToUtcMs(today, 7 * 60))).toBe(true);
+    expect(await queueDailySummary(lagosToUtcMs(today, 15 * 60))).toBe(false);
+    expect(await db.notification.count({ where: { type: "owner_daily_summary" } })).toBe(1);
+  });
+
+  it("lists today's appointments, new bookings and what needs the owner", async () => {
+    const b = await confirmedBooking();
+    const dayOf = lagosDateKey(b.startAt);
+    await db.notification.create({ data: { dedupeKey: `summary:${dayOf}`, type: "owner_daily_summary", channel: "email", dueAt: new Date(), payload: { dateKey: dayOf } } });
+    await db.notification.updateMany({ where: { bookingId: b.id }, data: { status: "sent" } });
+    await sendDueNotifications();
+    const summary = mail.sent.find((m) => m.msg.subject.startsWith("Today at"))!;
+    expect(summary.msg.to).toBe("owner@example.test");
+    expect(summary.msg.subject).toMatch(/1 appointment$/);
+    expect(summary.msg.text).toContain(b.contactName);
+    expect(summary.msg.text).toContain("New bookings (1)");
+  });
+});
+
+describe("payments backstop", () => {
+  beforeEach(() => usePaystackFake());
+
+  it("records a payment that both the webhook and the browser missed, once", async () => {
+    const r = await createPendingBooking(bookingInput());
+    const started = await startBookingPayment(r.reference, r.accessToken, "deposit");
+    // Started two hours ago, paid, and nobody told us.
+    await db.paymentAttempt.update({ where: { reference: started.reference }, data: { createdAt: new Date(Date.now() - 2 * HOUR) } });
+    paid(started.reference);
+    expect(await checkOpenPayments()).toBe(1);
+    expect(await checkOpenPayments()).toBe(0);
+    expect((await db.booking.findUniqueOrThrow({ where: { reference: r.reference } })).status).toBe("confirmed");
+    expect(await db.payment.count()).toBe(1);
+  });
+
+  it("leaves fresh attempts to the popup and webhook, and asks about an open one at most every 6 hours", async () => {
+    const r = await createPendingBooking(bookingInput());
+    const fresh = await startBookingPayment(r.reference, r.accessToken, "deposit");
+    expect(await checkOpenPayments()).toBe(0);
+    expect((await db.paymentAttempt.findUniqueOrThrow({ where: { reference: fresh.reference } })).lastCheckedAt).toBeNull();
+    await db.paymentAttempt.update({ where: { reference: fresh.reference }, data: { createdAt: new Date(Date.now() - 2 * HOUR) } });
+    await checkOpenPayments();
+    const checked = await db.paymentAttempt.findUniqueOrThrow({ where: { reference: fresh.reference } });
+    expect(checked.lastCheckedAt).not.toBeNull();
+    paid(fresh.reference);
+    expect(await checkOpenPayments(Date.now() + HOUR)).toBe(0);
+    expect(await checkOpenPayments(Date.now() + 7 * HOUR)).toBe(1);
   });
 });
