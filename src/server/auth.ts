@@ -204,11 +204,11 @@ function acceptedStep(totp: OTPAuth.TOTP, code: string, lastStep: number | null)
 
 const normaliseBackupCode = (code: string) => code.toUpperCase().replace(/[^A-Z0-9]/g, "");
 
-async function completeSignIn(userId: string, email: string) {
+async function completeSignIn({ id: userId, email, displayName }: { id: string; email: string; displayName: string }) {
   await db.adminUser.update({ where: { id: userId }, data: { failedLoginCount: 0, loginBlockedUntil: null, lastLoginAt: new Date() } });
   await startSession(userId, true);
   const { ip } = await requestMeta();
-  await db.auditLog.create({ data: { actorId: userId, actorLabel: email, action: "auth.signed_in", entityType: "AdminUser", entityId: userId, summary: `Signed in from ${ip}` } });
+  await db.auditLog.create({ data: { actorId: userId, actorLabel: displayName, action: "auth.signed_in", entityType: "AdminUser", entityId: userId, summary: `Signed in from ${ip}` } });
   await queueSecurityAlert("new_sign_in", email, `New sign-in to the salon admin as ${email} from ${ip}. If this wasn't you, contact your developer.`);
 }
 
@@ -238,7 +238,7 @@ export async function verifySecondFactor(codeRaw: string): Promise<void> {
     }
     await db.adminUser.update({ where: { id: user.id }, data: { backupCodeHashes: user.backupCodeHashes.filter((h) => h !== match) } });
   }
-  await completeSignIn(user.id, user.email);
+  await completeSignIn(user);
 }
 
 /* ───────────────────────────── Two-factor setup ───────────────────────────── */
@@ -289,8 +289,8 @@ export async function confirmTotpSetup(codeRaw: string): Promise<string[]> {
   await db.adminUser.update({ where: { id: user.id }, data: { totpEnabledAt: new Date(), lastTotpStep: step } });
   const codes = newBackupCodes();
   await storeBackupCodes(user.id, codes);
-  await db.auditLog.create({ data: { actorId: user.id, actorLabel: user.email, action: "auth.2fa_enabled", entityType: "AdminUser", entityId: user.id, summary: "Two-factor sign-in switched on" } });
-  await completeSignIn(user.id, user.email);
+  await db.auditLog.create({ data: { actorId: user.id, actorLabel: user.displayName, action: "auth.2fa_enabled", entityType: "AdminUser", entityId: user.id, summary: "Two-factor sign-in switched on" } });
+  await completeSignIn(user);
   return codes;
 }
 
