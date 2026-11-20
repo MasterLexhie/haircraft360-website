@@ -317,4 +317,15 @@ describe("manual payments and corrections", () => {
     await expect(recordManualPayment(booking.id, { amountKobo: -100, method: "cash", note: " ", purpose: "correction" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
     await expect(recordManualPayment(booking.id, { amountKobo: -100, method: "cash", note: "", purpose: "balance" }, actor)).rejects.toMatchObject({ code: "VALIDATION" });
   });
+
+  it("won't take off more than has been recorded, so the balance can't exceed the total", async () => {
+    const r = await createPendingBooking(bookingInput());
+    const booking = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
+    await recordManualPayment(booking.id, { amountKobo: 200_000, method: "cash", note: "", purpose: "deposit" }, actor);
+    await expect(
+      recordManualPayment(booking.id, { amountKobo: -1_000_000, method: "cash", note: "Wrong booking", purpose: "correction" }, actor),
+    ).rejects.toMatchObject({ code: "VALIDATION" });
+    await recordManualPayment(booking.id, { amountKobo: -200_000, method: "cash", note: "Wrong booking", purpose: "correction" }, actor);
+    expect((await db.payment.aggregate({ _sum: { amountKobo: true } }))._sum.amountKobo).toBe(0);
+  });
 });

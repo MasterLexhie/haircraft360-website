@@ -506,6 +506,13 @@ export async function recordManualPayment(bookingId: string, input: ManualPaymen
     if (towardsDeposit && b.status !== "pending_payment") {
       throw new BookingError("NOT_ALLOWED", "The deposit for this booking is already settled. Record it as a balance payment.");
     }
+    if (correction && input.amountKobo < 0) {
+      const recorded = await tx.payment.aggregate({ where: { bookingId, status: "success" }, _sum: { amountKobo: true } });
+      const paidSoFar = recorded._sum.amountKobo ?? 0;
+      if (paidSoFar + input.amountKobo < 0) {
+        throw new BookingError("VALIDATION", `Only ${formatNaira(paidSoFar)} is recorded on this booking, so a correction can take off at most that.`);
+      }
+    }
     await tx.payment.create({
       data: { bookingId, type: correction ? "adjustment" : "manual", method: input.method, amountKobo: input.amountKobo, recordedById: actor.id, note: input.note.trim().slice(0, 500) },
     });
