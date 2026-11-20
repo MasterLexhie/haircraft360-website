@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatPhone, isPlaceholderEmail, isValidEmail, normalizeEmail, normalizePhone, placeholderEmailFor, whatsappNumber } from "@/domain/phone";
+import { formatPhone, isPlaceholderEmail, isValidEmail, normalizeEmail, normalizePhone, placeholderDomain, placeholderEmailFor, whatsappNumber } from "@/domain/phone";
 import { validateContact } from "@/domain/validation";
 
 describe("normalizePhone", () => {
@@ -45,6 +45,14 @@ describe("formatting and helpers", () => {
     expect(email).toBe("2348031234567@noemail.haircraft360.ng");
     expect(isPlaceholderEmail(email)).toBe(true);
     expect(isPlaceholderEmail("ada@example.com")).toBe(false);
+  });
+
+  it("uses the site domain only when Paystack will accept it", () => {
+    expect(placeholderDomain("https://www.Haircraft360.ng")).toBe("www.haircraft360.ng");
+    expect(placeholderDomain("http://localhost:3360")).toBe("example.com");
+    expect(placeholderDomain("http://127.0.0.1:3000")).toBe("example.com");
+    expect(placeholderDomain(undefined)).toBe("example.com");
+    expect(isValidEmail(placeholderEmailFor("+2348031234567", placeholderDomain("http://localhost")))).toBe(true);
   });
 });
 

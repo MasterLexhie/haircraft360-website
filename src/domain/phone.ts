@@ -54,6 +54,21 @@ export function placeholderEmailFor(e164: string, domain: string): string {
   return `${whatsappNumber(e164)}@noemail.${domain}`;
 }
 
+/**
+ * The domain for generated emails: the site's own, when it is a public domain name.
+ * Paystack rejects `localhost` and bare IPs, so local and preview hosts use example.com
+ * (reserved, and it accepts no mail).
+ */
+export function placeholderDomain(siteUrl: string | undefined): string {
+  let host = "";
+  try {
+    host = new URL(siteUrl ?? "").hostname;
+  } catch {
+    host = "";
+  }
+  return /^([a-z0-9-]+\.)+[a-z]{2,}$/i.test(host) ? host.toLowerCase() : "example.com";
+}
+
 export function isPlaceholderEmail(email: string): boolean {
   return /@noemail\./.test(email);
 }

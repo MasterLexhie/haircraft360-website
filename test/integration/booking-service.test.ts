@@ -45,7 +45,7 @@ describe("createPendingBooking", () => {
     const b = await db.booking.findUniqueOrThrow({ where: { reference: r.reference } });
     expect(b.contactEmail).toBeNull();
     const email = await db.customerEmail.findFirstOrThrow({ where: { customerId: b.customerId } });
-    expect(email).toMatchObject({ isPlaceholder: true, value: "2348035559999@noemail.localhost" });
+    expect(email).toMatchObject({ isPlaceholder: true, value: "2348035559999@noemail.example.com" });
   });
 
   it("refuses a time that is already at capacity", async () => {

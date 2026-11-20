@@ -13,7 +13,7 @@ import { pgAdapter } from "../src/lib/pg-adapter";
 import { PrismaClient, type Prisma } from "../src/generated/prisma/client";
 import { addDays, lagosDateKey, lagosToUtcMs } from "../src/lib/time";
 import { hashPassword, randomToken, sha256Hex } from "../src/lib/crypto";
-import { placeholderEmailFor } from "../src/domain/phone";
+import { placeholderDomain, placeholderEmailFor } from "../src/domain/phone";
 import { depositDue, type DepositRule } from "../src/domain/deposit";
 import {
   DEFAULT_CAPACITY_BY_WEEKDAY,
@@ -54,7 +54,7 @@ const MIN = 60_000;
 const pad = (n: number, width = 3) => String(n).padStart(width, "0");
 /** Fake but well-formed Nigerian mobile number in E.164. */
 const fakePhone = (n: number) => `+234803555${pad(n, 4)}`;
-const PLACEHOLDER_DOMAIN = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost").hostname || "localhost";
+const PLACEHOLDER_DOMAIN = placeholderDomain(process.env.NEXT_PUBLIC_SITE_URL);
 
 /* ───────────────────────────── Reference data ───────────────────────────── */
 

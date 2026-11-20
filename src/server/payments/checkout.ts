@@ -1,7 +1,7 @@
 import "server-only";
 import type { PaymentMethod } from "@/domain/types";
 import { balanceDue } from "@/domain/pricing";
-import { placeholderEmailFor } from "@/domain/phone";
+import { placeholderDomain, placeholderEmailFor } from "@/domain/phone";
 import { sha256Hex } from "@/lib/crypto";
 import { db } from "../db";
 import { shortCode } from "../ids";
@@ -27,13 +27,9 @@ export interface StartedPayment {
   amountKobo: number;
 }
 
-function siteDomain(): string {
-  return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost").hostname;
-}
-
 /** Paystack needs an email: the customer's, or the generated one for phone-only customers. */
 function payerEmail(booking: { contactEmail: string | null; contactPhone: string }): string {
-  return booking.contactEmail ?? placeholderEmailFor(booking.contactPhone, siteDomain());
+  return booking.contactEmail ?? placeholderEmailFor(booking.contactPhone, placeholderDomain(process.env.NEXT_PUBLIC_SITE_URL));
 }
 
 export async function openAttempt(

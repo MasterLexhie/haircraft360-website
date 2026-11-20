@@ -61,7 +61,7 @@ describe("Paystack client", () => {
   it("sends the generated email for a phone-only customer", async () => {
     const { reference, accessToken } = await newBooking({ email: "", noEmail: true, phone: "0803 555 4444" });
     await startBookingPayment(reference, accessToken, "deposit");
-    expect(paystack.initialized[0]!.email).toBe("2348035554444@noemail.localhost");
+    expect(paystack.initialized[0]!.email).toBe("2348035554444@noemail.example.com");
   });
 
   it("opens a fresh transaction on every press", async () => {

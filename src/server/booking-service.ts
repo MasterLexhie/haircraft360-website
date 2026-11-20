@@ -4,7 +4,7 @@ import { isSlotBookable } from "@/domain/availability";
 import { describeClosurePeriod } from "@/domain/closures";
 import { depositDue } from "@/domain/deposit";
 import { addOnTerms, balanceDue, itemsDuration, itemsTotal } from "@/domain/pricing";
-import { normalizeEmail, normalizePhone, placeholderEmailFor } from "@/domain/phone";
+import { normalizeEmail, normalizePhone, placeholderDomain, placeholderEmailFor } from "@/domain/phone";
 import { validateContact } from "@/domain/validation";
 import { formatNaira } from "@/lib/money";
 import { addDays, formatDateKey, formatTime, lagosDateKey, lagosToUtcMs } from "@/lib/time";
@@ -120,8 +120,7 @@ export async function createPendingBooking(input: CreateBookingInput): Promise<C
   }
   if (Number.isNaN(Date.parse(input.startAt))) throw new BookingError("VALIDATION", "Choose an appointment time.");
   const phone = normalizePhone(input.phone)!;
-  const domain = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost").hostname;
-  const email = input.noEmail ? placeholderEmailFor(phone, domain) : normalizeEmail(input.email);
+  const email = input.noEmail ? placeholderEmailFor(phone, placeholderDomain(process.env.NEXT_PUBLIC_SITE_URL)) : normalizeEmail(input.email);
   const name = input.name.trim().replace(/\s+/g, " ");
   const addOnIds = [...new Set(input.addOnIds)];
 
