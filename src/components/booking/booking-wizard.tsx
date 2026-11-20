@@ -493,7 +493,7 @@ export function BookingWizard({
 
                 <p className="flex items-start gap-2 text-sm text-ink-2">
                   <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
-                  Your time is held for {holdMinutes} minutes while you pay the deposit. Card, bank transfer and USSD are accepted through Paystack. Questions? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
+                  Your time is held for {holdMinutes} minutes while you pay the deposit. You can pay by card, bank transfer or USSD. Questions? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
                 </p>
                 <PaymentProgress phase={payment.phase} />
               </div>
@@ -516,7 +516,7 @@ export function BookingWizard({
               </div>
               {isLast ? (
                 <Button size="lg" onClick={submit} loading={submitting || payment.busy} className="flex-1 md:flex-none">
-                  {payment.phase === "confirming" ? "Confirming payment…" : submitting || payment.busy ? "Reserving…" : <>Pay deposit <span className="tabular">{formatNaira(deposit)}</span></>}
+                  {payment.phase === "confirming" ? "Confirming payment…" : submitting || payment.busy ? "Reserving…" : "Pay deposit"}
                 </Button>
               ) : (
                 <Button size="lg" onClick={next} className="shrink-0">

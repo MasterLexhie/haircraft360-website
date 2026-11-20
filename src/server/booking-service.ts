@@ -269,7 +269,7 @@ export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: Re
   }
   if (payment.type === "balance_online" && shortBy > 0) outcome = `. ${formatNaira(shortBy)} less than asked`;
   if (overBy > 0) outcome += `. ${formatNaira(overBy)} more than asked`;
-  const fee = payment.customerFeeKobo ? `, plus ${formatNaira(payment.customerFeeKobo)} Paystack fee paid by the customer` : "";
+  const fee = payment.customerFeeKobo ? `, plus ${formatNaira(payment.customerFeeKobo)} transaction fee paid by the customer` : "";
   await audit(tx, {
     action: `payment.${payment.type}.received`,
     actorLabel: payment.actorLabel,

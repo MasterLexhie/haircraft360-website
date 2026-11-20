@@ -74,7 +74,7 @@ async function BookingView({ params, searchParams }: Props) {
       )}
       {paid === "balance" && due === 0 && <Alert tone="success" role="status" className="mb-6" title="Balance received: you're paid in full" />}
       {paid === "pending" && (booking.status === "pending_payment" || due > 0) && (
-        <Alert tone="info" role="status" className="mb-6" title="We're waiting for Paystack to confirm your payment">
+        <Alert tone="info" role="status" className="mb-6" title="We're waiting for your payment to be confirmed">
           Bank transfers can take a few minutes. Refresh this page in a little while. If money left your account, don&apos;t pay again: it will show here once it lands.
         </Alert>
       )}
@@ -158,7 +158,7 @@ async function BookingView({ params, searchParams }: Props) {
         {booking.status === "pending_payment" && <PendingRefresher />}
         <div className="mt-5">
           {booking.status === "pending_payment" && (
-            <PayButton reference={booking.reference} token={token} purpose="deposit" label={`Pay deposit ${formatNaira(booking.depositDueKobo)}`} />
+            <PayButton reference={booking.reference} token={token} purpose="deposit" label="Pay deposit" />
           )}
           {booking.status === "completed" && due > 0 && (
             <PayButton reference={booking.reference} token={token} purpose="balance" label={`Pay balance ${formatNaira(due)}`} />

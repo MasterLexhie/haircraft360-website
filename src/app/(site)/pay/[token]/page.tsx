@@ -52,7 +52,7 @@ async function PayView({ params, searchParams }: Props) {
   return (
     <div className="mx-auto max-w-xl px-4 py-10 sm:py-14">
       {paid === "pending" && !settled && (
-        <Alert tone="info" role="status" className="mb-6" title="We're waiting for Paystack to confirm your payment">
+        <Alert tone="info" role="status" className="mb-6" title="We're waiting for your payment to be confirmed">
           Bank transfers can take a few minutes. Refresh this page in a little while. If money left your account, don&apos;t pay again.
         </Alert>
       )}
@@ -90,7 +90,7 @@ async function PayView({ params, searchParams }: Props) {
         {!settled && (
           <div className="mt-5">
             <PayLinkButton token={token} label={`Pay ${formatNaira(view.dueKobo)}`} />
-            <p className="mt-3 text-xs text-ink-3">Card, bank transfer or USSD, through Paystack.</p>
+            <p className="mt-3 text-xs text-ink-3">Pay by card, bank transfer or USSD.</p>
           </div>
         )}
       </Card>

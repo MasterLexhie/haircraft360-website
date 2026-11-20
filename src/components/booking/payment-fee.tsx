@@ -19,7 +19,7 @@ export function PaymentFee({
       <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">Paying now</p>
       <dl className="mt-2 space-y-1 text-sm">
         <div className="flex justify-between gap-4">
-          <dt className="text-ink-2">Paystack payment fee</dt>
+          <dt className="text-ink-2">Transaction fee</dt>
           <dd className="tabular text-ink-2">{formatNaira(fee)}</dd>
         </div>
         <div className="flex justify-between gap-4 font-semibold">
@@ -28,8 +28,8 @@ export function PaymentFee({
         </div>
       </dl>
       <p className="mt-1 text-xs text-ink-3">
-        Paystack adds its fee at checkout and shows the exact total before you
-        pay. International cards cost a little more.
+        The exact total is shown at checkout before you pay. International
+        cards cost a little more.
       </p>
     </div>
   );

@@ -151,7 +151,7 @@ describe("settling a payment", () => {
     expect(payment).toMatchObject({ amountKobo: booking.depositDueKobo, customerFeeKobo: 3046, paystackFeeKobo: 3046 });
     expect((await db.booking.findUniqueOrThrow({ where: { id: booking.id } })).status).toBe("confirmed");
     const log = await db.auditLog.findFirstOrThrow({ where: { action: "payment.deposit.received" } });
-    expect(log.summary).toContain("Paystack fee paid by the customer");
+    expect(log.summary).toContain("transaction fee paid by the customer");
     expect(log.summary).not.toContain("more than asked");
   });
 
