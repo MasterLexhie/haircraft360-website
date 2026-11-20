@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ChevronLeft, ChevronRight, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { getAdminData, joinBooking } from "@/server/queries";
 import { balanceDue, paidKobo, paymentSummaryState } from "@/domain/pricing";
@@ -11,6 +11,8 @@ import { formatPhone } from "@/domain/phone";
 import { formatNaira } from "@/lib/money";
 import { formatDate, formatTime, lagosDateKey } from "@/lib/time";
 import { BookingStatusBadge, PageHeader, PaymentStateBadge, VisitBadge } from "@/components/admin/bits";
+import { Pagination } from "@/components/admin/pagination";
+import { pageHref, paginate } from "@/domain/paginate";
 import { EmptyState, Skeleton, buttonClass, cx, inputClass } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Bookings" };
@@ -56,16 +58,9 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
   // Only completed appointments owe a balance; confirmed ones pay theirs on the day.
   const totalBalance = rows.filter((r) => r.booking.status === "completed").reduce((s, r) => s + balanceDue(r.booking, r.payments), 0);
 
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const page = Math.min(Math.max(1, Number.parseInt(_page ?? "1", 10) || 1), pageCount);
-  const firstIndex = (page - 1) * PAGE_SIZE;
-  const pageRows = rows.slice(firstIndex, firstIndex + PAGE_SIZE);
-  const hrefFor = (n: number) => {
-    const params = new URLSearchParams(Object.entries(filters).filter((e): e is [string, string] => !!e[1]));
-    if (n > 1) params.set("page", String(n));
-    const qs = params.toString();
-    return qs ? `/admin/bookings?${qs}` : "/admin/bookings";
-  };
+  const paged = paginate(rows, _page, PAGE_SIZE);
+  const pageRows = paged.items;
+  const hrefFor = (n: number) => pageHref("/admin/bookings", filters, n);
 
   return (
     <>
@@ -188,75 +183,12 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
             })}
           </ul>
 
-          <Pagination page={page} pageCount={pageCount} first={firstIndex + 1} last={firstIndex + pageRows.length} total={rows.length} hrefFor={hrefFor} />
+          <Pagination label="Bookings pages" {...paged} hrefFor={hrefFor} />
 
           <TotalsBar count={rows.length} paidKobo={totalPaid} balanceKobo={totalBalance} />
         </>
       )}
     </>
-  );
-}
-
-function Pagination({
-  page,
-  pageCount,
-  first,
-  last,
-  total,
-  hrefFor,
-}: {
-  page: number;
-  pageCount: number;
-  first: number;
-  last: number;
-  total: number;
-  hrefFor: (n: number) => string;
-}) {
-  const pages = Array.from({ length: pageCount }, (_, i) => i + 1).filter(
-    (n) => n === 1 || n === pageCount || Math.abs(n - page) <= 1,
-  );
-  const item = "inline-flex min-h-10 min-w-10 items-center justify-center rounded-[var(--radius-control)] px-2 text-sm font-semibold tabular";
-  return (
-    <nav aria-label="Bookings pages" className="mt-4 flex flex-col items-center justify-between gap-3 sm:flex-row">
-      <p className="text-sm text-ink-2 tabular">
-        Showing {first}–{last} of {total}
-      </p>
-      {pageCount > 1 && (
-        <ul className="flex flex-wrap items-center gap-1">
-          <li>
-            {page > 1 ? (
-              <Link href={hrefFor(page - 1)} className={cx(item, "text-ink-2 hover:bg-surface")} aria-label="Previous page">
-                <ChevronLeft aria-hidden className="size-4" />
-              </Link>
-            ) : (
-              <span className={cx(item, "text-ink-3/50")} aria-hidden><ChevronLeft className="size-4" /></span>
-            )}
-          </li>
-          {pages.map((n, i) => (
-            <li key={n} className="flex items-center gap-1">
-              {i > 0 && n - pages[i - 1] > 1 && <span className="px-1 text-ink-3" aria-hidden>…</span>}
-              <Link
-                href={hrefFor(n)}
-                aria-current={n === page ? "page" : undefined}
-                aria-label={`Page ${n}`}
-                className={cx(item, n === page ? "bg-accent text-on-accent" : "text-ink-2 hover:bg-surface")}
-              >
-                {n}
-              </Link>
-            </li>
-          ))}
-          <li>
-            {page < pageCount ? (
-              <Link href={hrefFor(page + 1)} className={cx(item, "text-ink-2 hover:bg-surface")} aria-label="Next page">
-                <ChevronRight aria-hidden className="size-4" />
-              </Link>
-            ) : (
-              <span className={cx(item, "text-ink-3/50")} aria-hidden><ChevronRight className="size-4" /></span>
-            )}
-          </li>
-        </ul>
-      )}
-    </nav>
   );
 }
 

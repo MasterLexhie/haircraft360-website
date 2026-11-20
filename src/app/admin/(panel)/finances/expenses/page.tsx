@@ -12,11 +12,15 @@ import { formatDateKey, lagosDateKey } from "@/lib/time";
 import { PageHeader, Panel } from "@/components/admin/bits";
 import { PeriodPicker } from "@/components/admin/period-picker";
 import { ExpenseForm } from "@/components/admin/expense-forms";
+import { Pagination } from "@/components/admin/pagination";
+import { pageHref, paginate } from "@/domain/paginate";
 import { EmptyState, Skeleton, cx, inputClass } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Expenses" };
 
-type Search = { period?: string; from?: string; to?: string; category?: string };
+type Search = { period?: string; from?: string; to?: string; category?: string; page?: string };
+
+const EXPENSES_PER_PAGE = 20;
 
 export default function ExpensesPage({ searchParams }: { searchParams: Promise<Search> }) {
   return (
@@ -34,6 +38,8 @@ async function Expenses({ searchParams }: { searchParams: Promise<Search> }) {
   const categories = await activeExpenseCategories();
   const categoryId = categories.some((c) => c.id === params.category) ? params.category : undefined;
   const { rows, totalKobo } = await listExpenses({ fromKey: period.fromKey, toKey: period.toKey, categoryId });
+  const paged = paginate(rows, params.page, EXPENSES_PER_PAGE);
+  const hrefFor = (n: number) => pageHref("/admin/finances/expenses", { period: params.period, from: params.from, to: params.to, category: categoryId }, n);
 
   return (
     <>
@@ -71,7 +77,7 @@ async function Expenses({ searchParams }: { searchParams: Promise<Search> }) {
         <EmptyState icon={<Receipt aria-hidden className="size-6" />} title="No expenses in this period" />
       ) : (
         <ul className="divide-y divide-line rounded-[var(--radius)] border border-line bg-surface">
-          {rows.map((e) => (
+          {paged.items.map((e) => (
             <li key={e.id}>
               <Link href={`/admin/finances/expenses/${e.id}`} className="flex items-start justify-between gap-4 p-4 hover:bg-sand/40">
                 <span className="min-w-0">
@@ -88,6 +94,7 @@ async function Expenses({ searchParams }: { searchParams: Promise<Search> }) {
           ))}
         </ul>
       )}
+      {rows.length > 0 && <Pagination label="Expenses pages" noun="expenses" {...paged} hrefFor={hrefFor} />}
     </>
   );
 }

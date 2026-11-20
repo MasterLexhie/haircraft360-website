@@ -10,11 +10,15 @@ import { formatNaira } from "@/lib/money";
 import { formatDateKey, lagosDateKey } from "@/lib/time";
 import { PageHeader } from "@/components/admin/bits";
 import { PeriodPicker } from "@/components/admin/period-picker";
+import { Pagination } from "@/components/admin/pagination";
+import { pageHref, paginate } from "@/domain/paginate";
 import { Skeleton, buttonClass, cx } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Finances" };
 
-type Search = { period?: string; from?: string; to?: string };
+type Search = { period?: string; from?: string; to?: string; page?: string };
+
+const DAYS_PER_PAGE = 10;
 
 export default function FinancesPage({ searchParams }: { searchParams: Promise<Search> }) {
   return (
@@ -29,6 +33,8 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
   const [params, nowMs] = await Promise.all([searchParams, requestNow()]);
   const period = resolvePeriod(lagosDateKey(nowMs), params);
   const t = await dailyTotals(period.fromKey, period.toKey);
+  const paged = paginate(t.days, params.page, DAYS_PER_PAGE);
+  const hrefFor = (n: number) => pageHref("/admin/finances", { period: params.period, from: params.from, to: params.to }, n);
 
   return (
     <>
@@ -64,7 +70,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
-            {t.days.map((d) => {
+            {paged.items.map((d) => {
               const quiet = d.revenueKobo === 0 && d.expensesKobo === 0;
               return (
                 <tr key={d.dateKey} className={cx("hover:bg-sand/40", quiet && "text-ink-3")}>
@@ -82,7 +88,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
           </tbody>
           <tfoot className="border-t-2 border-line-strong bg-sand/40 font-semibold">
             <tr>
-              <th scope="row" className="px-4 py-3">Total</th>
+              <th scope="row" className="px-4 py-3">Total for the period</th>
               <td className="px-4 py-3 text-right tabular">{formatNaira(t.revenueKobo)}</td>
               <td className="px-4 py-3 text-right tabular">{formatNaira(t.expensesKobo)}</td>
               <td className={cx("px-4 py-3 text-right tabular", t.netKobo < 0 && "text-danger")}>{formatNaira(t.netKobo)}</td>
@@ -93,7 +99,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
 
       {/* Phone list */}
       <ul className="divide-y divide-line rounded-[var(--radius)] border border-line bg-surface md:hidden">
-        {t.days.map((d) => (
+        {paged.items.map((d) => (
           <li key={d.dateKey}>
             <Link href={`/admin/finances/day/${d.dateKey}`} className={cx("flex items-center gap-3 px-4 py-3", d.revenueKobo === 0 && d.expensesKobo === 0 && "text-ink-3")}>
               <span className="min-w-0 flex-1">
@@ -108,11 +114,13 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
           </li>
         ))}
         <li className="flex items-center gap-3 bg-sand/40 px-4 py-3 font-semibold">
-          <span className="flex-1">Total</span>
+          <span className="flex-1">Total for the period</span>
           <span className={cx("tabular", t.netKobo < 0 && "text-danger")}>{formatNaira(t.netKobo)}</span>
           <span className="size-4" />
         </li>
       </ul>
+
+      <Pagination label="Finance days pages" noun="days" {...paged} hrefFor={hrefFor} />
     </>
   );
 }
