@@ -22,6 +22,7 @@ export function PaymentHistory({ payments, showReference = true }: { payments: P
                 {showReference && p.paystackReference && <> · <span className="break-all">{p.paystackReference}</span></>}
                 {p.recordedByName && <> · recorded by {p.recordedByName}</>}
               </p>
+              {p.customerFeeKobo > 0 && <p className="text-xs text-ink-3">Plus {formatNaira(p.customerFeeKobo)} Paystack fee, charged {formatNaira(p.amountKobo + p.customerFeeKobo)} in all</p>}
               {p.note && <p className="text-xs text-ink-3">{p.note}</p>}
             </div>
             <div className="flex items-center gap-3">

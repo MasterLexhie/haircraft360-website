@@ -72,6 +72,7 @@ export function toPayment(row: P.Payment & { recordedBy?: { displayName: string 
     type: row.type,
     method: row.method,
     amountKobo: row.amountKobo,
+    customerFeeKobo: row.customerFeeKobo,
     status: row.status,
     paystackReference: row.paystackReference,
     recordedByName: row.recordedBy?.displayName ?? null,

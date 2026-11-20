@@ -4,6 +4,7 @@ import { getBookingConfig } from "@/server/queries";
 import { BookingWizard } from "@/components/booking/booking-wizard";
 import { Skeleton } from "@/components/ui/primitives";
 import { business } from "@/config/business";
+import { customerPaysFees } from "@/server/payments/paystack";
 
 export const metadata: Metadata = { title: "Book an appointment" };
 
@@ -28,7 +29,7 @@ async function Wizard({ searchParams }: { searchParams: Promise<{ service?: stri
       </div>
     );
   }
-  return <BookingWizard services={services} settings={{ availability: settings.availability, deposit: settings.deposit }} initialServiceId={params.service ?? null} />;
+  return <BookingWizard services={services} settings={{ availability: settings.availability, deposit: settings.deposit }} initialServiceId={params.service ?? null} customerPaysFees={customerPaysFees()} />;
 }
 
 function WizardSkeleton() {

@@ -120,6 +120,13 @@ export async function settlePayment(reference: string, actorLabel: string): Prom
   if (tx.currency !== "NGN" || tx.reference !== reference) {
     throw new PaystackError(`Verify returned ${tx.currency} for ${tx.reference}; expected NGN for ${reference}.`);
   }
+  if (tx.requestedKobo !== attempt.amountKobo) {
+    throw new PaystackError(`Verify says ${reference} asked for ${tx.requestedKobo} kobo; we asked for ${attempt.amountKobo}.`);
+  }
+  // With "pass fees to customers" on, Paystack charges the customer our amount plus its fee.
+  // The fee is Paystack's money, not the salon's, so it never counts toward the booking.
+  const customerFeeKobo = Math.max(tx.amountKobo - tx.requestedKobo, 0);
+  const creditedKobo = tx.amountKobo - customerFeeKobo;
 
   return db.$transaction(async (t): Promise<SettleOutcome> => {
     // Takes the attempt row; a second caller waits here and then finds it already settled.
@@ -128,7 +135,9 @@ export async function settlePayment(reference: string, actorLabel: string): Prom
     await recordOnlinePayment(t, attempt.bookingId, {
       type: attempt.purpose,
       method: methodFor(tx.channel),
-      amountKobo: tx.amountKobo,
+      amountKobo: creditedKobo,
+      customerFeeKobo,
+      paystackFeeKobo: tx.feesKobo,
       expectedKobo: attempt.amountKobo,
       paystackReference: reference,
       actorLabel,

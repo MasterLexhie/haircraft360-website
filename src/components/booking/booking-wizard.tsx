@@ -17,6 +17,7 @@ import { BookingSummaryPanel, MoneyRows, describeDepositRule, type SummaryLine }
 import { DateTimeStep } from "./date-time-step";
 import { PaymentProgress } from "./payment-progress";
 import { usePaystackPayment, type StartedPayment } from "./use-paystack-payment";
+import { PaymentFee } from "./payment-fee";
 
 const STEPS = ["Service", "Extras", "Date & time", "Your details", "Review"] as const;
 const SERVICE = 0;
@@ -56,10 +57,13 @@ export function BookingWizard({
   services,
   settings,
   initialServiceId,
+  customerPaysFees,
 }: {
   services: Service[];
   settings: Pick<Settings, "availability" | "deposit">;
   initialServiceId: string | null;
+  /** Paystack adds its fee to the charge, so the review step shows it. */
+  customerPaysFees: boolean;
 }) {
   const router = useRouter();
   const mains = useMemo(() => services.filter((s) => s.bookableAlone), [services]);
@@ -476,6 +480,7 @@ export function BookingWizard({
                   <h2 id="pay-title" className="font-semibold">Payment</h2>
                   <div className="mt-3">
                     <MoneyRows totalKobo={totalKobo} depositKobo={deposit} />
+                    <PaymentFee amountKobo={deposit} show={customerPaysFees} />
                   </div>
                   <p className="mt-3 text-xs text-ink-3">
                     Deposit: {describeDepositRule(settings.deposit)}. The deposit secures your time and is not refundable. Anything added on the day is included in the balance.

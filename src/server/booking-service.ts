@@ -206,7 +206,12 @@ export async function createPendingBooking(input: CreateBookingInput): Promise<C
 export interface ReceivedPayment {
   type: "deposit" | "balance_online";
   method: PaymentMethod;
+  /** What counts toward the booking: the charge less any fee the customer paid on top. */
   amountKobo: Kobo;
+  /** Paystack's fee added to the customer's charge (dashboard "pass fees to customers"). */
+  customerFeeKobo?: Kobo;
+  /** Paystack's whole fee for the charge, for the finance records. */
+  paystackFeeKobo?: Kobo | null;
   paystackReference: string;
   actorLabel: string;
   /** What we asked Paystack to charge. A deposit that arrives short is recorded but doesn't confirm. */
@@ -231,7 +236,15 @@ export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: Re
   await lockSalonDay(tx, lagosDateKey(booking.startAt));
   const nowMs = Date.now();
   await tx.payment.create({
-    data: { bookingId, type: payment.type, method: payment.method, amountKobo: payment.amountKobo, paystackReference: payment.paystackReference },
+    data: {
+      bookingId,
+      type: payment.type,
+      method: payment.method,
+      amountKobo: payment.amountKobo,
+      customerFeeKobo: payment.customerFeeKobo ?? 0,
+      paystackFeeKobo: payment.paystackFeeKobo ?? null,
+      paystackReference: payment.paystackReference,
+    },
   });
 
   const expected = payment.expectedKobo ?? payment.amountKobo;
@@ -256,6 +269,7 @@ export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: Re
   }
   if (payment.type === "balance_online" && shortBy > 0) outcome = `. ${formatNaira(shortBy)} less than asked`;
   if (overBy > 0) outcome += `. ${formatNaira(overBy)} more than asked`;
+  const fee = payment.customerFeeKobo ? `, plus ${formatNaira(payment.customerFeeKobo)} Paystack fee paid by the customer` : "";
   await audit(tx, {
     action: `payment.${payment.type}.received`,
     actorLabel: payment.actorLabel,
@@ -263,7 +277,7 @@ export async function recordOnlinePayment(tx: Tx, bookingId: string, payment: Re
     entityId: bookingId,
     bookingId,
     customerId: booking.customerId,
-    summary: `${payment.type === "deposit" ? "Deposit" : "Balance"} of ${formatNaira(payment.amountKobo)} received (${payment.paystackReference})${outcome}`,
+    summary: `${payment.type === "deposit" ? "Deposit" : "Balance"} of ${formatNaira(payment.amountKobo)} received${fee} (${payment.paystackReference})${outcome}`,
   });
   return { duplicate: false, status };
 }

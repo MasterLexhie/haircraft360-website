@@ -8,6 +8,8 @@ import { business, fullAddress } from "@/config/business";
 import { formatNaira } from "@/lib/money";
 import { formatDuration, formatLongDate, formatTime } from "@/lib/time";
 import { PaymentHistory } from "@/components/booking/payment-history";
+import { PaymentFee } from "@/components/booking/payment-fee";
+import { customerPaysFees } from "@/server/payments/paystack";
 import { Alert, Badge, ButtonLink, Card, Skeleton } from "@/components/ui/primitives";
 import { PayButton } from "../pay-button";
 
@@ -149,6 +151,8 @@ async function BookingView({ params, searchParams }: Props) {
             )}
           </div>
         </dl>
+        {booking.status === "pending_payment" && <PaymentFee amountKobo={booking.depositDueKobo} show={customerPaysFees()} />}
+        {booking.status === "completed" && due > 0 && <PaymentFee amountKobo={due} show={customerPaysFees()} />}
 
         <div className="mt-5">
           {booking.status === "pending_payment" && (

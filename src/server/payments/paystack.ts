@@ -27,6 +27,11 @@ function secretKey(): string {
   return key;
 }
 
+/** Mirrors the dashboard's "pass fees to customers", so pages can say a fee is added. */
+export function customerPaysFees(): boolean {
+  return process.env.PAYSTACK_CUSTOMER_PAYS_FEES === "true";
+}
+
 /** True when the secret key is set, so online payment can be offered. */
 export function isPaystackConfigured(): boolean {
   return Boolean(process.env.PAYSTACK_SECRET_KEY);
@@ -80,7 +85,12 @@ export interface VerifiedTransaction {
   reference: string;
   /** Paystack's word for it: success, failed, abandoned, ongoing, pending, reversed, ... */
   status: string;
+  /** What the customer was charged, including Paystack's fee when it is passed to them. */
   amountKobo: number;
+  /** What we asked for at initialize. Equals `amountKobo` unless Paystack added its fee on top. */
+  requestedKobo: number;
+  /** Paystack's whole fee for the charge, whoever bears it. Null until the charge succeeds. */
+  feesKobo: number | null;
   currency: string;
   channel: string;
   paidAt: string | null;
@@ -88,10 +98,26 @@ export interface VerifiedTransaction {
 
 /** The only source of truth for whether money arrived. */
 export async function verifyTransaction(reference: string): Promise<VerifiedTransaction> {
-  const data = await call<{ reference: string; status: string; amount: number; currency: string; channel: string; paid_at: string | null }>(
-    `/transaction/verify/${encodeURIComponent(reference)}`,
-  );
-  return { reference: data.reference, status: data.status, amountKobo: data.amount, currency: data.currency, channel: data.channel, paidAt: data.paid_at };
+  const data = await call<{
+    reference: string;
+    status: string;
+    amount: number;
+    requested_amount?: number | null;
+    fees?: number | null;
+    currency: string;
+    channel: string;
+    paid_at: string | null;
+  }>(`/transaction/verify/${encodeURIComponent(reference)}`);
+  return {
+    reference: data.reference,
+    status: data.status,
+    amountKobo: data.amount,
+    requestedKobo: data.requested_amount ?? data.amount,
+    feesKobo: data.fees ?? null,
+    currency: data.currency,
+    channel: data.channel,
+    paidAt: data.paid_at,
+  };
 }
 
 /** Checks `x-paystack-signature`: HMAC SHA-512 of the raw body, keyed with the secret key. */

@@ -76,7 +76,10 @@ export interface Payment {
   bookingId: string;
   type: PaymentType;
   method: PaymentMethod;
+  /** Counts toward the booking. */
   amountKobo: Kobo;
+  /** Paystack's fee the customer paid on top; not the salon's money. */
+  customerFeeKobo: Kobo;
   status: PaymentStatus;
   paystackReference: string | null;
   recordedByName: string | null;

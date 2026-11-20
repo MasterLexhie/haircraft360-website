@@ -142,6 +142,35 @@ describe("settling a payment", () => {
     expect(log.summary).toContain("less than the deposit asked");
   });
 
+  it("never counts Paystack's fee toward the booking when the customer pays it", async () => {
+    const { reference, accessToken, booking } = await newBooking();
+    const { reference: ref } = await startBookingPayment(reference, accessToken, "deposit");
+    paid(ref, { customerFee: 3046 });
+    expect(await settlePayment(ref, "Paystack")).toBe("paid");
+    const payment = await db.payment.findFirstOrThrow();
+    expect(payment).toMatchObject({ amountKobo: booking.depositDueKobo, customerFeeKobo: 3046, paystackFeeKobo: 3046 });
+    expect((await db.booking.findUniqueOrThrow({ where: { id: booking.id } })).status).toBe("confirmed");
+    const log = await db.auditLog.findFirstOrThrow({ where: { action: "payment.deposit.received" } });
+    expect(log.summary).toContain("Paystack fee paid by the customer");
+    expect(log.summary).not.toContain("more than asked");
+  });
+
+  it("records Paystack's fee without touching the amount when the salon bears it", async () => {
+    const { reference, accessToken, booking } = await newBooking();
+    const { reference: ref } = await startBookingPayment(reference, accessToken, "deposit");
+    paid(ref, { fees: 3000 });
+    await settlePayment(ref, "Paystack");
+    expect(await db.payment.findFirstOrThrow()).toMatchObject({ amountKobo: booking.depositDueKobo, customerFeeKobo: 0, paystackFeeKobo: 3000 });
+  });
+
+  it("refuses a charge Paystack says was for a different amount than we asked", async () => {
+    const { reference, accessToken, booking } = await newBooking();
+    const { reference: ref } = await startBookingPayment(reference, accessToken, "deposit");
+    paid(ref, { requested: booking.depositDueKobo - 1, amount: booking.depositDueKobo - 1 });
+    await expect(settlePayment(ref, "Paystack")).rejects.toThrow(/asked for/);
+    expect(await db.payment.count()).toBe(0);
+  });
+
   it("refuses a charge in another currency", async () => {
     const { reference, accessToken } = await newBooking();
     const { reference: ref } = await startBookingPayment(reference, accessToken, "deposit");

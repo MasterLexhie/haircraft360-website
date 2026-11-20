@@ -8,6 +8,8 @@ import { formatNaira } from "@/lib/money";
 import { formatLongDate, formatTime } from "@/lib/time";
 import { Alert, ButtonLink, Card, Skeleton } from "@/components/ui/primitives";
 import { PayLinkButton } from "./pay-link-button";
+import { PaymentFee } from "@/components/booking/payment-fee";
+import { customerPaysFees } from "@/server/payments/paystack";
 
 export const metadata: Metadata = { title: "Pay your balance", robots: { index: false, follow: false } };
 
@@ -73,6 +75,7 @@ async function PayView({ params, searchParams }: Props) {
           <div className="flex justify-between"><dt className="text-ink-2">Paid so far</dt><dd className="tabular">{formatNaira(view.paidKobo)}</dd></div>
           <div className="flex justify-between border-t border-line pt-2 text-base font-semibold"><dt>Balance</dt><dd className="tabular">{formatNaira(view.dueKobo)}</dd></div>
         </dl>
+        {!settled && <PaymentFee amountKobo={view.dueKobo} show={customerPaysFees()} />}
         {!settled && (
           <div className="mt-5">
             <PayLinkButton token={token} label={`Pay ${formatNaira(view.dueKobo)}`} />

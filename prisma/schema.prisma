@@ -267,7 +267,12 @@ model Payment {
   bookingId         String
   type              PaymentType
   method            PaymentMethod
+  /// What counts toward the booking. Never includes a fee the customer paid on top.
   amountKobo        Int
+  /// Paystack's fee when it was added to the customer's charge ("pass fees to customers"). Not ours.
+  customerFeeKobo   Int           @default(0)
+  /// Paystack's whole fee for the charge, as Verify reports it, whoever bore it. Null for manual entries.
+  paystackFeeKobo   Int?
   status            PaymentStatus @default(success)
   /// Unique when present, so a replayed webhook can never record the same charge twice.
   paystackReference String?       @unique
