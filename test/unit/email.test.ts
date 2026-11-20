@@ -89,7 +89,7 @@ describe("email transport", () => {
 
 const data: BookingEmailData = {
   salon: { name: "Haircraft360", address: "N5, 64B Basorun Road, Ibadan", mapsUrl: "https://maps.example/x", phoneDisplay: "0805 845 5564" },
-  intro: "thank you for booking with Haircraft360.",
+  intro: "Thank you for booking with Haircraft360.",
   customerName: "<script>alert(1)</script> Ada",
   reference: "HC-ABCDE",
   startAt: "2026-11-21T09:00:00.000Z",

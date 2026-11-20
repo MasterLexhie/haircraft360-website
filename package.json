@@ -18,6 +18,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
+    "cron": "tsx --env-file=.env.local scripts/cron.ts",
     "admin": "tsx scripts/admin-user.ts"
   },
   "dependencies": {

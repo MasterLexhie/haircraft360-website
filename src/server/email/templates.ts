@@ -78,7 +78,8 @@ function bookingBody(d: BookingEmailData, heading: string): { html: string; text
   const items = itemLines(d.items);
   const html = `
 <h1 style="margin:0 0 8px;font-size:22px;line-height:1.3;color:${C.ink};">${escapeHtml(heading)}</h1>
-<p style="margin:0 0 18px;color:${C.ink2};">Hello ${escapeHtml(d.customerName)}, ${escapeHtml(d.intro)}</p>
+<p style="margin:0 0 6px;color:${C.ink2};">Hello ${escapeHtml(d.customerName)},</p>
+<p style="margin:0 0 18px;color:${C.ink2};">${escapeHtml(d.intro)}</p>
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.soft};border-radius:8px;"><tr><td style="padding:14px 16px;">
 <div style="font-size:12px;letter-spacing:1px;text-transform:uppercase;color:${C.ink3};">Booking ${escapeHtml(d.reference)}</div>
 <div style="font-size:17px;font-weight:600;margin-top:4px;">${escapeHtml(when)}</div>
@@ -97,7 +98,9 @@ ${row("Balance due at the salon", formatNaira(d.balanceKobo), true)}
   const text = [
     heading,
     "",
-    `Hello ${d.customerName}, ${d.intro}`,
+    `Hello ${d.customerName},`,
+    "",
+    d.intro,
     "",
     `Booking ${d.reference}`,
     when,

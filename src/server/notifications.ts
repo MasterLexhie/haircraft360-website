@@ -1,0 +1,245 @@
+import "server-only";
+import type { Prisma } from "@/generated/prisma/client";
+import { balanceDue, paidKobo } from "@/domain/pricing";
+import { fillTemplate, type MessageVars } from "@/domain/messages";
+import { business, fullAddress } from "@/config/business";
+import { formatNaira } from "@/lib/money";
+import { formatLongDate, formatTime } from "@/lib/time";
+import { buildIcs, googleCalendarUrl } from "@/lib/calendar";
+import { db } from "./db";
+import { loadSettings } from "./settings";
+import { toBooking } from "./mappers";
+import { bookingUrl, ensureMessageToken, siteUrl } from "./booking-access";
+import { calendarEventFor } from "./booking-calendar";
+import { EmailSendError, sendEmail, type EmailMessage } from "./email/transport";
+import { confirmationEmail, ownerAlertEmail, reminderEmail, type SalonInfo } from "./email/templates";
+
+/**
+ * The scheduler's sender (BUILD_SPEC 6.4). Notification rows are made with the booking
+ * change that causes them; this sends the due ones, a small batch per run.
+ *
+ * - A row is claimed before sending (nextAttemptAt pushed ahead), so two runs at once
+ *   never send the same row.
+ * - Marked `sent` only after the provider accepts it, with the provider's message ID.
+ * - Failures retry after 1, 3 and 9 hours, then the row is `failed`.
+ * - The provider's daily limit stops the batch without using up an attempt.
+ * - Before sending, the booking is checked again: cancelled, moved or past means `skipped`.
+ */
+
+const HOUR_MS = 3_600_000;
+const BATCH = 10;
+const CLAIM_MS = 10 * 60_000;
+/** Waits after the 1st, 2nd and 3rd failure; the 4th failure is final. */
+export const RETRY_AFTER_MS = [1 * HOUR_MS, 3 * HOUR_MS, 9 * HOUR_MS] as const;
+export const MAX_ATTEMPTS = RETRY_AFTER_MS.length + 1;
+/** A reminder this close to the confirmation adds nothing: the confirmation covers it. */
+const REMINDER_MIN_GAP_MS = 12 * HOUR_MS;
+
+export interface SendResult {
+  sent: number;
+  skipped: number;
+  retrying: number;
+  failed: number;
+  /** Why the batch stopped early, if it did. */
+  stopped?: "daily_limit" | "rate_limited" | "time";
+}
+
+type Row = Prisma.NotificationGetPayload<{ include: { booking: { include: { items: true; payments: true } } } }>;
+
+export function salonInfo(): SalonInfo {
+  return { name: business.brandName, address: fullAddress, mapsUrl: business.mapsUrl, phoneDisplay: business.phone.value.display };
+}
+
+function dueNow(now: Date): Prisma.NotificationWhereInput {
+  return { status: "pending", dueAt: { lte: now }, OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }] };
+}
+
+/** Why a row shouldn't be sent any more, or null to send it. Booking rows are re-checked here. */
+async function skipReason(row: Row, nowMs: number): Promise<string | null> {
+  if (row.type !== "confirmation" && row.type !== "reminder") return null;
+  const b = row.booking;
+  if (!b) return "The booking no longer exists";
+  if (b.status !== "confirmed") return `The booking is ${b.status.replace(/_/g, " ")}`;
+  if (b.startAt.getTime() <= nowMs) return "The appointment time has passed";
+  if (row.type === "reminder") {
+    const confirmation = await db.notification.findUnique({ where: { dedupeKey: `confirmation:${b.id}` }, select: { createdAt: true } });
+    if (confirmation && row.dueAt.getTime() - confirmation.createdAt.getTime() < REMINDER_MIN_GAP_MS) {
+      return "Booked less than a day ahead, so the confirmation covers it";
+    }
+  }
+  return null;
+}
+
+/** Placeholder values for the owner's templates, for one booking. */
+export function messageVarsFor(b: Row["booking"] & {}, link: string): MessageVars {
+  const booking = toBooking(b);
+  const main = booking.items.find((i) => i.kind === "main") ?? booking.items[0];
+  return {
+    name: b.contactName,
+    service: main?.name ?? "appointment",
+    date: formatLongDate(booking.startAt),
+    time: formatTime(booking.startAt),
+    total: formatNaira(b.totalKobo),
+    deposit: formatNaira(b.depositDueKobo),
+    balance: formatNaira(balanceDue(b, b.payments)),
+    link,
+    salon: business.brandName,
+    address: fullAddress,
+  };
+}
+
+async function render(row: Row): Promise<EmailMessage> {
+  if (row.type === "owner_alert" || row.type === "owner_daily_summary") {
+    const to = process.env.OWNER_NOTIFICATION_EMAIL?.trim();
+    if (!to) throw new EmailSendError("OWNER_NOTIFICATION_EMAIL is not set.", "permanent");
+    const payload = (row.payload ?? {}) as { message?: string; email?: { subject: string; html: string; text: string } };
+    if (row.type === "owner_daily_summary" && payload.email) return { to, ...payload.email };
+    return { to, ...ownerAlertEmail(salonInfo(), payload.message ?? "Something on your admin account needs a look.", `${siteUrl()}/admin`) };
+  }
+
+  const b = row.booking!;
+  if (!b.contactEmail) throw new EmailSendError("This customer has no email address.", "permanent");
+  const booking = toBooking(b);
+  const token = await ensureMessageToken(b);
+  const link = bookingUrl(b.reference, token);
+  const due = balanceDue(b, b.payments);
+  const event = calendarEventFor(booking, { url: link, balanceKobo: due });
+  const settings = await loadSettings();
+  const vars = messageVarsFor(b, link);
+  const template = row.type === "confirmation" ? settings.messageTemplates.confirmationEmailIntro : settings.messageTemplates.reminderEmailIntro;
+  const data = {
+    salon: salonInfo(),
+    intro: fillTemplate(template, vars),
+    customerName: b.contactName,
+    reference: b.reference,
+    startAt: booking.startAt,
+    durationMinutes: Math.round((b.endAt.getTime() - b.startAt.getTime()) / 60_000),
+    items: booking.items.map((i) => ({ name: i.name, priceKobo: i.priceKobo, kind: i.kind })),
+    totalKobo: b.totalKobo,
+    paidKobo: paidKobo(b.payments),
+    balanceKobo: due,
+    bookingUrl: link,
+    icsUrl: `${siteUrl()}/api/bookings/${b.reference}/calendar?t=${encodeURIComponent(token)}`,
+    googleCalendarUrl: googleCalendarUrl(event),
+  };
+  const email = row.type === "confirmation" ? confirmationEmail(data) : reminderEmail(data);
+  return {
+    to: b.contactEmail,
+    ...email,
+    attachments: row.type === "confirmation" ? [{ filename: `${b.reference}.ics`, content: buildIcs(event), contentType: "text/calendar; method=PUBLISH" }] : undefined,
+  };
+}
+
+/** The next midnight UTC, when Resend's daily quota resets. */
+function nextUtcMidnight(nowMs: number): Date {
+  const d = new Date(nowMs);
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1));
+}
+
+/**
+ * WhatsApp rows are sent by the owner by hand (Reminders due). The same checks apply: a
+ * cancelled, moved-away or past booking takes them off the list.
+ */
+async function skipStaleManualRows(now: Date): Promise<number> {
+  const { count } = await db.notification.updateMany({
+    where: {
+      status: "pending",
+      channel: "whatsapp_manual",
+      type: { in: ["confirmation", "reminder"] },
+      OR: [{ booking: null }, { booking: { status: { not: "confirmed" } } }, { booking: { startAt: { lte: now } } }],
+    },
+    data: { status: "skipped", lastError: "No longer needed: the booking was cancelled, moved or has passed" },
+  });
+  return count;
+}
+
+export async function sendDueNotifications(opts: { nowMs?: number; deadlineMs?: number } = {}): Promise<SendResult> {
+  const nowMs = opts.nowMs ?? Date.now();
+  const deadline = opts.deadlineMs ?? nowMs + 20_000;
+  const now = new Date(nowMs);
+  const result: SendResult = { sent: 0, skipped: await skipStaleManualRows(now), retrying: 0, failed: 0 };
+
+  const rows = await db.notification.findMany({
+    where: { ...dueNow(now), channel: "email" },
+    orderBy: { dueAt: "asc" },
+    take: BATCH,
+    include: { booking: { include: { items: true, payments: true } } },
+  });
+
+  for (const row of rows) {
+    if (Date.now() > deadline) {
+      result.stopped = "time";
+      break;
+    }
+    // Claim it, so an overlapping run leaves it alone.
+    const claimed = await db.notification.updateMany({ where: { id: row.id, ...dueNow(now) }, data: { nextAttemptAt: new Date(Date.now() + CLAIM_MS) } });
+    if (claimed.count === 0) continue;
+
+    const reason = await skipReason(row, nowMs);
+    if (reason) {
+      await db.notification.update({ where: { id: row.id }, data: { status: "skipped", lastError: reason, nextAttemptAt: null } });
+      result.skipped++;
+      continue;
+    }
+
+    try {
+      const message = await render(row);
+      // The due time is part of the key: a reminder reset by a move is a new message.
+      const { id } = await sendEmail(message, `${row.id}:${row.dueAt.getTime()}`);
+      await db.notification.update({
+        where: { id: row.id },
+        data: { status: "sent", sentAt: new Date(), providerMessageId: id, lastError: null, nextAttemptAt: null, attempts: { increment: 1 } },
+      });
+      result.sent++;
+    } catch (err) {
+      const kind = err instanceof EmailSendError ? err.kind : "temporary";
+      const message = (err instanceof Error ? err.message : String(err)).slice(0, 500);
+      if (kind === "daily_limit" || kind === "rate_limited") {
+        // Not the message's fault: no attempt used. Daily limit waits for the reset.
+        await db.notification.update({
+          where: { id: row.id },
+          data: {
+            lastError: kind === "daily_limit" ? "Daily email limit reached; sending resumes after the reset" : "Email service asked us to slow down",
+            nextAttemptAt: kind === "daily_limit" ? nextUtcMidnight(nowMs) : null,
+          },
+        });
+        result.stopped = kind;
+        break;
+      }
+      const attempts = row.attempts + 1;
+      const final = kind === "permanent" || attempts >= MAX_ATTEMPTS;
+      await db.notification.update({
+        where: { id: row.id },
+        data: {
+          attempts,
+          lastError: message,
+          status: final ? "failed" : "pending",
+          nextAttemptAt: final ? null : new Date(Date.now() + RETRY_AFTER_MS[attempts - 1]!),
+        },
+      });
+      if (final) result.failed++;
+      else result.retrying++;
+      console.error(`[notifications] ${row.id} ${row.type} attempt ${attempts} failed: ${message}`);
+    }
+  }
+  if (result.stopped === "daily_limit") {
+    // The rest wait for the reset too, so the owner sees them as delayed, not failed.
+    await db.notification.updateMany({
+      where: { ...dueNow(now), channel: "email" },
+      data: { lastError: "Daily email limit reached; sending resumes after the reset", nextAttemptAt: nextUtcMidnight(nowMs) },
+    });
+  }
+  return result;
+}
+
+/** Records that the scheduler ran. The admin warns when this is more than two hours old. */
+export async function recordHeartbeat(nowMs = Date.now()): Promise<void> {
+  await db.settings.update({ where: { id: 1 }, data: { schedulerHeartbeat: new Date(nowMs) } });
+}
+
+/** One scheduler run: heartbeat, then sending. */
+export async function runScheduler(opts: { nowMs?: number; budgetMs?: number } = {}): Promise<SendResult> {
+  const nowMs = opts.nowMs ?? Date.now();
+  await recordHeartbeat(nowMs);
+  return sendDueNotifications({ nowMs, deadlineMs: Date.now() + (opts.budgetMs ?? 20_000) });
+}

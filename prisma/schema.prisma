@@ -359,6 +359,8 @@ model Notification {
   status            NotificationStatus  @default(pending)
   dueAt             DateTime            @db.Timestamptz(3)
   attempts          Int                 @default(0)
+  /// Not before this time: the next retry after a failure, or a short claim while a run sends it.
+  nextAttemptAt     DateTime?           @db.Timestamptz(3)
   lastError         String?
   providerMessageId String?
   sentAt            DateTime?           @db.Timestamptz(3)
