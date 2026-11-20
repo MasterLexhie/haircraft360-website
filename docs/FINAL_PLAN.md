@@ -280,7 +280,7 @@ Sources: **Spec**, **F&R**, **PT**, **PR**. Phases: **Launch**, **Wk1-2** (first
 | P3 | Webhook route: signature over raw body, WebhookEvent, verify call, amount and currency check, one transaction (Payment, confirm or `needs_attention`, Notification rows) | `src/app/api/webhooks/paystack/route.ts`, tests | Duplicate, out-of-order and tampered events behave per 6.11 | L |
 | P4 | PaymentLink tokens and the balance page; fresh transaction per press | `src/app/(site)/pay/[token]/page.tsx`, `src/server/payment-links.ts` | Link opened on two days both work; no transaction reused | M |
 | P5 | Manual payments and adjustments; status guard | `booking-service.ts`, `booking-forms.tsx` | Cannot record against expired or cancelled; ledger rows never edited | S |
-| P6 | Wrong-amount transfer test in Paystack test mode; implement the observed outcome | P3 files | Written result in this doc; handled path tested | M |
+| P6 | Wrong-amount transfer test in Paystack test mode; implement the observed outcome | P3 files | Written result in this doc; handled path tested (done 20 Nov 2026: see Open questions) | M |
 | P7 | Delete mock checkout route, page, component and adapter | `src/app/api/checkout/*`, `src/app/(site)/checkout/*`, `mock-checkout.tsx`, `mock-checkout-adapter.ts` | No route references "mock" | S |
 
 ### Notifications
@@ -420,7 +420,18 @@ Spec 6.11 in full, plus:
 8. **Supabase pausing.** Hourly cron should prevent it; confirm after week one (Spec 6.10).
 
 **Open questions**
-1. What Paystack does with a wrong-amount transfer (Spec 10; answered by P6).
+1. ~~What Paystack does with a wrong-amount transfer~~ Answered by P6, below.
+
+**P6 result: wrong-amount bank transfer (tested 20 Nov 2026, Paystack test mode)**
+- Test mode can't send a wrong amount. The Transfer tab offers one button, "I've sent the money", for the exact sum. Test-transfer deposits for the right amount confirmed through the webhook in under a minute.
+- Paystack's help centre ("Pay with transfer") says these transfers are refunded to the customer automatically and never reach us as a charge:
+  - a transfer for the wrong amount;
+  - extra transfers to the same generated account (only the excess goes back);
+  - a transfer after the account's 30 minute window.
+- Our handling:
+  - No code path is needed for a mismatched transfer, because Paystack never reports it as successful.
+  - If a short charge ever does arrive (Verify reports less than the attempt asked), it is recorded as received. The booking goes to `needs_attention` and the audit entry says to collect the difference. An overpayment is recorded as received and noted in the audit entry. Both cases are covered by tests.
+- Customer side: Paystack's transfer screen shows the exact amount to send. A customer whose wrong-amount transfer was refunded sees the booking still awaiting its deposit, and can pay again before the hold ends.
 2. Expiry for customer links: I suggest confirmation links expire 30 days after the appointment and balance links 30 days after creation or once paid. Confirm.
 3. Are "services and prices, about, contact" separate pages at launch or sections of the home page as now? I recommend sections at launch, separate pages later.
 4. Data deletion under NDPA when the ledger is append-only: anonymise the customer and keep payment rows? Needs advice.
