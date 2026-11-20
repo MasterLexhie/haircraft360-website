@@ -5,13 +5,14 @@ import { usePathname } from "next/navigation";
 import { CalendarDays, LayoutDashboard, MessageCircle, Settings2, UserRoundCog, Users } from "lucide-react";
 import { cx } from "@/components/ui/primitives";
 
-const ITEMS = [
+/** `sidebarOnly`: on phones it sits in the top bar instead, so five items fit the bottom bar. */
+const ITEMS: { href: string; label: string; shortLabel?: string; icon: typeof LayoutDashboard; exact?: boolean; sidebarOnly?: boolean }[] = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
-  { href: "/admin/reminders", label: "Reminders due", icon: MessageCircle },
+  { href: "/admin/reminders", label: "Reminders due", shortLabel: "Reminders", icon: MessageCircle },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/settings", label: "Settings", icon: Settings2 },
-  { href: "/admin/account", label: "Account", icon: UserRoundCog },
+  { href: "/admin/account", label: "Account", icon: UserRoundCog, sidebarOnly: true },
 ];
 
 /** Pathname-aware nav. Must render inside <Suspense> (dynamic routes). */
@@ -32,7 +33,7 @@ export function AdminNavList({
   return (
     <nav aria-label="Admin">
       <ul className={orientation === "vertical" ? "space-y-1" : "grid grid-cols-5 gap-1"}>
-        {ITEMS.map((item) => {
+        {ITEMS.filter((item) => orientation === "vertical" || !item.sidebarOnly).map((item) => {
           const active = item.exact ? pathname === item.href : !!pathname?.startsWith(item.href);
           return (
             <li key={item.href}>
@@ -47,7 +48,14 @@ export function AdminNavList({
                 )}
               >
                 <item.icon aria-hidden className={cx("shrink-0", orientation === "vertical" ? "size-4" : "size-5")} />
-                <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
+                {orientation === "horizontal" && item.shortLabel ? (
+                  <span>
+                    <span aria-hidden>{item.shortLabel}</span>
+                    <span className="sr-only">{item.label}</span>
+                  </span>
+                ) : (
+                  <span className={collapsed ? "sr-only" : undefined}>{item.label}</span>
+                )}
               </Link>
             </li>
           );
