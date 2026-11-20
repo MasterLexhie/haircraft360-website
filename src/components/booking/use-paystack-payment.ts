@@ -77,8 +77,12 @@ export function usePaystackPayment(onDone: (outcome: PaymentOutcome) => void) {
     setPhase("open");
     const result = await openPopup(started.accessCode).catch(() => ({ error: "The payment window couldn't load. Check your connection and try again." }));
     if (result === "cancel") {
+      // A customer who sent a transfer often closes the window before Paystack shows it
+      // received. Ask once, so they aren't shown an unpaid booking and pay twice.
+      setPhase("confirming");
+      const outcome = await verify(started.reference).catch(() => "pending");
       setPhase("idle");
-      onDone("cancelled");
+      onDone(outcome === "paid" ? "paid" : "cancelled");
       return;
     }
     if (typeof result === "object") {
