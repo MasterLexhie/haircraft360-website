@@ -55,5 +55,7 @@ function lowerFirst(s: string): string {
 }
 
 function dayLabel(iso: string): string {
-  return new Intl.DateTimeFormat("en-NG", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Africa/Lagos" }).format(new Date(iso));
+  return new Intl.DateTimeFormat("en-NG", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true, timeZone: "Africa/Lagos" })
+    .format(new Date(iso))
+    .replace(/\s?(AM|PM)$/i, (m) => ` ${m.trim().toLowerCase()}`);
 }

@@ -221,7 +221,7 @@ function MessagesPanel({ bookingId, contactEmail, view }: { bookingId: string; c
   return (
     <Panel title="Messages">
       {view.messages.length === 0 ? (
-        <p className="text-sm text-ink-3">Messages start once the booking is confirmed.</p>
+        <p className="text-sm text-ink-3">No confirmation or reminder messages for this booking.</p>
       ) : (
         <ul className="space-y-3">
           {view.messages.map((m) => (

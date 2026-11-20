@@ -33,7 +33,7 @@ describe("message status labels", () => {
   });
 
   it("tells a future reminder from one due now on WhatsApp", () => {
-    expect(messageStatus(row({ type: "reminder", dueAt: "2026-11-22T09:00:00.000Z" }), now, NOTE).label).toMatch(/^Reminder goes out by email /);
+    expect(messageStatus(row({ type: "reminder", dueAt: "2026-11-22T09:00:00.000Z" }), now, NOTE).label).toBe("Reminder goes out by email Sun, 22 Nov, 10:00 am");
     expect(messageStatus(row({ type: "reminder", channel: "whatsapp_manual", dueAt: "2026-11-22T09:00:00.000Z" }), now, NOTE)).toMatchObject({ sendOnWhatsapp: false, tone: "info" });
     expect(messageStatus(row({ channel: "whatsapp_manual" }), now, NOTE)).toMatchObject({ label: "Confirmation to send on WhatsApp", sendOnWhatsapp: true });
   });
