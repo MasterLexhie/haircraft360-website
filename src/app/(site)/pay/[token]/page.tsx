@@ -37,6 +37,17 @@ async function PayView({ params, searchParams }: Props) {
       </div>
     );
   }
+  if (!view.open) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-20 text-center">
+        <h1 className="type-display text-[2.2rem]">This booking is closed</h1>
+        <p className="mt-3 text-ink-2">
+          Booking {view.reference} can&apos;t be paid online any more. If you have a question about it, call {business.phone.value.display}.
+        </p>
+        <ButtonLink href="/" variant="secondary" className="mt-6">Go to the home page</ButtonLink>
+      </div>
+    );
+  }
   const settled = view.dueKobo === 0;
   return (
     <div className="mx-auto max-w-xl px-4 py-10 sm:py-14">

@@ -62,6 +62,8 @@ export async function getPaymentLinkView(token: string) {
     items: b.items.map((i) => ({ id: i.id, kind: i.kind, name: i.name, priceKobo: i.priceKobo })),
     totalKobo: b.totalKobo,
     paidKobo: b.payments.filter((p) => p.status === "success").reduce((s, p) => s + p.amountKobo, 0),
+    /** False once the booking is cancelled or never went ahead: nothing can be paid online. */
+    open: (BALANCE_STATUSES as readonly string[]).includes(b.status),
     dueKobo: (BALANCE_STATUSES as readonly string[]).includes(b.status) ? balanceDue(b, b.payments) : 0,
     expiresAt: link.expiresAt.toISOString(),
   };

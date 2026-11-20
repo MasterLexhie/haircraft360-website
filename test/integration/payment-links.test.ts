@@ -66,6 +66,15 @@ describe("balance links", () => {
     await expect(startLinkPayment(token)).rejects.toMatchObject({ code: "NOT_FOUND" });
   });
 
+  it("says the booking is closed once it is cancelled, and won't take a payment", async () => {
+    const booking = await confirmedWithBalance();
+    const { url } = await createBalanceLink(booking.id, actor);
+    const token = url.split("/pay/")[1]!;
+    await db.booking.update({ where: { id: booking.id }, data: { status: "cancelled" } });
+    expect(await getPaymentLinkView(token)).toMatchObject({ open: false, dueKobo: 0 });
+    await expect(startLinkPayment(token)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
+  });
+
   it("can't be made for an unpaid or cancelled booking", async () => {
     const { booking } = await newBooking();
     await expect(createBalanceLink(booking.id, actor)).rejects.toMatchObject({ code: "NOT_ALLOWED" });
