@@ -432,6 +432,17 @@ Spec 6.11 in full, plus:
   - No code path is needed for a mismatched transfer, because Paystack never reports it as successful.
   - If a short charge ever does arrive (Verify reports less than the attempt asked), it is recorded as received. The booking goes to `needs_attention` and the audit entry says to collect the difference. An overpayment is recorded as received and noted in the audit entry. Both cases are covered by tests.
 - Customer side: Paystack's transfer screen shows the exact amount to send. A customer whose wrong-amount transfer was refunded sees the booking still awaiting its deposit, and can pay again before the hold ends.
+
+**Payment fees (decided 20 Nov 2026): the customer pays Paystack's fee**
+- "Pass fees to customers" is on in the Paystack dashboard, and `PAYSTACK_CUSTOMER_PAYS_FEES="true"` mirrors it. Paystack adds its fee to the charge (1.5%, plus ₦100 from ₦2,500, capped at ₦2,000), so the salon receives the full deposit or balance. Checked in test mode: ₦2,000 became ₦2,030.46, and ₦3,000 became ₦3,147.21, matching our estimate.
+- Only Paystack's `requested_amount` counts toward a booking. The customer's fee (`customerFeeKobo`) and Paystack's whole fee (`paystackFeeKobo`) are kept on the payment row for the finance pages. A charge whose `requested_amount` differs from what we asked is refused.
+- Customers see the fee and the total before Paystack's window opens: on the review step, the booking page and `/pay`.
+- To confirm on the first live settlement: whether VAT is added to Paystack's fee, and whether stamp duty applies to transfers of ₦10,000 or more.
+
+**Follow-ups found in the payments review (20 Nov 2026)**
+- M5: the cron run should also verify payment attempts left open for more than an hour. That is the backstop if both the webhook and the customer's browser miss a payment.
+- M7: the attention box needs rows for webhook events marked `failed` (for example a currency or amount mismatch), and for overpaid bookings, such as an online balance that landed after cash was recorded.
+- M9: check the start-payment rate limit (10 per IP per 10 minutes) against Nigerian mobile networks, where many customers share one address.
 2. Expiry for customer links: I suggest confirmation links expire 30 days after the appointment and balance links 30 days after creation or once paid. Confirm.
 3. Are "services and prices, about, contact" separate pages at launch or sections of the home page as now? I recommend sections at launch, separate pages later.
 4. Data deletion under NDPA when the ledger is append-only: anonymise the customer and keep payment rows? Needs advice.
