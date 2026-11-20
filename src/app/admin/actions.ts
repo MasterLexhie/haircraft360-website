@@ -17,6 +17,7 @@ import {
   type Actor,
   type CompletionInput,
 } from "@/server/booking-service";
+import { createBalanceLink } from "@/server/payments/links";
 import { parseNairaToKobo } from "@/lib/money";
 import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
 import { recordId } from "@/domain/schemas";
@@ -155,6 +156,20 @@ export async function manualPaymentAction(bookingIdRaw: string, _: ActionState, 
     await recordManualPayment(bookingId, { amountKobo: negative ? -parsed : parsed, method, note, purpose }, actor);
     refresh();
     return { ok: true, message: purpose === "correction" ? "Correction recorded." : "Payment recorded." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** A fresh balance link for the owner to send. The link itself is shown once, here. */
+export async function balanceLinkAction(bookingIdRaw: string): Promise<ActionState> {
+  const actor = await adminActor();
+  const bookingId = validId(bookingIdRaw);
+  if (!bookingId) return INVALID;
+  try {
+    const { url } = await createBalanceLink(bookingId, actor);
+    refresh();
+    return { ok: true, message: "Link ready. Copy it and send it to the customer.", link: url };
   } catch (e) {
     return fail(e);
   }

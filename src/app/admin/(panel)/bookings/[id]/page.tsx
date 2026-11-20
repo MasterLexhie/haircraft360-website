@@ -107,9 +107,9 @@ async function Detail({ params, searchParams }: Props) {
               <Stat label="Paid" value={formatNaira(paid)} />
               <Stat label="Balance due" value={formatNaira(due)} strong />
             </dl>
-            {booking.status === "completed" && due > 0 && (
+            {booking.status !== "pending_payment" && booking.status !== "expired" && booking.status !== "cancelled" && due > 0 && (
               <div className="mt-5 border-t border-line pt-4">
-                <BalanceLink />
+                <BalanceLink bookingId={booking.id} />
               </div>
             )}
             <h3 className="mt-6 border-t border-line pt-4 text-xs font-semibold uppercase tracking-[0.1em] text-ink-3">Payment entries</h3>

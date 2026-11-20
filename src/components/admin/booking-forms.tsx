@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState, useTransition } from "react";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Link2, Plus, Trash2 } from "lucide-react";
 import type { Booking, Kobo } from "@/domain/types";
 import { formatNaira, parseNairaToKobo } from "@/lib/money";
 import { formatTime } from "@/lib/time";
@@ -9,6 +9,7 @@ import {
   bookingNoteAction,
   completeBookingAction,
   customerNoteAction,
+  balanceLinkAction,
   manualPaymentAction,
   moveBookingAction,
   setStatusAction,
@@ -190,6 +191,38 @@ export function MoveTimes({ bookingId, startTimes }: { bookingId: string; startT
 /* ───────────── Balance payment link ───────────── */
 
 /** Placeholder until Milestone 4 adds payment links sent by WhatsApp. */
-export function BalanceLink() {
-  return <p className="text-sm text-ink-3">Payment links sent by WhatsApp arrive with online payments. For now, record cash or transfer payments above.</p>;
+/** Makes a link the customer can pay the balance with (card, transfer or USSD), valid for 14 days. */
+export function BalanceLink({ bookingId }: { bookingId: string }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionState>(null);
+  const [copied, setCopied] = useState(false);
+  async function copy(link: string) {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  }
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="secondary" size="sm" loading={pending} onClick={() => start(async () => { setCopied(false); setState(await balanceLinkAction(bookingId)); })}>
+          <Link2 aria-hidden className="size-4" /> {state?.link ? "Make another link" : "Make a payment link"}
+        </Button>
+        <span className="text-xs text-ink-3">The customer pays the balance online. Works for 14 days.</span>
+      </div>
+      {state?.link ? (
+        <div className="flex gap-2">
+          <label htmlFor="balance-link" className="sr-only">Payment link</label>
+          <input id="balance-link" readOnly value={state.link} onFocus={(e) => e.currentTarget.select()} className={cx(inputClass, "min-w-0 flex-1 text-sm")} />
+          <Button variant="secondary" size="sm" onClick={() => copy(state.link!)}>
+            {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />} {copied ? "Copied" : "Copy"}
+          </Button>
+        </div>
+      ) : (
+        <Feedback state={state} />
+      )}
+    </div>
+  );
 }
