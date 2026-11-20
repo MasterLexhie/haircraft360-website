@@ -138,12 +138,12 @@ async function main() {
     );
 
     // Admin user. The password comes from SEED_ADMIN_PASSWORD or is generated and printed once.
-    const adminEmail = (process.env.SEED_ADMIN_EMAIL ?? "owner@example.test").toLowerCase();
+    const adminEmail = (process.env.SEED_ADMIN_EMAIL?.trim() || "owner@example.test").toLowerCase();
     const existingAdmin = await db.adminUser.findUnique({ where: { email: adminEmail } });
     let printedPassword: string | null = null;
     let admin = existingAdmin;
     if (!admin || process.env.SEED_ADMIN_PASSWORD) {
-      const password = process.env.SEED_ADMIN_PASSWORD ?? randomToken(12);
+      const password = process.env.SEED_ADMIN_PASSWORD || randomToken(12);
       if (!process.env.SEED_ADMIN_PASSWORD) printedPassword = password;
       const passwordHash = await hashPassword(password);
       admin = await db.adminUser.upsert({
