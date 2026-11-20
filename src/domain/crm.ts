@@ -74,3 +74,27 @@ export function customerStats(bookings: Booking[], payments: Pick<Payment, "book
     outstandingKobo: completed.reduce((s, b) => s + balanceDue(b, paymentsOf(b.id)), 0),
   };
 }
+
+export const MAX_TAGS = 10;
+export const MAX_TAG_LENGTH = 24;
+
+/**
+ * Tags the owner puts on a customer (for example VIP). Trimmed, inner spaces collapsed,
+ * duplicates dropped regardless of capitals (the first spelling wins). Returns an error
+ * message instead of the tags when a limit is broken.
+ */
+export function normalizeTags(input: string[]): { tags: string[] } | { error: string } {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    const tag = raw.trim().replace(/\s+/g, " ");
+    if (!tag) continue;
+    if (tag.length > MAX_TAG_LENGTH) return { error: `Keep each tag to ${MAX_TAG_LENGTH} characters ("${tag.slice(0, 30)}" is longer).` };
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    tags.push(tag);
+  }
+  if (tags.length > MAX_TAGS) return { error: `A customer can have up to ${MAX_TAGS} tags.` };
+  return { tags };
+}

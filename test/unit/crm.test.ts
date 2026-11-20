@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Booking, BookingStatus, Payment } from "@/domain/types";
-import { customerStats, ordinal, visitInfo, visitLabel } from "@/domain/crm";
+import { customerStats, normalizeTags, ordinal, visitInfo, visitLabel } from "@/domain/crm";
 
 let seq = 0;
 function booking(startAt: string, status: BookingStatus, main = "Loc retwist", totalKobo = 1_000_000): Booking {
@@ -85,5 +85,16 @@ describe("customer stats", () => {
   it("has no average before a first visit", () => {
     const s = customerStats([booking("2026-12-10T09:00:00.000Z", "confirmed")], [], Date.parse("2026-06-01T00:00:00Z"));
     expect(s).toMatchObject({ visits: 0, averageSpendKobo: null, lastVisitAt: null, usualServices: [] });
+  });
+});
+
+describe("tags", () => {
+  it("trims, collapses spaces and drops repeats regardless of capitals", () => {
+    expect(normalizeTags(["  VIP", "vip ", "Sensitive   scalp", ""])).toEqual({ tags: ["VIP", "Sensitive scalp"] });
+  });
+  it("refuses more than ten, or one longer than 24 characters", () => {
+    expect(normalizeTags(Array.from({ length: 11 }, (_, i) => `t${i}`))).toHaveProperty("error");
+    expect(normalizeTags(["x".repeat(25)])).toHaveProperty("error");
+    expect(normalizeTags(["x".repeat(24)])).toEqual({ tags: ["x".repeat(24)] });
   });
 });

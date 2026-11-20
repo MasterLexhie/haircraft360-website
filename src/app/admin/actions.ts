@@ -10,8 +10,10 @@ import {
   moveBooking,
   recordManualPayment,
   setBookingStatus,
+  setMarketingConsent,
   updateBookingNote,
   updateCustomerNote,
+  updateCustomerTags,
   updateSettings,
   upsertService,
   type Actor,
@@ -127,6 +129,32 @@ export async function customerNoteAction(customerIdRaw: string, _: ActionState, 
     await updateCustomerNote(customerId, String(formData.get("privateNotes") ?? ""), actor);
     refresh();
     return { ok: true, message: "Private note saved." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function customerTagsAction(customerIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const customerId = validId(customerIdRaw);
+  if (!customerId) return INVALID;
+  try {
+    await updateCustomerTags(customerId, formData.getAll("tag").map(String), actor);
+    refresh();
+    return { ok: true, message: "Tags saved." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function marketingConsentAction(customerIdRaw: string, consent: boolean): Promise<ActionState> {
+  const actor = await adminActor();
+  const customerId = validId(customerIdRaw);
+  if (!customerId || typeof consent !== "boolean") return INVALID;
+  try {
+    await setMarketingConsent(customerId, consent, actor);
+    refresh();
+    return { ok: true };
   } catch (e) {
     return fail(e);
   }

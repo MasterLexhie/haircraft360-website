@@ -12,6 +12,7 @@ import { formatNaira } from "@/lib/money";
 import { formatDate, formatDateTime, formatTime } from "@/lib/time";
 import { BookingStatusBadge, PageHeader, Panel } from "@/components/admin/bits";
 import { PrivateNoteForm } from "@/components/admin/booking-forms";
+import { CustomerTagsForm, MarketingConsentSwitch } from "@/components/admin/customer-forms";
 import { Badge, Skeleton } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Customer" };
@@ -100,8 +101,11 @@ async function CustomerView({ params }: { params: Promise<{ id: string }> }) {
                 <li key={e.value} className="flex items-center gap-2"><Mail aria-hidden className="size-4 text-ink-3" /><a className="break-all underline" href={`mailto:${e.value}`}>{e.value}</a>{e.bounced && <Badge tone="danger">Bounced</Badge>}</li>
               ))}
               {!c.emails.some((e) => !e.isPlaceholder && !e.bounced) && <li className="text-ink-3">No usable email: message on WhatsApp</li>}
-              <li className="text-ink-3">{c.marketingConsent ? "Happy to receive offers" : "No marketing messages"}</li>
+              <li className="border-t border-line pt-3"><MarketingConsentSwitch customerId={c.id} consent={c.marketingConsent} /></li>
             </ul>
+          </Panel>
+          <Panel title="Tags">
+            <CustomerTagsForm customerId={c.id} initial={c.tags} />
           </Panel>
           <Panel title={<span className="flex items-center gap-1.5"><Lock aria-hidden className="size-3.5" /> Private customer notes</span>}>
             <PrivateNoteForm kind="customer" id={c.id} defaultValue={c.notes} />

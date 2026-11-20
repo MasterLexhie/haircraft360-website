@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDatabase } from "../db";
 import { bookingInput, createServices, createSettings, slot } from "../factories";
-import { BookingError, createBlock, createPendingBooking, deleteBlock, moveBooking, recordManualPayment, recordOnlinePayment, setBookingStatus, upsertService, type ServiceInput } from "@/server/booking-service";
+import { BookingError, createBlock, createPendingBooking, deleteBlock, moveBooking, recordManualPayment, recordOnlinePayment, setBookingStatus, setMarketingConsent, updateCustomerTags, upsertService, type ServiceInput } from "@/server/booking-service";
 import { findBookingSummary, getCustomerBooking } from "@/server/queries";
 
 // next/server's connection() needs a request; tests call queries directly.
@@ -327,5 +327,41 @@ describe("manual payments and corrections", () => {
     ).rejects.toMatchObject({ code: "VALIDATION" });
     await recordManualPayment(booking.id, { amountKobo: -200_000, method: "cash", note: "Wrong booking", purpose: "correction" }, actor);
     expect((await db.payment.aggregate({ _sum: { amountKobo: true } }))._sum.amountKobo).toBe(0);
+  });
+});
+
+describe("customer tags and marketing consent", () => {
+  async function customer() {
+    const r = await createPendingBooking(bookingInput({ marketingConsent: true }));
+    return (await db.booking.findUniqueOrThrow({ where: { reference: r.reference } })).customerId;
+  }
+
+  it("saves tidy tags, logs the change once, and refuses too many or too long", async () => {
+    const id = await customer();
+    await updateCustomerTags(id, [" VIP ", "vip", "Sensitive   scalp", ""], actor);
+    expect((await db.customer.findUniqueOrThrow({ where: { id } })).tags).toEqual(["VIP", "Sensitive scalp"]);
+    await updateCustomerTags(id, ["VIP", "Sensitive scalp"], actor);
+    const logs = await db.auditLog.findMany({ where: { customerId: id, action: "customer.tags" } });
+    expect(logs.map((l) => l.summary)).toEqual(["Tags set to VIP, Sensitive scalp"]);
+    await expect(updateCustomerTags(id, Array.from({ length: 11 }, (_, i) => `t${i}`), actor)).rejects.toMatchObject({ code: "VALIDATION" });
+    await expect(updateCustomerTags(id, ["x".repeat(25)], actor)).rejects.toMatchObject({ code: "VALIDATION" });
+    await updateCustomerTags(id, [], actor);
+    expect(await db.auditLog.findFirst({ where: { customerId: id, summary: "Tags cleared" } })).not.toBeNull();
+  });
+
+  it("turns marketing messages off and on, recording when, under the admin's name", async () => {
+    const id = await customer();
+    await setMarketingConsent(id, false, actor);
+    expect(await db.customer.findUniqueOrThrow({ where: { id } })).toMatchObject({ marketingConsent: false, marketingConsentAt: null });
+    await setMarketingConsent(id, false, actor);
+    await setMarketingConsent(id, true, actor);
+    const c = await db.customer.findUniqueOrThrow({ where: { id } });
+    expect(c.marketingConsent).toBe(true);
+    expect(c.marketingConsentAt).not.toBeNull();
+    const logs = await db.auditLog.findMany({ where: { customerId: id, action: "customer.marketing_consent" }, orderBy: { createdAt: "asc" } });
+    expect(logs.map((l) => [l.summary, l.actorLabel])).toEqual([
+      ["Marketing messages turned off", "Test admin"],
+      ["Marketing messages turned on", "Test admin"],
+    ]);
   });
 });

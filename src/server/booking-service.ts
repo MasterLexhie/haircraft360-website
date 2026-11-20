@@ -6,6 +6,7 @@ import { depositDue } from "@/domain/deposit";
 import { addOnTerms, balanceDue, itemsDuration, itemsTotal } from "@/domain/pricing";
 import { normalizeEmail, normalizePhone, placeholderDomain, placeholderEmailFor } from "@/domain/phone";
 import { validateContact } from "@/domain/validation";
+import { normalizeTags } from "@/domain/crm";
 import { formatNaira } from "@/lib/money";
 import { addDays, formatDateKey, formatTime, lagosDateKey, lagosToUtcMs } from "@/lib/time";
 import { randomToken, sha256Hex } from "@/lib/crypto";
@@ -471,6 +472,46 @@ export async function updateCustomerNote(customerId: string, notes: string, acto
     if (!c) throw new BookingError("NOT_FOUND", "Customer not found.");
     await tx.customer.update({ where: { id: customerId }, data: { notes: notes.trim().slice(0, 4000) } });
     await audit(tx, { action: "customer.private_note", actorLabel: actor.label, actorId: actor.id, entityType: "Customer", entityId: c.id, customerId: c.id, summary: "Private customer note updated" });
+  });
+}
+
+/** The owner's tags on a customer, for example VIP. Replaces the whole set. */
+export async function updateCustomerTags(customerId: string, input: string[], actor: Actor) {
+  const result = normalizeTags(input);
+  if ("error" in result) throw new BookingError("VALIDATION", result.error);
+  return db.$transaction(async (tx) => {
+    const c = await tx.customer.findUnique({ where: { id: customerId } });
+    if (!c) throw new BookingError("NOT_FOUND", "Customer not found.");
+    if (c.tags.join("\n") === result.tags.join("\n")) return;
+    await tx.customer.update({ where: { id: customerId }, data: { tags: result.tags } });
+    await audit(tx, {
+      action: "customer.tags",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Customer",
+      entityId: c.id,
+      customerId: c.id,
+      summary: result.tags.length ? `Tags set to ${result.tags.join(", ")}` : "Tags cleared",
+    });
+  });
+}
+
+/** Marketing messages on or off, for example when a customer asks to stop them. */
+export async function setMarketingConsent(customerId: string, consent: boolean, actor: Actor) {
+  return db.$transaction(async (tx) => {
+    const c = await tx.customer.findUnique({ where: { id: customerId } });
+    if (!c) throw new BookingError("NOT_FOUND", "Customer not found.");
+    if (c.marketingConsent === consent) return;
+    await tx.customer.update({ where: { id: customerId }, data: { marketingConsent: consent, marketingConsentAt: consent ? new Date() : null } });
+    await audit(tx, {
+      action: "customer.marketing_consent",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Customer",
+      entityId: c.id,
+      customerId: c.id,
+      summary: consent ? "Marketing messages turned on" : "Marketing messages turned off",
+    });
   });
 }
 
