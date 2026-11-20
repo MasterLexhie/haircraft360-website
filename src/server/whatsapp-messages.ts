@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import type { MessageTemplates } from "@/domain/settings";
+import { messageStatus, type MessageStatus } from "@/domain/message-status";
 import { fillTemplate } from "@/domain/messages";
 import { formatPhone } from "@/domain/phone";
 import { addDays, lagosDateKey, lagosToUtcMs } from "@/lib/time";
@@ -102,4 +103,66 @@ export async function markWhatsappSent(notificationId: string, actor: Actor): Pr
       summary: `${row.type === "confirmation" ? "Confirmation" : "Reminder"} sent on WhatsApp${row.channel === "email" ? " instead of email" : ""}${row.booking ? ` (${row.booking.reference})` : ""}`,
     });
   });
+}
+
+/* ───────────── The booking page's Messages panel ───────────── */
+
+export interface BookingMessage {
+  id: string;
+  type: "confirmation" | "reminder";
+  status: MessageStatus;
+  sentAt: string | null;
+  /** Ready to send on WhatsApp, when the status calls for it. */
+  manual: ManualMessage | null;
+}
+
+export interface BookingMessages {
+  messages: BookingMessage[];
+  /** "Send on WhatsApp" at any time for an upcoming confirmed booking, whatever happened by email. */
+  whatsapp: { confirmation: string; reminder: string } | null;
+}
+
+export async function bookingMessages(bookingId: string, nowMs = Date.now()): Promise<BookingMessages> {
+  const [rows, booking] = await Promise.all([
+    db.notification.findMany({
+      where: { bookingId, type: { in: ["confirmation", "reminder"] } },
+      orderBy: [{ type: "asc" }],
+      include: { booking: { include: { items: true, payments: true } } },
+    }),
+    db.booking.findUnique({ where: { id: bookingId }, include: { items: true, payments: true } }),
+  ]);
+  if (!booking) return { messages: [], whatsapp: null };
+  const { messageTemplates } = await loadSettings();
+  const live = booking.status === "confirmed" && booking.startAt.getTime() > nowMs;
+  const messages: BookingMessage[] = [];
+  for (const row of rows) {
+    const status = messageStatus(
+      { type: row.type as BookingMessage["type"], channel: row.channel, status: row.status, dueAt: row.dueAt.toISOString(), sentAt: row.sentAt?.toISOString() ?? null, lastError: row.lastError },
+      nowMs,
+      DAILY_LIMIT_NOTE,
+    );
+    messages.push({
+      id: row.id,
+      type: row.type as BookingMessage["type"],
+      status,
+      sentAt: row.sentAt?.toISOString() ?? null,
+      manual: live && status.sendOnWhatsapp ? await buildManualMessage(row, messageTemplates) : null,
+    });
+  }
+  let whatsapp: BookingMessages["whatsapp"] = null;
+  if (live) {
+    const vars = messageVarsFor(booking, bookingUrl(booking.reference, await ensureMessageToken(booking)));
+    whatsapp = {
+      confirmation: whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.confirmationWhatsapp, vars)),
+      reminder: whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.reminderWhatsapp, vars)),
+    };
+  }
+  return { messages, whatsapp };
+}
+
+/** The balance link message, in the owner's wording, ready to open in WhatsApp. */
+export async function balanceLinkWhatsapp(bookingId: string, link: string): Promise<string> {
+  const booking = await db.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { items: true, payments: true } });
+  const { messageTemplates } = await loadSettings();
+  return whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.balanceLinkWhatsapp, messageVarsFor(booking, link)));
 }

@@ -11,6 +11,7 @@ import {
   recordManualPayment,
   setBookingStatus,
   setMarketingConsent,
+  updateBookingEmail,
   updateBookingNote,
   updateCustomerNote,
   updateCustomerTags,
@@ -20,7 +21,7 @@ import {
   type CompletionInput,
 } from "@/server/booking-service";
 import { createBalanceLink } from "@/server/payments/links";
-import { markWhatsappSent } from "@/server/whatsapp-messages";
+import { balanceLinkWhatsapp, markWhatsappSent } from "@/server/whatsapp-messages";
 import { createExpense, softDeleteExpense, updateExpense } from "@/server/expenses";
 import { parseNairaToKobo } from "@/lib/money";
 import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
@@ -29,7 +30,7 @@ import { z } from "zod";
 import type { PaymentMethod } from "@/domain/types";
 import { capacityByWeekdaySchema, weeklyHoursSchema, type CapacityByWeekday, type WeekdayKey, type WeeklyHours } from "@/domain/settings";
 
-export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string } | null;
+export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string; whatsappUrl?: string } | null;
 
 function fail(err: unknown): ActionState {
   if (err instanceof BookingError) return { error: err.message, fieldErrors: err.fieldErrors };
@@ -198,8 +199,23 @@ export async function balanceLinkAction(bookingIdRaw: string): Promise<ActionSta
   if (!bookingId) return INVALID;
   try {
     const { url } = await createBalanceLink(bookingId, actor);
+    const whatsappUrl = await balanceLinkWhatsapp(bookingId, url);
     refresh();
-    return { ok: true, message: "Link ready. Copy it and send it to the customer.", link: url };
+    return { ok: true, message: "Link ready. Send it on WhatsApp, or copy it.", link: url, whatsappUrl };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** A wrong or missing email fixed on the booking page; its failed messages are sent again. */
+export async function bookingEmailAction(bookingIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const bookingId = validId(bookingIdRaw);
+  if (!bookingId) return INVALID;
+  try {
+    const { resent } = await updateBookingEmail(bookingId, String(formData.get("email") ?? "").slice(0, 200), actor);
+    refresh();
+    return { ok: true, message: resent ? `Email saved. ${resent === 1 ? "The message goes" : "Its messages go"} out at the next scheduler run.` : "Email saved." };
   } catch (e) {
     return fail(e);
   }

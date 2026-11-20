@@ -4,7 +4,7 @@ import { isSlotBookable } from "@/domain/availability";
 import { describeClosurePeriod } from "@/domain/closures";
 import { depositDue } from "@/domain/deposit";
 import { addOnTerms, balanceDue, itemsDuration, itemsTotal } from "@/domain/pricing";
-import { normalizeEmail, normalizePhone, placeholderDomain, placeholderEmailFor } from "@/domain/phone";
+import { isValidEmail, normalizeEmail, normalizePhone, placeholderDomain, placeholderEmailFor } from "@/domain/phone";
 import { validateContact } from "@/domain/validation";
 import { normalizeTags } from "@/domain/crm";
 import { formatNaira } from "@/lib/money";
@@ -328,6 +328,9 @@ export async function setBookingStatus(bookingId: string, status: "cancelled" | 
     if (!STATUS_CHANGES[status].includes(b.status)) {
       throw new BookingError("NOT_ALLOWED", `A ${b.status.replace(/_/g, " ")} booking can't be changed to ${status.replace(/_/g, " ")}.`);
     }
+    if (status === "no_show" && b.startAt.getTime() > Date.now()) {
+      throw new BookingError("NOT_ALLOWED", "A booking can be marked as a no-show once its start time has passed.");
+    }
     if (status === "confirmed") {
       // Reinstating uses the same capacity check as a new booking, under the same lock.
       await lockSalonDay(tx, lagosDateKey(b.startAt));
@@ -430,6 +433,9 @@ export async function completeBooking(bookingId: string, input: CompletionInput,
     if (b.status !== "confirmed" && b.status !== "completed") {
       throw new BookingError("NOT_ALLOWED", "Only confirmed or completed bookings can be completed.");
     }
+    if (b.status === "confirmed" && b.startAt.getTime() > Date.now()) {
+      throw new BookingError("NOT_ALLOWED", "This appointment hasn't started yet. Complete it on the day.");
+    }
     const extras = input.extras.filter((e) => e.name.trim());
     for (const e of extras) {
       if (!Number.isInteger(e.priceKobo) || e.priceKobo < 0) throw new BookingError("VALIDATION", `Enter a valid price for “${e.name}”.`);
@@ -463,6 +469,47 @@ export async function updateBookingNote(bookingId: string, privateNote: string, 
     const b = await getBooking(tx, bookingId);
     await tx.booking.update({ where: { id: bookingId }, data: { privateNote: privateNote.trim().slice(0, 2000) } });
     await audit(tx, { action: "booking.private_note", actorLabel: actor.label, actorId: actor.id, entityType: "Booking", entityId: b.id, bookingId: b.id, customerId: b.customerId, summary: "Private booking note updated" });
+  });
+}
+
+/**
+ * Fixes a wrong or missing email on a booking. Its messages go to the new address: a failed one
+ * is sent again, and one waiting to go on WhatsApp goes by email instead.
+ */
+export async function updateBookingEmail(bookingId: string, raw: string, actor: Actor) {
+  const email = normalizeEmail(raw);
+  if (!isValidEmail(email)) {
+    const message = "Enter an email address like name@example.com.";
+    throw new BookingError("VALIDATION", message, { email: message });
+  }
+  return db.$transaction(async (tx) => {
+    const b = await getBooking(tx, bookingId);
+    if (b.contactEmail === email) return { resent: 0 };
+    await tx.booking.update({ where: { id: bookingId }, data: { contactEmail: email } });
+    // Saved on the customer too, unless the address already belongs to someone (the duplicates list's job).
+    const owner = await tx.customerEmail.findUnique({ where: { value: email } });
+    if (!owner) await tx.customerEmail.create({ data: { customerId: b.customerId, value: email } });
+    const bookingMessages = { bookingId, type: { in: ["confirmation" as const, "reminder" as const] } };
+    // A fresh due time gives the email service a fresh idempotency key, so it is really sent again.
+    const failed = await tx.notification.updateMany({
+      where: { ...bookingMessages, status: { in: ["failed", "bounced"] } },
+      data: { channel: "email", status: "pending", attempts: 0, lastError: null, nextAttemptAt: null, dueAt: new Date() },
+    });
+    const waiting = await tx.notification.updateMany({
+      where: { ...bookingMessages, status: "pending", channel: "whatsapp_manual" },
+      data: { channel: "email", attempts: 0, lastError: null, nextAttemptAt: null },
+    });
+    await audit(tx, {
+      action: "booking.email_changed",
+      actorLabel: actor.label,
+      actorId: actor.id,
+      entityType: "Booking",
+      entityId: b.id,
+      bookingId: b.id,
+      customerId: b.customerId,
+      summary: `${b.contactEmail ? `Email changed from ${b.contactEmail} to ${email}` : `Email added: ${email}`}${owner && owner.customerId !== b.customerId ? " (this address is on another customer's record)" : ""}`,
+    });
+    return { resent: failed.count + waiting.count };
   });
 }
 

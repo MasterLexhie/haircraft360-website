@@ -3,18 +3,20 @@ import Form from "next/form";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { Lock, Mail, Phone } from "lucide-react";
+import { Lock, Mail, MessageCircle, Phone } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { getAdminData, getMoveSlots, joinBooking, requestNow } from "@/server/queries";
+import { bookingMessages, type BookingMessages } from "@/server/whatsapp-messages";
 import { balanceDue, paidKobo } from "@/domain/pricing";
 import { formatPhone } from "@/domain/phone";
 import { bookingStatusLabel } from "@/domain/labels";
 import { formatNaira } from "@/lib/money";
 import { formatDateKey, formatDateTime, formatDuration, formatLongDate, formatTime, isValidDateKey, lagosDateKey } from "@/lib/time";
 import { BookingStatusBadge, KeyValue, PageHeader, Panel, PaymentStateBadge, VisitBadge } from "@/components/admin/bits";
-import { BalanceLink, CompletionForm, ManualPaymentForm, MoveTimes, PrivateNoteForm, StatusActions } from "@/components/admin/booking-forms";
+import { BalanceLink, BookingEmailForm, CompletionForm, ManualPaymentForm, MoveTimes, PrivateNoteForm, StatusActions } from "@/components/admin/booking-forms";
+import { WhatsappSend } from "@/components/admin/whatsapp-send";
 import { PaymentHistory } from "@/components/booking/payment-history";
-import { Alert, Button, Field, Skeleton, inputClass } from "@/components/ui/primitives";
+import { Alert, Badge, Button, Field, Skeleton, buttonClass, inputClass } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Booking detail" };
 
@@ -33,13 +35,16 @@ async function Detail({ params, searchParams }: Props) {
   const [{ id }, { move }, db, nowMs] = await Promise.all([params, searchParams, getAdminData(), requestNow()]);
   const b = db.bookings.find((x) => x.id === id);
   if (!b) notFound();
+  const messages = await bookingMessages(b.id, nowMs);
   const { booking, customer, payments, visit } = joinBooking(db, b);
   const paid = paidKobo(payments);
   const due = balanceDue(booking, payments);
   const audit = db.audit.filter((e) => e.bookingId === booking.id).sort((x, y) => y.at.localeCompare(x.at));
   const minutes = (Date.parse(booking.endAt) - Date.parse(booking.startAt)) / 60_000;
   const isPast = Date.parse(booking.endAt) < nowMs;
-  const canComplete = booking.status === "confirmed" || booking.status === "completed";
+  const started = Date.parse(booking.startAt) <= nowMs;
+  // Completing (and adding items on the day) waits for the appointment to start.
+  const canComplete = (booking.status === "confirmed" && started) || booking.status === "completed";
   const canMove = booking.status === "confirmed" || booking.status === "needs_attention";
   const today = lagosDateKey(nowMs);
   const bookingDay = lagosDateKey(booking.startAt);
@@ -51,7 +56,7 @@ async function Detail({ params, searchParams }: Props) {
         back={{ href: "/admin/bookings", label: "All bookings" }}
         title={<span className="flex flex-wrap items-center gap-3">{booking.reference} <BookingStatusBadge status={booking.status} /> <PaymentStateBadge booking={booking} payments={payments} /> <VisitBadge visit={visit} /></span>}
         description={`${formatLongDate(booking.startAt)} · ${formatTime(booking.startAt)} – ${formatTime(booking.endAt)} (${formatDuration(minutes)})`}
-        actions={<StatusActions bookingId={booking.id} status={booking.status} />}
+        actions={<StatusActions bookingId={booking.id} status={booking.status} started={started} />}
       />
 
       {booking.status === "pending_payment" && booking.holdExpiresAt && (
@@ -162,6 +167,10 @@ async function Detail({ params, searchParams }: Props) {
             </ul>
           </Panel>
 
+          <section id="messages" className="scroll-mt-20">
+            <MessagesPanel bookingId={booking.id} contactEmail={booking.contactEmail} view={messages} />
+          </section>
+
           <Panel title={<span className="flex items-center gap-1.5"><Lock aria-hidden className="size-3.5" /> Private booking note</span>}>
             <PrivateNoteForm kind="booking" id={booking.id} defaultValue={booking.privateNote} />
           </Panel>
@@ -203,6 +212,49 @@ async function MoveOptions({ booking, dateKey, minutes }: { booking: { id: strin
       <p className="mb-3 text-sm text-ink-2">{formatDateKey(dateKey, { long: true })}: times with room for {formatDuration(minutes)}.</p>
       <MoveTimes key={dateKey} bookingId={booking.id} startTimes={startTimes} />
     </>
+  );
+}
+
+/** Confirmation and reminder in plain words, with WhatsApp and an email fix when they're needed (Spec 6.7). */
+function MessagesPanel({ bookingId, contactEmail, view }: { bookingId: string; contactEmail: string | null; view: BookingMessages }) {
+  const canFix = view.whatsapp !== null && (!contactEmail || view.messages.some((m) => m.status.fixEmail));
+  return (
+    <Panel title="Messages">
+      {view.messages.length === 0 ? (
+        <p className="text-sm text-ink-3">Messages start once the booking is confirmed.</p>
+      ) : (
+        <ul className="space-y-3">
+          {view.messages.map((m) => (
+            <li key={m.id} className="space-y-2">
+              <Badge tone={m.status.tone}>{m.status.label}</Badge>
+              {m.sentAt && m.status.tone === "success" && <p className="text-xs text-ink-3">{formatDateTime(m.sentAt)}</p>}
+              {m.manual && <WhatsappSend notificationId={m.manual.id} href={m.manual.whatsappUrl} name={m.manual.name} />}
+            </li>
+          ))}
+        </ul>
+      )}
+      {view.whatsapp && (
+        <div className="mt-4 border-t border-line pt-4">
+          <p className="mb-2 text-xs text-ink-3">Send again on WhatsApp, in your wording from Settings:</p>
+          <div className="flex flex-wrap gap-2">
+            <a href={view.whatsapp.confirmation} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "sm")}>
+              <MessageCircle aria-hidden className="size-4" /> Confirmation
+            </a>
+            <a href={view.whatsapp.reminder} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "sm")}>
+              <MessageCircle aria-hidden className="size-4" /> Reminder
+            </a>
+          </div>
+        </div>
+      )}
+      {canFix && (
+        <details className="mt-4 rounded-[var(--radius)] border border-line" open={view.messages.some((m) => m.status.fixEmail && m.status.tone === "danger")}>
+          <summary className="min-h-11 px-4 py-3 text-sm font-semibold">{contactEmail ? "Fix the email" : "Add an email"}</summary>
+          <div className="border-t border-line p-4">
+            <BookingEmailForm bookingId={bookingId} current={contactEmail} />
+          </div>
+        </details>
+      )}
+    </Panel>
   );
 }
 

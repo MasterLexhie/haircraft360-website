@@ -1,11 +1,12 @@
 "use client";
 
 import { useActionState, useMemo, useState, useTransition } from "react";
-import { Check, Copy, Link2, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Link2, MessageCircle, Plus, Trash2 } from "lucide-react";
 import type { Booking, Kobo } from "@/domain/types";
 import { formatNaira, parseNairaToKobo } from "@/lib/money";
 import { formatTime } from "@/lib/time";
 import {
+  bookingEmailAction,
   bookingNoteAction,
   completeBookingAction,
   customerNoteAction,
@@ -16,7 +17,7 @@ import {
   type ActionState,
 } from "@/app/admin/actions";
 import { ActionFeedback } from "@/components/admin/action-feedback";
-import { Button, Field, cx, inputClass } from "@/components/ui/primitives";
+import { Button, Field, buttonClass, cx, inputClass } from "@/components/ui/primitives";
 
 const Feedback = ActionFeedback;
 
@@ -133,7 +134,7 @@ export function ManualPaymentForm({ bookingId, awaitingDeposit }: { bookingId: s
 
 /* ───────────── Status changes ───────────── */
 
-export function StatusActions({ bookingId, status }: { bookingId: string; status: Booking["status"] }) {
+export function StatusActions({ bookingId, status, started }: { bookingId: string; status: Booking["status"]; started: boolean }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<ActionState>(null);
   const run = (to: "cancelled" | "no_show" | "confirmed", confirmText: string) => {
@@ -143,7 +144,7 @@ export function StatusActions({ bookingId, status }: { bookingId: string; status
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap gap-2">
-        {status === "confirmed" && (
+        {status === "confirmed" && started && (
           <Button variant="secondary" size="sm" disabled={pending} onClick={() => run("no_show", "Mark this booking as a no-show? Payments already received are kept.")}>
             Mark no-show
           </Button>
@@ -190,8 +191,7 @@ export function MoveTimes({ bookingId, startTimes }: { bookingId: string; startT
 
 /* ───────────── Balance payment link ───────────── */
 
-/** Placeholder until Milestone 4 adds payment links sent by WhatsApp. */
-/** Makes a link the customer can pay the balance with (card, transfer or USSD), valid for 14 days. */
+/** Makes a link the customer can pay the balance with (card, transfer or USSD), valid for 14 days, ready to send on WhatsApp. */
 export function BalanceLink({ bookingId }: { bookingId: string }) {
   const [pending, start] = useTransition();
   const [state, setState] = useState<ActionState>(null);
@@ -213,16 +213,38 @@ export function BalanceLink({ bookingId }: { bookingId: string }) {
         <span className="text-xs text-ink-3">The customer pays the balance online. Works for 14 days.</span>
       </div>
       {state?.link ? (
-        <div className="flex gap-2">
-          <label htmlFor="balance-link" className="sr-only">Payment link</label>
-          <input id="balance-link" readOnly value={state.link} onFocus={(e) => e.currentTarget.select()} className={cx(inputClass, "min-w-0 flex-1 text-sm")} />
-          <Button variant="secondary" size="sm" onClick={() => copy(state.link!)}>
-            {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />} {copied ? "Copied" : "Copy"}
-          </Button>
+        <div className="space-y-2">
+          {state.whatsappUrl && (
+            <a href={state.whatsappUrl} target="_blank" rel="noopener noreferrer" className={buttonClass("primary", "sm")}>
+              <MessageCircle aria-hidden className="size-4" /> Send on WhatsApp
+            </a>
+          )}
+          <div className="flex gap-2">
+            <label htmlFor="balance-link" className="sr-only">Payment link</label>
+            <input id="balance-link" readOnly value={state.link} onFocus={(e) => e.currentTarget.select()} className={cx(inputClass, "min-w-0 flex-1 text-sm")} />
+            <Button variant="secondary" size="sm" onClick={() => copy(state.link!)}>
+              {copied ? <Check aria-hidden className="size-4" /> : <Copy aria-hidden className="size-4" />} {copied ? "Copied" : "Copy"}
+            </Button>
+          </div>
         </div>
       ) : (
         <Feedback state={state} />
       )}
     </div>
+  );
+}
+
+/* ───────────── Fix the email ───────────── */
+
+export function BookingEmailForm({ bookingId, current }: { bookingId: string; current: string | null }) {
+  const [state, action, pending] = useActionState<ActionState, FormData>(bookingEmailAction.bind(null, bookingId), null);
+  return (
+    <form action={action} className="space-y-3">
+      <Field id="booking-email" label={current ? "Correct email" : "Customer's email"} error={state?.fieldErrors?.email}>
+        <input id="booking-email" name="email" type="email" inputMode="email" autoComplete="off" required defaultValue={current ?? ""} className={cx(inputClass, "text-sm")} />
+      </Field>
+      <Feedback state={state} />
+      <Button type="submit" variant="secondary" size="sm" loading={pending}>Save and resend</Button>
+    </form>
   );
 }
