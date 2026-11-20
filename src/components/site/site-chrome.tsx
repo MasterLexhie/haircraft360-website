@@ -58,10 +58,8 @@ export function SiteFooter() {
             <li><Link className={linkCls} href="/#services">Services</Link></li>
             <li><Link className={linkCls} href="/#visit">Location &amp; hours</Link></li>
             <li><Link className={linkCls} href="/booking">Find my booking</Link></li>
+            <li><Link className={linkCls} href="/terms">Booking terms</Link></li>
           </ul>
-          <p className="mt-5 text-xs text-on-night-2">
-            Booking, deposit and cancellation terms will appear here once the owner approves them.
-          </p>
         </div>
       </div>
       <div className="border-t border-on-night/15">

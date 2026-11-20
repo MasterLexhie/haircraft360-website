@@ -54,7 +54,7 @@ export default function FindBookingPage() {
         <div className="lg:col-start-1 lg:row-start-2">
           <ul className="grid max-w-lg gap-5 sm:grid-cols-2">
             {[
-              { icon: CalendarCheck, title: "Check your appointment", body: "Date, time and services." },
+              { icon: CalendarCheck, title: "Check your appointment", body: "Date, time and whether it’s confirmed." },
               { icon: Receipt, title: "See what you owe", body: "Any balance still due after your deposit." },
               { icon: MapPin, title: "Get directions", body: "The salon’s address and phone number in one place." },
             ].map((f) => (
