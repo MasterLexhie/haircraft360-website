@@ -1,6 +1,6 @@
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/server/db";
-import { clientIpFrom } from "@/server/rate-limit";
+import { clientIpFrom, hit, LIMITS } from "@/server/rate-limit";
 import { settlePayment } from "@/server/payments/checkout";
 import { isValidSignature, PAYSTACK_WEBHOOK_IPS } from "@/server/payments/paystack";
 
@@ -13,11 +13,20 @@ import { isValidSignature, PAYSTACK_WEBHOOK_IPS } from "@/server/payments/paysta
  *    then records it once (duplicates and any order of arrival are safe).
  *
  * A failure answers 500 so Paystack retries; everything else answers 200 straight away.
+ * Paystack's events are a few KB, so anything large is refused before it is read or stored.
  */
+const MAX_BODY_BYTES = 64 * 1024;
+
 export async function POST(request: Request) {
+  if (Number(request.headers.get("content-length") ?? 0) > MAX_BODY_BYTES) return new Response("too large", { status: 413 });
   const raw = await request.text();
+  if (raw.length > MAX_BODY_BYTES) return new Response("too large", { status: 413 });
   const sourceIp = clientIpFrom(request.headers);
   const signatureValid = await isValidSignature(raw, request.headers.get("x-paystack-signature"));
+  // Bad signatures are kept as evidence, but only so many per sender: the URL is public.
+  if (!signatureValid && !(await hit(`webhook-bad:ip:${sourceIp}`, LIMITS.webhookBadSignaturePerIp)).ok) {
+    return new Response("invalid signature", { status: 401 });
+  }
 
   let payload: { event?: unknown; data?: { reference?: unknown } } | null = null;
   try {
@@ -33,7 +42,8 @@ export async function POST(request: Request) {
     data: {
       eventType,
       reference,
-      payload: (payload ?? { raw: raw.slice(0, 2000) }) as Prisma.InputJsonValue,
+      // Only a signed event is stored whole; anything else is kept short.
+      payload: (signatureValid && payload ? payload : { raw: raw.slice(0, 2000) }) as Prisma.InputJsonValue,
       signatureValid,
       sourceIp,
       status: signatureValid ? "received" : "ignored",
@@ -50,6 +60,12 @@ export async function POST(request: Request) {
 
   try {
     const outcome = await settlePayment(reference, "Paystack");
+    if (outcome === "pending") {
+      // Paystack signed a success but Verify doesn't agree yet. Answer 500 so Paystack sends
+      // it again later; otherwise a payment whose customer closed the page would never land.
+      await db.webhookEvent.update({ where: { id: event.id }, data: { status: "failed", error: "Verify doesn't show success yet; Paystack will retry", processedAt: new Date() } });
+      return new Response("not yet", { status: 500 });
+    }
     await db.webhookEvent.update({
       where: { id: event.id },
       data: {

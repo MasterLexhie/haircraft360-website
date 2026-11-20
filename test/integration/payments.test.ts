@@ -195,12 +195,13 @@ describe("webhook", () => {
     expect(await db.webhookEvent.findFirstOrThrow()).toMatchObject({ signatureValid: false, status: "ignored" });
   });
 
-  it("ignores a tampered body: the amount in the event is never trusted", async () => {
+  it("never takes the event's word: a signed success that Verify doesn't confirm is retried, not recorded", async () => {
     const { reference, accessToken, booking } = await newBooking();
     const { reference: ref } = await startBookingPayment(reference, accessToken, "deposit");
-    // Correctly signed, but Paystack's Verify says the charge didn't succeed.
+    // Correctly signed, but Paystack's Verify doesn't show the charge as successful yet.
     const res = await signedWebhook({ event: "charge.success", data: { reference: ref, amount: booking.depositDueKobo, status: "success" } });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(500);
+    expect((await db.webhookEvent.findFirstOrThrow()).status).toBe("failed");
     expect(await db.payment.count()).toBe(0);
     expect((await db.booking.findUniqueOrThrow({ where: { id: booking.id } })).status).toBe("pending_payment");
   });
@@ -239,6 +240,30 @@ describe("webhook", () => {
     expect((await signedWebhook({ event: "charge.success", data: { reference: ref } }, { ip: "203.0.113.9" })).status).toBe(200);
     expect(await db.payment.count()).toBe(1);
     expect((await db.webhookEvent.findFirstOrThrow()).error).toMatch(/outside Paystack/);
+  });
+
+  it("then records it when Paystack sends the event again", async () => {
+    const { reference, accessToken } = await newBooking();
+    const { reference: ref } = await startBookingPayment(reference, accessToken, "deposit");
+    const event = { event: "charge.success", data: { reference: ref } };
+    expect((await signedWebhook(event)).status).toBe(500);
+    paid(ref);
+    expect((await signedWebhook(event)).status).toBe(200);
+    expect(await db.payment.count()).toBe(1);
+  });
+
+  it("refuses a large body without storing it", async () => {
+    const res = await webhook(new Request("http://localhost/api/webhooks/paystack", { method: "POST", body: "x".repeat(70 * 1024) }));
+    expect(res.status).toBe(413);
+    expect(await db.webhookEvent.count()).toBe(0);
+  });
+
+  it("stores only a short note of badly signed calls, and stops storing them from a flooding sender", async () => {
+    const bad = () => signedWebhook({ event: "charge.success", data: { reference: "x", junk: "y".repeat(20_000) } }, { secret: "sk_test_attacker", ip: "203.0.113.50" });
+    for (let i = 0; i < 22; i++) expect((await bad()).status).toBe(401);
+    expect(await db.webhookEvent.count()).toBe(20);
+    const stored = await db.webhookEvent.findFirstOrThrow();
+    expect(JSON.stringify(stored.payload).length).toBeLessThan(2_100);
   });
 
   it("answers 500 when Paystack can't be reached, so Paystack retries", async () => {
