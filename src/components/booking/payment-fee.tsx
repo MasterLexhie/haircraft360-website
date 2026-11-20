@@ -15,8 +15,9 @@ export function PaymentFee({
   if (!show || amountKobo <= 0) return null;
   const fee = paystackFeeOnTop(amountKobo);
   return (
-    <div className="mt-2">
-      <dl className="space-y-1 text-sm">
+    <div className="mt-3 border-t border-line pt-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">Paying now</p>
+      <dl className="mt-2 space-y-1 text-sm">
         <div className="flex justify-between gap-4">
           <dt className="text-ink-2">Paystack payment fee</dt>
           <dd className="tabular text-ink-2">{formatNaira(fee)}</dd>
