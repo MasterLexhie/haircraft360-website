@@ -4,8 +4,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CalendarDays, CreditCard, Lock, Mail, Phone } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData } from "@/server/queries";
-import { balanceDue, paidKobo } from "@/domain/pricing";
+import { getAdminData, requestNow } from "@/server/queries";
+import { customerStats } from "@/domain/crm";
 import { paymentMethodLabel, paymentTypeLabel } from "@/domain/labels";
 import { formatPhone } from "@/domain/phone";
 import { formatNaira } from "@/lib/money";
@@ -26,13 +26,13 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
 
 async function CustomerView({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
-  const [{ id }, db] = await Promise.all([params, getAdminData()]);
+  const [{ id }, db, nowMs] = await Promise.all([params, getAdminData(), requestNow()]);
   const c = db.customers.find((x) => x.id === id);
   if (!c) notFound();
   const bookings = db.bookings.filter((b) => b.customerId === c.id);
   const ids = new Set(bookings.map((b) => b.id));
   const payments = db.payments.filter((p) => ids.has(p.bookingId));
-  const outstanding = bookings.filter((b) => b.status === "completed").reduce((s, b) => s + balanceDue(b, payments.filter((p) => p.bookingId === b.id)), 0);
+  const stats = customerStats(bookings, payments, nowMs);
   const refOf = (bookingId: string) => bookings.find((b) => b.id === bookingId)?.reference ?? "";
 
   // One chronological timeline of bookings and payments (oldest first).
@@ -76,6 +76,21 @@ async function CustomerView({ params }: { params: Promise<{ id: string }> }) {
         </Panel>
 
         <div className="space-y-6">
+          <Panel title="At a glance">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+              <Stat label="Visits" value={stats.visits} />
+              <Stat label="No-shows" value={stats.noShows} tone={stats.noShows ? "text-danger" : undefined} />
+              <Stat label="Total paid" value={formatNaira(stats.totalSpendKobo)} />
+              <Stat label="Average paid per visit" value={stats.averageSpendKobo === null ? "None yet" : formatNaira(stats.averageSpendKobo)} />
+              <Stat label="Last visit" value={stats.lastVisitAt ? formatDate(stats.lastVisitAt) : "None yet"} />
+              <Stat label="Next visit" value={stats.nextVisitAt ? `${formatDate(stats.nextVisitAt)}, ${formatTime(stats.nextVisitAt)}` : "None booked"} />
+              <Stat label="Owes" value={formatNaira(stats.outstandingKobo)} tone={stats.outstandingKobo ? "text-danger" : undefined} />
+              <div className="col-span-2">
+                <dt className="text-xs text-ink-3">Usual services</dt>
+                <dd className="mt-0.5">{stats.usualServices.length ? stats.usualServices.map((s) => `${s.name} (${s.count})`).join(", ") : "None yet"}</dd>
+              </div>
+            </dl>
+          </Panel>
           <Panel title="Contact">
             <ul className="space-y-2 text-sm">
               {c.phones.map((p) => (
@@ -87,11 +102,6 @@ async function CustomerView({ params }: { params: Promise<{ id: string }> }) {
               {!c.emails.some((e) => !e.isPlaceholder && !e.bounced) && <li className="text-ink-3">No usable email: message on WhatsApp</li>}
               <li className="text-ink-3">{c.marketingConsent ? "Happy to receive offers" : "No marketing messages"}</li>
             </ul>
-            <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-line pt-4 text-sm">
-              <div><dt className="text-xs text-ink-3">Bookings</dt><dd className="tabular font-semibold">{bookings.length}</dd></div>
-              <div><dt className="text-xs text-ink-3">Paid</dt><dd className="tabular font-semibold">{formatNaira(paidKobo(payments))}</dd></div>
-              <div><dt className="text-xs text-ink-3">Owes</dt><dd className={`tabular font-semibold ${outstanding ? "text-danger" : ""}`}>{formatNaira(outstanding)}</dd></div>
-            </dl>
           </Panel>
           <Panel title={<span className="flex items-center gap-1.5"><Lock aria-hidden className="size-3.5" /> Private customer notes</span>}>
             <PrivateNoteForm kind="customer" id={c.id} defaultValue={c.notes} />
@@ -99,5 +109,14 @@ async function CustomerView({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </div>
     </>
+  );
+}
+
+function Stat({ label, value, tone }: { label: string; value: React.ReactNode; tone?: string }) {
+  return (
+    <div>
+      <dt className="text-xs text-ink-3">{label}</dt>
+      <dd className={`tabular font-semibold ${tone ?? ""}`}>{value}</dd>
+    </div>
   );
 }

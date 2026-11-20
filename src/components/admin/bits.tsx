@@ -3,11 +3,17 @@ import type { ReactNode } from "react";
 import type { Booking, Payment } from "@/domain/types";
 import { bookingStatusLabel, paymentSummaryLabel } from "@/domain/labels";
 import { paymentSummaryState } from "@/domain/pricing";
+import { visitLabel, type VisitInfo } from "@/domain/crm";
 import { Badge, cx } from "@/components/ui/primitives";
 
 export function BookingStatusBadge({ status }: { status: Booking["status"] }) {
   const s = bookingStatusLabel[status];
   return <Badge tone={s.tone}>{s.label}</Badge>;
+}
+
+/** "New" or "Returning, 5th visit" (Spec 6.5). */
+export function VisitBadge({ visit }: { visit: VisitInfo }) {
+  return <Badge tone={visit.returning ? "accent" : "info"}>{visitLabel(visit)}</Badge>;
 }
 
 export function PaymentStateBadge({ booking, payments }: { booking: Booking; payments: Payment[] }) {

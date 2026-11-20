@@ -11,7 +11,7 @@ import { formatPhone } from "@/domain/phone";
 import { bookingStatusLabel } from "@/domain/labels";
 import { formatNaira } from "@/lib/money";
 import { formatDateKey, formatDateTime, formatDuration, formatLongDate, formatTime, isValidDateKey, lagosDateKey } from "@/lib/time";
-import { BookingStatusBadge, KeyValue, PageHeader, Panel, PaymentStateBadge } from "@/components/admin/bits";
+import { BookingStatusBadge, KeyValue, PageHeader, Panel, PaymentStateBadge, VisitBadge } from "@/components/admin/bits";
 import { BalanceLink, CompletionForm, ManualPaymentForm, MoveTimes, PrivateNoteForm, StatusActions } from "@/components/admin/booking-forms";
 import { PaymentHistory } from "@/components/booking/payment-history";
 import { Alert, Button, Field, Skeleton, inputClass } from "@/components/ui/primitives";
@@ -33,7 +33,7 @@ async function Detail({ params, searchParams }: Props) {
   const [{ id }, { move }, db, nowMs] = await Promise.all([params, searchParams, getAdminData(), requestNow()]);
   const b = db.bookings.find((x) => x.id === id);
   if (!b) notFound();
-  const { booking, customer, payments } = joinBooking(db, b);
+  const { booking, customer, payments, visit } = joinBooking(db, b);
   const paid = paidKobo(payments);
   const due = balanceDue(booking, payments);
   const audit = db.audit.filter((e) => e.bookingId === booking.id).sort((x, y) => y.at.localeCompare(x.at));
@@ -49,7 +49,7 @@ async function Detail({ params, searchParams }: Props) {
     <>
       <PageHeader
         back={{ href: "/admin/bookings", label: "All bookings" }}
-        title={<span className="flex flex-wrap items-center gap-3">{booking.reference} <BookingStatusBadge status={booking.status} /> <PaymentStateBadge booking={booking} payments={payments} /></span>}
+        title={<span className="flex flex-wrap items-center gap-3">{booking.reference} <BookingStatusBadge status={booking.status} /> <PaymentStateBadge booking={booking} payments={payments} /> <VisitBadge visit={visit} /></span>}
         description={`${formatLongDate(booking.startAt)} · ${formatTime(booking.startAt)} – ${formatTime(booking.endAt)} (${formatDuration(minutes)})`}
         actions={<StatusActions bookingId={booking.id} status={booking.status} />}
       />

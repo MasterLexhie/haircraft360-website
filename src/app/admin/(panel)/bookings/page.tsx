@@ -10,7 +10,7 @@ import type { Booking, BookingStatus } from "@/domain/types";
 import { formatPhone } from "@/domain/phone";
 import { formatNaira } from "@/lib/money";
 import { formatDate, formatTime, lagosDateKey } from "@/lib/time";
-import { BookingStatusBadge, PageHeader, PaymentStateBadge } from "@/components/admin/bits";
+import { BookingStatusBadge, PageHeader, PaymentStateBadge, VisitBadge } from "@/components/admin/bits";
 import { EmptyState, Skeleton, buttonClass, cx, inputClass } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Bookings" };
@@ -131,7 +131,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {pageRows.map(({ booking, customer, payments }) => {
+                {pageRows.map(({ booking, customer, payments, visit }) => {
                   const due = balanceDue(booking, payments);
                   return (
                     <tr key={booking.id} className="hover:bg-sand/40">
@@ -144,6 +144,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
                       <td className="px-4 py-3">
                         <Link href={`/admin/customers/${customer.id}`} className="font-medium hover:underline">{customer.displayName}</Link>
                         <span className="block text-xs text-ink-3">{formatPhone(booking.contactPhone)}</span>
+                        <span className="mt-1 block"><VisitBadge visit={visit} /></span>
                       </td>
                       <td className="max-w-56 px-4 py-3 text-ink-2">{serviceNames(booking)}</td>
                       <td className="whitespace-nowrap px-4 py-3 text-right tabular">{formatNaira(booking.totalKobo)}</td>
@@ -159,7 +160,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
 
           {/* Mobile cards */}
           <ul className="grid gap-3 lg:grid-cols-2 xl:hidden">
-            {pageRows.map(({ booking, customer, payments }) => {
+            {pageRows.map(({ booking, customer, payments, visit }) => {
               const due = balanceDue(booking, payments);
               return (
                 <li key={booking.id}>
@@ -167,6 +168,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="font-semibold">{customer.displayName}</p>
+                        <p className="mb-1"><VisitBadge visit={visit} /></p>
                         <p className="tabular text-sm text-ink-2">{formatDate(booking.startAt)}, {formatTime(booking.startAt)}</p>
                       </div>
                       <BookingStatusBadge status={booking.status} />

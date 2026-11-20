@@ -1,4 +1,5 @@
 import "server-only";
+import { visitInfo, type VisitInfo } from "@/domain/crm";
 import { connection } from "next/server";
 import type { AuditEvent, Booking, Customer, Payment, Service, Settings } from "@/domain/types";
 import { balanceDue } from "@/domain/pricing";
@@ -97,6 +98,8 @@ export interface AdminBookingRow {
   booking: Booking;
   customer: Customer;
   payments: Payment[];
+  /** New or returning, and which visit this is (Spec 6.5). */
+  visit: VisitInfo;
 }
 
 /** Current time for a request-rendered page (after connection(), so never prerendered). */
@@ -129,11 +132,12 @@ export async function getAdminData(): Promise<AdminSnapshot> {
   };
 }
 
-export function joinBooking(snapshot: Pick<AdminSnapshot, "customers" | "payments">, b: Booking): AdminBookingRow {
+export function joinBooking(snapshot: Pick<AdminSnapshot, "bookings" | "customers" | "payments">, b: Booking): AdminBookingRow {
   return {
     booking: b,
     customer: snapshot.customers.find((c) => c.id === b.customerId)!,
     payments: snapshot.payments.filter((p) => p.bookingId === b.id),
+    visit: visitInfo(b, snapshot.bookings.filter((x) => x.customerId === b.customerId)),
   };
 }
 
