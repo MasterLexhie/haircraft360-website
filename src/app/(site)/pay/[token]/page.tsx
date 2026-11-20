@@ -3,7 +3,8 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { CalendarDays, CheckCircle2, ReceiptText } from "lucide-react";
 import { getPaymentLinkView, PAYMENT_LINK_DAYS } from "@/server/payments/links";
-import { business } from "@/config/business";
+import { getSalon } from "@/server/queries";
+import { SalonPhone } from "@/components/site/salon-phone";
 import { formatNaira } from "@/lib/money";
 import { formatLongDate, formatTime } from "@/lib/time";
 import { Alert, ButtonLink, Card, Skeleton } from "@/components/ui/primitives";
@@ -32,7 +33,7 @@ async function PayView({ params, searchParams }: Props) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <h1 className="type-display text-[2.2rem]">This payment link has expired</h1>
-        <p className="mt-3 text-ink-2">Payment links work for {PAYMENT_LINK_DAYS} days. Ask the salon to send a new one, or call {business.phone.value.display}.</p>
+        <p className="mt-3 text-ink-2">Payment links work for {PAYMENT_LINK_DAYS} days. Ask the salon to send a new one, or call <SalonPhone />.</p>
         <ButtonLink href="/" variant="secondary" className="mt-6">Go to the home page</ButtonLink>
       </div>
     );
@@ -42,7 +43,7 @@ async function PayView({ params, searchParams }: Props) {
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <h1 className="type-display text-[2.2rem]">This booking is closed</h1>
         <p className="mt-3 text-ink-2">
-          Booking {view.reference} can&apos;t be paid online any more. If you have a question about it, call {business.phone.value.display}.
+          Booking {view.reference} can&apos;t be paid online any more. If you have a question about it, call <SalonPhone />.
         </p>
         <ButtonLink href="/" variant="secondary" className="mt-6">Go to the home page</ButtonLink>
       </div>
@@ -63,7 +64,7 @@ async function PayView({ params, searchParams }: Props) {
         <div>
           <h1 className="type-display text-[2.2rem] sm:text-[2.75rem]">{settled ? "All paid, thank you" : "Pay your balance"}</h1>
           <p className="mt-1 text-ink-2">
-            {settled ? "Nothing more is owed on this booking." : `For ${view.contactName}'s appointment at ${business.brandName}.`}
+            {settled ? "Nothing more is owed on this booking." : `For ${view.contactName}'s appointment at ${(await getSalon()).name}.`}
           </p>
         </div>
       </div>

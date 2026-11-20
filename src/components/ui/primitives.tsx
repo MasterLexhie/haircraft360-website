@@ -90,15 +90,6 @@ export function Badge({ tone = "neutral", children, className }: { tone?: Tone; 
   );
 }
 
-/** Marks sample values that are not owner-approved. */
-export function DemoTag({ children = "Demo", className }: { children?: ReactNode; className?: string }) {
-  return (
-    <span className={cx("inline-flex items-center rounded border border-dashed border-ink-3/60 bg-surface px-1.5 py-px text-[0.7rem] font-semibold uppercase tracking-wide text-ink-2", className)}>
-      {children}
-    </span>
-  );
-}
-
 /* ───────────── Alerts ───────────── */
 
 const alertIcon = { info: Info, success: CheckCircle2, warning: AlertTriangle, danger: XCircle } as const;

@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarX2, ChevronLeft, ChevronRight, Phone, RefreshCw } from "lucide-react";
 import type { DateOption, Slot } from "@/domain/availability";
-import { business } from "@/config/business";
 import { dayOfWeek, formatDateKey, formatDuration, formatTime } from "@/lib/time";
 import { Alert, Button, EmptyState, Skeleton, cx } from "@/components/ui/primitives";
 
@@ -21,6 +20,7 @@ export function DateTimeStep({
   onDate,
   onSlot,
   refreshKey,
+  salonPhone,
 }: {
   durationMinutes: number;
   dateKey: string | null;
@@ -29,6 +29,7 @@ export function DateTimeStep({
   onSlot: (s: string | null) => void;
   /** Bump to force a refetch (e.g. after a slot was taken). */
   refreshKey: number;
+  salonPhone: { e164: string } | null;
 }) {
   const [retry, setRetry] = useState(0);
   // Results are stored with the request key they answer, so "loading" is derived
@@ -200,9 +201,11 @@ export function DateTimeStep({
                     Try {formatDateKey(nextAvailable.dateKey)}
                   </Button>
                 )}
-                <a href={`tel:${business.phone.value.e164}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-line-strong px-4 text-sm font-semibold hover:bg-sand">
-                  <Phone aria-hidden className="size-4" /> Call the salon
-                </a>
+                {salonPhone && (
+                  <a href={`tel:${salonPhone.e164}`} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-full border border-line-strong px-4 text-sm font-semibold hover:bg-sand">
+                    <Phone aria-hidden className="size-4" /> Call the salon
+                  </a>
+                )}
               </div>
             }
           >
@@ -232,7 +235,7 @@ export function DateTimeStep({
                 </div>
               </div>
             ))}
-            <p className="text-xs text-ink-3">Times shown in Ibadan time (WAT). Based on demo availability settings.</p>
+            <p className="text-xs text-ink-3">Times shown in Ibadan time (WAT).</p>
           </div>
         )}
       </fieldset>

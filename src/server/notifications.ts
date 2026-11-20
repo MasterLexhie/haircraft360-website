@@ -2,7 +2,7 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { balanceDue, paidKobo } from "@/domain/pricing";
 import { fillTemplate, type MessageVars } from "@/domain/messages";
-import { business, fullAddress } from "@/config/business";
+import { salonFrom, type Salon } from "@/domain/salon";
 import { formatNaira } from "@/lib/money";
 import { addDays, formatDateKey, formatLongDate, formatTime, lagosDateKey, lagosMinutes, lagosToUtcMs } from "@/lib/time";
 import { buildIcs, googleCalendarUrl } from "@/lib/calendar";
@@ -50,8 +50,10 @@ export interface SendResult {
 
 type Row = Prisma.NotificationGetPayload<{ include: { booking: { include: { items: true; payments: true } } } }>;
 
-export function salonInfo(): SalonInfo {
-  return { name: business.brandName, address: fullAddress, mapsUrl: business.mapsUrl, phoneDisplay: business.phone.value.display };
+/** The salon's name, address and phone for emails, from Settings. */
+export async function salonInfo(salon?: Salon): Promise<SalonInfo> {
+  const s = salon ?? salonFrom((await loadSettings()).salonDetails);
+  return { name: s.name, address: s.address, mapsUrl: s.mapsUrl, phoneDisplay: s.phone?.display ?? "" };
 }
 
 function dueNow(now: Date): Prisma.NotificationWhereInput {
@@ -75,7 +77,7 @@ async function skipReason(row: Row, nowMs: number): Promise<string | null> {
 }
 
 /** Placeholder values for the owner's templates, for one booking. */
-export function messageVarsFor(b: Row["booking"] & {}, link: string): MessageVars {
+export function messageVarsFor(b: Row["booking"] & {}, link: string, salon: Pick<Salon, "name" | "address">): MessageVars {
   const booking = toBooking(b);
   const main = booking.items.find((i) => i.kind === "main") ?? booking.items[0];
   return {
@@ -87,8 +89,8 @@ export function messageVarsFor(b: Row["booking"] & {}, link: string): MessageVar
     deposit: formatNaira(b.depositDueKobo),
     balance: formatNaira(balanceDue(b, b.payments)),
     link,
-    salon: business.brandName,
-    address: fullAddress,
+    salon: salon.name,
+    address: salon.address,
   };
 }
 
@@ -98,7 +100,7 @@ async function render(row: Row): Promise<EmailMessage> {
     if (!to) throw new EmailSendError("OWNER_NOTIFICATION_EMAIL is not set.", "permanent");
     const payload = (row.payload ?? {}) as { message?: string; dateKey?: string };
     if (row.type === "owner_daily_summary") return { to, ...dailySummaryEmail(await dailySummaryData(payload.dateKey ?? lagosDateKey(row.dueAt), row.dueAt.getTime())) };
-    return { to, ...ownerAlertEmail(salonInfo(), payload.message ?? "Something on your admin account needs a look.", `${siteUrl()}/admin`) };
+    return { to, ...ownerAlertEmail(await salonInfo(), payload.message ?? "Something on your admin account needs a look.", `${siteUrl()}/admin`) };
   }
 
   const b = row.booking!;
@@ -107,12 +109,13 @@ async function render(row: Row): Promise<EmailMessage> {
   const token = await ensureMessageToken(b);
   const link = bookingUrl(b.reference, token);
   const due = balanceDue(b, b.payments);
-  const event = calendarEventFor(booking, { url: link, balanceKobo: due });
   const settings = await loadSettings();
-  const vars = messageVarsFor(b, link);
+  const salon = salonFrom(settings.salonDetails);
+  const event = calendarEventFor(booking, salon, { url: link, balanceKobo: due });
+  const vars = messageVarsFor(b, link, salon);
   const template = row.type === "confirmation" ? settings.messageTemplates.confirmationEmailIntro : settings.messageTemplates.reminderEmailIntro;
   const data = {
-    salon: salonInfo(),
+    salon: await salonInfo(salon),
     intro: fillTemplate(template, vars),
     customerName: b.contactName,
     reference: b.reference,
@@ -288,7 +291,7 @@ export async function dailySummaryData(dateKey: string, nowMs = Date.now()) {
     failedWebhooks ? `${plural(failedWebhooks, "payment notice", "payment notices")} couldn't be processed: contact your developer` : "",
   ].filter(Boolean);
   return {
-    salon: salonInfo(),
+    salon: await salonInfo(),
     dateLabel: formatDateKey(dateKey, { long: true }),
     today: today.map((b) => ({ time: formatTime(b.startAt.toISOString()), name: b.contactName, services: services(b.items), balanceKobo: balanceDue(b, b.payments) })),
     newBookings: fresh.map((b) => ({ when: `${formatLongDate(b.startAt.toISOString())}, ${formatTime(b.startAt.toISOString())}`, name: b.contactName, services: services(b.items) })),

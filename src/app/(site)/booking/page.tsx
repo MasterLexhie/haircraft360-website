@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowRight, CalendarCheck, MapPin, Phone, Receipt } from "lucide-react";
-import { business } from "@/config/business";
+import { SalonPhone } from "@/components/site/salon-phone";
 import { FindBookingForm } from "./find-submit";
 
 export const metadata: Metadata = { title: "Find my booking" };
@@ -33,11 +33,8 @@ export default function FindBookingPage() {
               <p className="flex items-start gap-2 text-ink-2">
                 <Phone aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-text" />
                 <span>
-                  Lost your reference? Call the salon on{" "}
-                  <a href={`tel:${business.phone.value.e164}`} className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-accent">
-                    {business.phone.value.display}
-                  </a>
-                  .
+                  Lost your reference? Call{" "}
+                  <SalonPhone className="font-semibold text-ink underline decoration-line-strong underline-offset-4 hover:decoration-accent" />.
                 </span>
               </p>
               <p className="text-ink-2">

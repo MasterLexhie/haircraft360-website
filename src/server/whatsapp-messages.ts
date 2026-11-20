@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
-import type { MessageTemplates } from "@/domain/settings";
+import type { Settings } from "@/domain/types";
+import { salonFrom } from "@/domain/salon";
 import { messageStatus, type MessageStatus } from "@/domain/message-status";
 import { fillTemplate } from "@/domain/messages";
 import { formatPhone } from "@/domain/phone";
@@ -44,19 +45,20 @@ export async function manualMessagesDue(nowMs = Date.now()): Promise<ManualMessa
     orderBy: [{ booking: { startAt: "asc" } }, { type: "asc" }],
     include: { booking: { include: { items: true, payments: true } } },
   });
-  const { messageTemplates } = await loadSettings();
+  const settings = await loadSettings();
   const out: ManualMessage[] = [];
-  for (const row of rows) out.push(await buildManualMessage(row, messageTemplates));
+  for (const row of rows) out.push(await buildManualMessage(row, settings));
   return out;
 }
 
 type MessageRow = Prisma.NotificationGetPayload<{ include: { booking: { include: { items: true; payments: true } } } }>;
 
 /** The WhatsApp version of a booking's confirmation or reminder, in the owner's wording. */
-export async function buildManualMessage(row: MessageRow, templates: MessageTemplates): Promise<ManualMessage> {
+export async function buildManualMessage(row: MessageRow, settings: Pick<Settings, "messageTemplates" | "salonDetails">): Promise<ManualMessage> {
   const b = row.booking!;
   const link = bookingUrl(b.reference, await ensureMessageToken(b));
-  const text = fillTemplate(row.type === "confirmation" ? templates.confirmationWhatsapp : templates.reminderWhatsapp, messageVarsFor(b, link));
+  const templates = settings.messageTemplates;
+  const text = fillTemplate(row.type === "confirmation" ? templates.confirmationWhatsapp : templates.reminderWhatsapp, messageVarsFor(b, link, salonFrom(settings.salonDetails)));
   return {
     id: row.id,
     type: row.type as ManualMessage["type"],
@@ -132,7 +134,8 @@ export async function bookingMessages(bookingId: string, nowMs = Date.now()): Pr
     db.booking.findUnique({ where: { id: bookingId }, include: { items: true, payments: true } }),
   ]);
   if (!booking) return { messages: [], whatsapp: null };
-  const { messageTemplates } = await loadSettings();
+  const settings = await loadSettings();
+  const { messageTemplates } = settings;
   const live = booking.status === "confirmed" && booking.startAt.getTime() > nowMs;
   const messages: BookingMessage[] = [];
   for (const row of rows) {
@@ -146,12 +149,12 @@ export async function bookingMessages(bookingId: string, nowMs = Date.now()): Pr
       type: row.type as BookingMessage["type"],
       status,
       sentAt: row.sentAt?.toISOString() ?? null,
-      manual: live && status.sendOnWhatsapp ? await buildManualMessage(row, messageTemplates) : null,
+      manual: live && status.sendOnWhatsapp ? await buildManualMessage(row, settings) : null,
     });
   }
   let whatsapp: BookingMessages["whatsapp"] = null;
   if (live) {
-    const vars = messageVarsFor(booking, bookingUrl(booking.reference, await ensureMessageToken(booking)));
+    const vars = messageVarsFor(booking, bookingUrl(booking.reference, await ensureMessageToken(booking)), salonFrom(settings.salonDetails));
     whatsapp = {
       confirmation: whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.confirmationWhatsapp, vars)),
       reminder: whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.reminderWhatsapp, vars)),
@@ -163,6 +166,6 @@ export async function bookingMessages(bookingId: string, nowMs = Date.now()): Pr
 /** The balance link message, in the owner's wording, ready to open in WhatsApp. */
 export async function balanceLinkWhatsapp(bookingId: string, link: string): Promise<string> {
   const booking = await db.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { items: true, payments: true } });
-  const { messageTemplates } = await loadSettings();
-  return whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.balanceLinkWhatsapp, messageVarsFor(booking, link)));
+  const { messageTemplates, salonDetails } = await loadSettings();
+  return whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.balanceLinkWhatsapp, messageVarsFor(booking, link, salonFrom(salonDetails))));
 }

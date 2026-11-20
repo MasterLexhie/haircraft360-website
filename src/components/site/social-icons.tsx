@@ -1,4 +1,4 @@
-import type { SocialPlatform } from "@/config/business";
+import type { SocialPlatform } from "@/domain/salon";
 
 /**
  * Simple outline glyphs for social platforms, drawn in the same 24px,

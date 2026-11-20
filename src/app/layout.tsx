@@ -12,11 +12,11 @@ const montserrat = Montserrat({ subsets: ["latin"], variable: "--font-montserrat
 
 export const metadata: Metadata = {
   title: {
-    default: "Haircraft360 · Loc care in Ibadan (prototype)",
+    default: "Haircraft360 · Loc care in Ibadan",
     template: "%s · Haircraft360",
   },
   description:
-    "Prototype website for Haircraft360, a loc-focused hair business in Ibadan. Demo services and simulated payments only.",
+    "Book loc care in Ibadan online: starter locs, retwists and more. Choose your services and time, and reserve with a deposit.",
   robots: { index: false, follow: false },
   icons: { icon: "/brand/logo-pink-icon.png" },
 };

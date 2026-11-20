@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { getBookingConfig } from "@/server/queries";
+import { getBookingConfig, getSalon } from "@/server/queries";
 import { BookingWizard } from "@/components/booking/booking-wizard";
 import { Skeleton } from "@/components/ui/primitives";
-import { business } from "@/config/business";
+import { SalonPhone } from "@/components/site/salon-phone";
 import { customerPaysFees } from "@/server/payments/paystack";
 
 export const metadata: Metadata = { title: "Book an appointment" };
@@ -17,19 +17,19 @@ export default function BookPage({ searchParams }: { searchParams: Promise<{ ser
 }
 
 async function Wizard({ searchParams }: { searchParams: Promise<{ service?: string }> }) {
-  const [{ services, settings }, params] = await Promise.all([getBookingConfig(), searchParams]);
+  const [{ services, settings }, params, salon] = await Promise.all([getBookingConfig(), searchParams, getSalon()]);
   if (!services.some((s) => s.bookableAlone)) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
         <h1 className="type-display text-[2.2rem]">Online booking is paused</h1>
         <p className="mt-3 text-ink-2">
           No services are open for booking right now. Please call{" "}
-          <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
+          <SalonPhone />.
         </p>
       </div>
     );
   }
-  return <BookingWizard services={services} settings={{ availability: settings.availability, deposit: settings.deposit }} initialServiceId={params.service ?? null} customerPaysFees={customerPaysFees()} />;
+  return <BookingWizard services={services} settings={{ availability: settings.availability, deposit: settings.deposit }} initialServiceId={params.service ?? null} customerPaysFees={customerPaysFees()} salonPhone={salon.phone} />;
 }
 
 function WizardSkeleton() {

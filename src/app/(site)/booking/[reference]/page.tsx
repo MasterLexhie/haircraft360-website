@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { AlertTriangle, CalendarDays, CalendarPlus, CheckCircle2, Clock, Hourglass, MapPin, Phone, ReceiptText } from "lucide-react";
-import { getCustomerBooking } from "@/server/queries";
+import { getCustomerBooking, getSalon } from "@/server/queries";
 import { bookingStatusLabel } from "@/domain/labels";
 import { balanceDue, paidKobo } from "@/domain/pricing";
-import { business, fullAddress } from "@/config/business";
 import { formatNaira } from "@/lib/money";
 import { formatDuration, formatLongDate, formatTime } from "@/lib/time";
 import { PaymentHistory } from "@/components/booking/payment-history";
@@ -34,7 +33,7 @@ export default function BookingPage(props: Props) {
  */
 async function BookingView({ params, searchParams }: Props) {
   const [{ reference }, { t, paid }] = await Promise.all([params, searchParams]);
-  const data = await getCustomerBooking(reference, t);
+  const [data, salon] = await Promise.all([getCustomerBooking(reference, t), getSalon()]);
   if (!data) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
@@ -51,7 +50,7 @@ async function BookingView({ params, searchParams }: Props) {
   const due = balanceDue(booking, payments);
   const minutes = (Date.parse(booking.endAt) - Date.parse(booking.startAt)) / 60_000;
   const token = t!;
-  const calendar = upcoming ? calendarEventFor(booking, { balanceKobo: due }) : null;
+  const calendar = upcoming ? calendarEventFor(booking, salon, { balanceKobo: due }) : null;
 
   const hero =
     booking.status === "confirmed"
@@ -190,9 +189,9 @@ async function BookingView({ params, searchParams }: Props) {
         <div className="flex gap-3 text-sm">
           <MapPin aria-hidden className="mt-0.5 size-5 shrink-0 text-accent-text" />
           <div>
-            <p className="font-semibold">Haircraft360</p>
-            <p className="text-ink-2">{fullAddress}</p>
-            <a href={business.mapsUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-10 items-center font-semibold underline">
+            <p className="font-semibold">{salon.name}</p>
+            <p className="text-ink-2">{salon.address}</p>
+            <a href={salon.mapsUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-10 items-center font-semibold underline">
               Directions<span className="sr-only"> (opens in a new tab)</span>
             </a>
           </div>
@@ -202,7 +201,7 @@ async function BookingView({ params, searchParams }: Props) {
           <div>
             <p className="font-semibold">Need to change something?</p>
             <p className="text-ink-2">Call the salon. Changes aren&apos;t available online yet.</p>
-            <a href={`tel:${business.phone.value.e164}`} className="mt-1 inline-flex min-h-10 items-center font-semibold underline">{business.phone.value.display}</a>
+            {salon.phone && <a href={`tel:${salon.phone.e164}`} className="mt-1 inline-flex min-h-10 items-center font-semibold underline">{salon.phone.display}</a>}
           </div>
         </div>
       </Card>

@@ -2,12 +2,13 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ArrowRight, CalendarCheck, Clock, CreditCard, ExternalLink, MapPin, Navigation, Phone, Scissors, Sparkles } from "lucide-react";
-import { business, fullAddress, PREVIEW_MODE } from "@/config/business";
-import { getActiveServices, getPublicSettings } from "@/server/queries";
+import { getActiveServices, getPublicSettings, getSalon } from "@/server/queries";
+import { hoursSummary } from "@/domain/salon";
+import { SalonPhone } from "@/components/site/salon-phone";
 import { HomeServices } from "@/components/site/home-services";
 import { StockPhoto } from "@/components/site/brand";
 import { GALLERY_PAIRS, HERO_PHOTO } from "@/config/stock-photos";
-import { ButtonLink, DemoTag, SectionHeading, Skeleton } from "@/components/ui/primitives";
+import { ButtonLink, SectionHeading, Skeleton } from "@/components/ui/primitives";
 import { formatHHMM, WEEKDAYS } from "@/lib/time";
 import type { WeekdayKey } from "@/domain/settings";
 
@@ -60,16 +61,9 @@ function Hero() {
               Book appointment
             </ButtonLink>
           </div>
-          <ul className="mt-10 grid gap-4 border-t border-line-strong/60 pt-6 text-sm text-ink-2 sm:grid-cols-2">
-            <li className="flex items-start gap-2.5">
-              <MapPin aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-text" />
-              <span>Basorun Road, Ibadan<br /><span className="text-ink-3">Beside OLAREM filling station</span></span>
-            </li>
-            <li className="flex items-start gap-2.5">
-              <Clock aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-text" />
-              <span>Mon–Sat, 8 am–9 pm<br /><span className="text-ink-3">Sunday closed{PREVIEW_MODE && " · listed hours"}</span></span>
-            </li>
-          </ul>
+          <Suspense fallback={<Skeleton className="mt-10 h-20" />}>
+            <HeroFacts />
+          </Suspense>
         </div>
 
         <div className="relative mx-auto w-full max-w-md self-stretch md:max-w-none">
@@ -98,7 +92,7 @@ function Hero() {
   );
 }
 
-/** Full-width plum announcement band. States only what the prototype actually does. */
+/** Full-width plum announcement band. */
 function PromoBand() {
   return (
     <div className="on-night bg-accent text-on-night">
@@ -145,9 +139,6 @@ function Welcome() {
             </li>
           ))}
         </ol>
-        <p className="mx-auto mt-8 max-w-2xl text-center text-xs text-ink-3">
-          Prototype: the deposit amount is a demo rule. Real deposit and cancellation terms are awaiting the owner.
-        </p>
       </div>
     </section>
   );
@@ -160,7 +151,7 @@ async function ServicesSection() {
       <div className="rounded-[var(--radius)] border border-dashed border-line-strong p-8 text-center">
         <p className="font-semibold">Services are being updated.</p>
         <p className="mt-1 text-sm text-ink-2">
-          Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a> to ask about an appointment.
+          Call <SalonPhone /> to ask about an appointment.
         </p>
       </div>
     );
@@ -190,7 +181,7 @@ function Gallery() {
           {GALLERY_PAIRS.map(({ label, before, after }) => (
             <li key={label} className="bg-surface shadow-[var(--shadow-sm)]">
               <p className="type-caps flex items-center justify-center gap-2 bg-sand-2 px-4 py-4 text-center text-[0.8rem] text-accent-text">
-                {label} <DemoTag>Stock stand-in</DemoTag>
+                {label}
               </p>
               <div className="grid grid-cols-2 gap-1 p-1">
                 <StockPhoto photo={before} label="before" ratio="3/4" sizes="(min-width: 768px) 17vw, 50vw" className="rounded-none" />
@@ -209,44 +200,14 @@ function Visit() {
     <section id="visit" aria-labelledby="visit-title" className="scroll-mt-24 bg-bg py-16 sm:py-24">
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <SectionHeading id="visit-title" align="center" title={<>Find the <em>salon</em></>}>
-          On Basorun Road in Ibadan, beside the OLAREM filling station.
+          Directions, phone and opening hours.
         </SectionHeading>
         <div className="mt-12 grid gap-6 md:grid-cols-2">
           <div className="bg-sand-2 p-6 sm:p-10">
             <h3 className="type-caps text-[0.85rem] text-accent-text">Address &amp; contact</h3>
-            <dl className="mt-6 space-y-6">
-              <div className="flex gap-4">
-                <dt className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface">
-                  <MapPin aria-hidden className="size-5 text-accent-text" />
-                  <span className="sr-only">Address</span>
-                </dt>
-                <dd>
-                  <address className="not-italic text-ink">{fullAddress}</address>
-                  <a href={business.mapsUrl} target="_blank" rel="noopener noreferrer" className="link-caps mt-1">
-                    <Navigation aria-hidden className="size-4" /> Get directions
-                    <ExternalLink aria-hidden className="size-3.5" />
-                    <span className="sr-only">on Google Maps (opens in a new tab)</span>
-                  </a>
-                </dd>
-              </div>
-              <div className="flex gap-4">
-                <dt className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface">
-                  <Phone aria-hidden className="size-5 text-accent-text" />
-                  <span className="sr-only">Phone</span>
-                </dt>
-                <dd>
-                  <a href={`tel:${business.phone.value.e164}`} className="inline-flex min-h-11 items-center font-display text-2xl text-accent-text underline decoration-line-strong decoration-1 underline-offset-[6px] hover:decoration-accent">
-                    {business.phone.value.display}
-                  </a>
-                  <p className="text-sm text-ink-3">Tap to call</p>
-                </dd>
-              </div>
-            </dl>
-            {PREVIEW_MODE && (
-              <p className="mt-8 border-t border-line-strong/70 pt-4 text-xs text-ink-2">
-                Address, phone and hours are from a public Google listing (record fetched 14 Sep 2026) and are awaiting confirmation by the owner.
-              </p>
-            )}
+            <Suspense fallback={<Skeleton className="mt-6 h-40" />}>
+              <VisitContact />
+            </Suspense>
           </div>
 
           <div className="border border-line bg-surface p-6 sm:p-10">
@@ -260,6 +221,74 @@ function Visit() {
         </div>
       </div>
     </section>
+  );
+}
+
+async function HeroFacts() {
+  const [salon, { availability }] = await Promise.all([getSalon(), getPublicSettings()]);
+  const hours = hoursSummary(availability.weeklyHours, formatHHMM);
+  return (
+    <ul className="mt-10 grid gap-4 border-t border-line-strong/60 pt-6 text-sm text-ink-2 sm:grid-cols-2">
+      {salon.addressLines.length > 0 && (
+        <li className="flex items-start gap-2.5">
+          <MapPin aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-text" />
+          <span>
+            {salon.addressLines[0]}
+            {salon.addressLines[1] && (
+              <>
+                <br />
+                <span className="text-ink-3">{salon.addressLines[1]}</span>
+              </>
+            )}
+          </span>
+        </li>
+      )}
+      <li className="flex items-start gap-2.5">
+        <Clock aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-text" />
+        <span>
+          {hours.open.map((line) => (
+            <span key={line} className="block">{line}</span>
+          ))}
+          <span className="text-ink-3">{hours.closed}</span>
+        </span>
+      </li>
+    </ul>
+  );
+}
+
+async function VisitContact() {
+  const salon = await getSalon();
+  return (
+    <dl className="mt-6 space-y-6">
+      <div className="flex gap-4">
+        <dt className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface">
+          <MapPin aria-hidden className="size-5 text-accent-text" />
+          <span className="sr-only">Address</span>
+        </dt>
+        <dd>
+          {salon.address && <address className="not-italic text-ink">{salon.address}</address>}
+          <a href={salon.mapsUrl} target="_blank" rel="noopener noreferrer" className="link-caps mt-1">
+            <Navigation aria-hidden className="size-4" /> Get directions
+            <ExternalLink aria-hidden className="size-3.5" />
+            <span className="sr-only">on Google Maps (opens in a new tab)</span>
+          </a>
+        </dd>
+      </div>
+      {salon.phone && (
+        <div className="flex gap-4">
+          <dt className="flex size-11 shrink-0 items-center justify-center rounded-full bg-surface">
+            <Phone aria-hidden className="size-5 text-accent-text" />
+            <span className="sr-only">Phone</span>
+          </dt>
+          <dd>
+            <a href={`tel:${salon.phone.e164}`} className="inline-flex min-h-11 items-center font-display text-2xl text-accent-text underline decoration-line-strong decoration-1 underline-offset-[6px] hover:decoration-accent">
+              {salon.phone.display}
+            </a>
+            <p className="text-sm text-ink-3">Tap to call</p>
+          </dd>
+        </div>
+      )}
+    </dl>
   );
 }
 

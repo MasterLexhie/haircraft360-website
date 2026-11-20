@@ -1,4 +1,5 @@
 import "server-only";
+import { salonFrom, type Salon } from "@/domain/salon";
 import { visitInfo, type VisitInfo } from "@/domain/crm";
 import { connection } from "next/server";
 import type { AuditEvent, Booking, Customer, Payment, Service, Settings } from "@/domain/types";
@@ -38,6 +39,12 @@ export async function getBookingConfig(): Promise<{ services: Service[]; setting
 export async function getPublicSettings(): Promise<Settings> {
   await connection();
   return loadSettings();
+}
+
+/** The salon's name, address, phone and links, from Settings. */
+export async function getSalon(): Promise<Salon> {
+  await connection();
+  return salonFrom((await loadSettings()).salonDetails);
 }
 
 /** Customer booking page. Requires the link token. Shows what was typed for this booking only. */

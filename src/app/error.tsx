@@ -1,6 +1,6 @@
 "use client";
 
-import { business } from "@/config/business";
+import Link from "next/link";
 import { Button, ButtonLink } from "@/components/ui/primitives";
 
 /**
@@ -19,7 +19,7 @@ export default function ErrorPage({ error, retry }: { error: unknown; retry: () 
           <ButtonLink href="/" variant="secondary">Go to the home page</ButtonLink>
         </div>
         <p className="mt-6 text-sm text-ink-3">
-          Still not working? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>
+          Still not working? The salon&apos;s phone number is on the <Link className="font-semibold underline" href="/#visit">home page</Link>.
           {digest && <span className="mt-1 block text-xs">Reference: {digest}</span>}
         </p>
       </div>

@@ -1,4 +1,4 @@
-import { getCustomerBooking } from "@/server/queries";
+import { getCustomerBooking, getSalon } from "@/server/queries";
 import { calendarEventFor } from "@/server/booking-calendar";
 import { bookingUrl } from "@/server/booking-access";
 import { balanceDue } from "@/domain/pricing";
@@ -17,7 +17,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ reference: 
     return new Response("Not found", { status: 404, headers: { "Cache-Control": "no-store" } });
   }
   const { booking, payments } = data;
-  const event = calendarEventFor(booking, { url: bookingUrl(booking.reference, token!), balanceKobo: balanceDue(booking, payments) });
+  const event = calendarEventFor(booking, await getSalon(), { url: bookingUrl(booking.reference, token!), balanceKobo: balanceDue(booking, payments) });
   return new Response(buildIcs(event), {
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",

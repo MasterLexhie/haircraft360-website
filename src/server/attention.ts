@@ -81,8 +81,8 @@ export async function getAttention(nowMs = Date.now()): Promise<Attention> {
 
   const stopped = schedulerStale(settings.schedulerHeartbeat, nowMs);
   return {
-    unreachable: await Promise.all(failedRows.map((r) => buildManualMessage(r, settings.messageTemplates))),
-    delayed: await Promise.all(delayedRows.map((r) => buildManualMessage(r, settings.messageTemplates))),
+    unreachable: await Promise.all(failedRows.map((r) => buildManualMessage(r, settings))),
+    delayed: await Promise.all(delayedRows.map((r) => buildManualMessage(r, settings))),
     whatsappDue,
     newTimeNeeded: newTime.map(toItem),
     toComplete: toComplete.map(toItem),

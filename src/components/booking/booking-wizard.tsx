@@ -10,7 +10,6 @@ import { addOnTerms, itemsDuration, itemsTotal } from "@/domain/pricing";
 import { validateContact, type ContactErrors } from "@/domain/validation";
 import { formatNaira } from "@/lib/money";
 import { formatDateKey, formatDuration, formatTime, lagosDateKey } from "@/lib/time";
-import { business } from "@/config/business";
 import { Alert, Button, Field, cx, describedBy, inputClass } from "@/components/ui/primitives";
 import { ServiceMeta } from "./service-bits";
 import { BookingSummaryPanel, MoneyRows, describeDepositRule, type SummaryLine } from "./booking-summary";
@@ -58,12 +57,15 @@ export function BookingWizard({
   settings,
   initialServiceId,
   customerPaysFees,
+  salonPhone,
 }: {
   services: Service[];
   settings: Pick<Settings, "availability" | "deposit">;
   initialServiceId: string | null;
   /** Paystack adds its fee to the charge, so the review step shows it. */
   customerPaysFees: boolean;
+  /** From Settings; null when the owner hasn't added one. */
+  salonPhone: { e164: string; display: string } | null;
 }) {
   const router = useRouter();
   const mains = useMemo(() => services.filter((s) => s.bookableAlone), [services]);
@@ -374,6 +376,7 @@ export function BookingWizard({
                 dateKey={dateKey}
                 startAt={startAt}
                 refreshKey={slotRefresh}
+                salonPhone={salonPhone}
                 onDate={(d) => {
                   setStepError(null);
                   setDateKey(d);
@@ -493,7 +496,12 @@ export function BookingWizard({
 
                 <p className="flex items-start gap-2 text-sm text-ink-2">
                   <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0 text-success" />
-                  Your time is held for {holdMinutes} minutes while you pay the deposit. You can pay by card, bank transfer or USSD. Questions? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>.
+                  Your time is held for {holdMinutes} minutes while you pay the deposit. You can pay by card, bank transfer or USSD.
+                  {salonPhone && (
+                    <>
+                      {" "}Questions? Call <a className="font-semibold underline" href={`tel:${salonPhone.e164}`}>{salonPhone.display}</a>.
+                    </>
+                  )}
                 </p>
                 <PaymentProgress phase={payment.phase} />
               </div>

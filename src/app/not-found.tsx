@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
-import { business } from "@/config/business";
+import { SalonPhone } from "@/components/site/salon-phone";
 import { ButtonLink } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Page not found", robots: { index: false, follow: false } };
@@ -17,7 +17,7 @@ export default function NotFound() {
           <ButtonLink href="/booking" variant="secondary">Find my booking</ButtonLink>
         </div>
         <p className="mt-6 text-sm text-ink-3">
-          Need help? Call <a className="font-semibold underline" href={`tel:${business.phone.value.e164}`}>{business.phone.value.display}</a>
+          Need help? Call <SalonPhone />
         </p>
       </div>
     </div>
