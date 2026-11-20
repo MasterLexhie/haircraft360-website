@@ -89,7 +89,7 @@ async function PayView({ params, searchParams }: Props) {
         {!settled && <PaymentFee amountKobo={view.dueKobo} show={customerPaysFees()} />}
         {!settled && (
           <div className="mt-5">
-            <PayLinkButton token={token} label={`Pay ${formatNaira(view.dueKobo)}`} />
+            <PayLinkButton token={token} label="Pay balance" />
             <p className="mt-3 text-xs text-ink-3">Pay by card, bank transfer or USSD.</p>
           </div>
         )}

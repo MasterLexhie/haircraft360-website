@@ -161,7 +161,7 @@ async function BookingView({ params, searchParams }: Props) {
             <PayButton reference={booking.reference} token={token} purpose="deposit" label="Pay deposit" />
           )}
           {booking.status === "completed" && due > 0 && (
-            <PayButton reference={booking.reference} token={token} purpose="balance" label={`Pay balance ${formatNaira(due)}`} />
+            <PayButton reference={booking.reference} token={token} purpose="balance" label="Pay balance" />
           )}
           {booking.status === "expired" && <ButtonLink href="/book" size="lg">Choose a new time</ButtonLink>}
           {booking.status === "confirmed" && (
