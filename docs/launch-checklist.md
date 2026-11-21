@@ -15,8 +15,10 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 
 ## Booking and payment
 
+- [x] **Booking form after a booking** (21 Nov): starts empty at step 1, with no stuck "Confirming payment" button; a refresh always gives an empty form. Checked in Chromium and Firefox; Safari still to recheck on a phone.
+
 - [x] **Card deposit confirms through the webhook** (21 Nov, HC-ERYXW): Test consultation, ₦5,000. Deposit ₦1,500 plus ₦22.85 Paystack charge, recorded separately. `charge.success` arrived 23 seconds after booking, signature valid, from a published Paystack address, processed with no error. Booking confirmed and the hold cleared.
-- [ ] Book with add-ons at phone width: summary, deposit and balance right.
+- [x] **Booking with an add-on** (21 Nov, HC-TCVQD): Test retwist + Test wash, review showed ₦18,000 total, ₦5,400 deposit, ₦12,600 balance; paid in Paystack test mode and confirmed. (Desktop width; phone width still to check.)
 - [ ] Test bank transfer confirms the same way.
 - [ ] Close the payment window, then come back: the booking still confirms.
 - [ ] Payment after the hold expired, with the time taken: "Needs a new time" on the dashboard.
@@ -24,6 +26,9 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 - [ ] Find my booking works and is rate-limited after repeated tries.
 
 ## Messages
+
+- [x] **Confirmation sent within a second of payment** (21 Nov, HC-TCVQD): confirmed 8:03:46 pm, email sent 8:03:46 pm, with no cron run. Before the fix, confirmations waited for the hourly run (HC-RWTUE waited 10 minutes, then went with the 8:00 pm run).
+- [x] **Reminder scheduled a day before:** HC-TCVQD (Mon 23 Nov, 4:30 pm) has its reminder due Sun 22 Nov, 4:30 pm.
 
 - [x] **Confirmation email sent** (21 Nov, HC-ERYXW): sent by the cron test run at 7:29 pm Lagos time, accepted by Resend. The booking page shows "Confirmation sent by email" and "Reminder goes out by email Tue, 24 Nov, 10:00 am".
 - [ ] The email arrives in the inbox and the calendar file opens.
