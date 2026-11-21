@@ -41,7 +41,7 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 - [ ] Login needs the password and the 2FA code; a backup code works once.
 - [x] **Login rate limit** (local): five wrong passwords refused normally; the 6th and 7th were blocked with "Too many sign-in attempts. Please try again in 8 minutes".
 - [x] **Money actions** (HC-BRPE5): payment link page shows ₦3,500 balance plus fee; cash balance ₦2,000 recorded; a correction without a reason is blocked; −₦500 correction with a reason recorded. Paid ₦3,000, balance ₦2,000. (Paying the link itself not tested.)
-- [ ] Complete a booking with an extra item, then mark a no-show.
+- [x] **Complete and no-show** (local, past seed bookings; staging has no started appointment until Monday): HC-SD038 completed with a ₦2,500 item added on the day, total ₦53,000 to ₦55,500, balance ₦39,600. HC-SD037 marked no-show after the confirmation prompt; its ₦2,000 deposit kept.
 - [x] **Expenses and Finances:** added ₦2,500, edited to ₦3,000, deleted after a confirmation. Finances matched the database (revenue ₦16,800, expenses ₦3,000 then ₦0).
 - [x] **Locs Mastery application** (LM-NU4Z7E): applicant receipt and owner alert sent within a second; dashboard showed it; marked contacted and logged.
 - [x] **Dashboard:** attention box, next 7 days (5), popular services and new customers all add up.
