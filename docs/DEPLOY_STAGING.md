@@ -11,9 +11,9 @@ This guide puts the whole app online on **your own accounts** as a staging envir
 - Each step ends with a check. Don't move on until it passes.
 
 
-## Stage 0: Code changes before the first deploy (Claude does these)
+## Stage 0: Code changes before the first deploy (done)
 
-Each one is a separate commit that passes lint, types, tests and build.
+Done on `launch-build`, one commit each, every one passing lint, types, tests and build.
 
 | # | Change | Why |
 | - | - | - |
@@ -65,8 +65,8 @@ The region decides where Supabase goes, and Supabase's region can't be changed l
 3. **Database > Settings:** turn **Enforce SSL** on. Download the **CA certificate**; you'll paste it as `DATABASE_CA_CERT`.
 4. **Connect > Connection strings.** Take two:
    - **Transaction pooler** (port **6543**) is `DATABASE_URL`, the app's connection.
-   - **Session pooler** (port **5432**) is `DIRECT_URL`, for migrations. The direct connection is IPv6 only on the free plan, so the session pooler is the IPv4-safe choice.
-5. **Run the migrations from your machine.** Create `.env.remote.local` (git-ignored) with just the two connection strings, `DATABASE_URL` and `DIRECT_URL`, then:
+   - **Session pooler** (port **5432**) is `DIRECT_URL`, for migrations. The direct connection is IPv6 only on the free plan, so the session pooler is the IPv4-safe choice. Add `?sslmode=require` to the end of this one, because migrations don't use the CA certificate.
+5. **Run the migrations from your machine.** Create `.env.remote.local` (git-ignored) with three values: `DATABASE_URL`, `DIRECT_URL` and `DATABASE_CA_CERT` (the certificate in double quotes, line breaks kept), then:
    ```bash
    npm run remote:migrate
    ```
@@ -78,6 +78,8 @@ The region decides where Supabase goes, and Supabase's region can't be changed l
    ```
 
 **Check:** every table shows `relrowsecurity = true`, the timezone is `UTC`, and the migrations report "All migrations have been successfully applied".
+
+**If the app can't connect later with a certificate error** (Stage 6 or 7), the pooler's certificate didn't match the CA file. Tell Claude: the fallback is `?sslmode=no-verify` on `DATABASE_URL` with `DATABASE_CA_CERT` removed, which still encrypts but doesn't check the certificate. Note it as a known gap.
 
 
 ## Stage 4: Resend (you)
@@ -119,8 +121,8 @@ Use a **different** value for `AUTH_SECRET` and `CRON_SECRET`.
 | Variable | Staging value |
 | - | - |
 | `DATABASE_URL` | Supabase transaction pooler string (port 6543) |
-| `DIRECT_URL` | Supabase session pooler string (port 5432) |
-| `DATABASE_CA_CERT` | Contents of Supabase's CA certificate file |
+| `DIRECT_URL` | Supabase session pooler string (port 5432), ending `?sslmode=require` |
+| `DATABASE_CA_CERT` | Contents of Supabase's CA certificate file, pasted with its line breaks |
 | `AUTH_SECRET` | Generated |
 | `CRON_SECRET` | Generated |
 | `PAYSTACK_SECRET_KEY` | Paystack **test** secret key (`sk_test_...`) |
