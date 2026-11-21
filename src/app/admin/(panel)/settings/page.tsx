@@ -3,7 +3,8 @@ import Link from "next/link";
 import { CalendarOff, Clock, GraduationCap, MessageSquareText, Receipt, Scissors, Store } from "lucide-react";
 import { Suspense } from "react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData, getUpcomingBlocks, requestNow } from "@/server/queries";
+import { getUpcomingBlocks, requestNow } from "@/server/queries";
+import { getAdminSettings } from "@/server/admin-queries";
 import { BlocksManager } from "@/components/admin/blocks-manager";
 import { lagosDateKey } from "@/lib/time";
 import { PageHeader } from "@/components/admin/bits";
@@ -41,7 +42,7 @@ export default function SettingsPage({ searchParams }: { searchParams: Promise<{
 
 async function SettingsView({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   await requireAdmin();
-  const [db, sp, blocks, nowMs, categories] = await Promise.all([getAdminData(), searchParams, getUpcomingBlocks(), requestNow(), listExpenseCategories()]);
+  const [db, sp, blocks, nowMs, categories] = await Promise.all([getAdminSettings(), searchParams, getUpcomingBlocks(), requestNow(), listExpenseCategories()]);
   const tab: TabId = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "services";
   const programs = tab === "programs" ? await listPrograms() : [];
   return (

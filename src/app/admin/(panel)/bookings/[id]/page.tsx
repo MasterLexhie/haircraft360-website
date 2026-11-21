@@ -5,7 +5,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { Lock, Mail, MessageCircle, Phone } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData, getMoveSlots, joinBooking, requestNow } from "@/server/queries";
+import { getMoveSlots, requestNow } from "@/server/queries";
+import { bookingAudit, getAdminBooking } from "@/server/admin-queries";
 import { bookingMessages, type BookingMessages } from "@/server/whatsapp-messages";
 import { balanceDue, paidKobo } from "@/domain/pricing";
 import { formatPhone } from "@/domain/phone";
@@ -32,14 +33,13 @@ export default function BookingDetailPage({ params, searchParams }: Props) {
 
 async function Detail({ params, searchParams }: Props) {
   await requireAdmin();
-  const [{ id }, { move }, db, nowMs] = await Promise.all([params, searchParams, getAdminData(), requestNow()]);
-  const b = db.bookings.find((x) => x.id === id);
-  if (!b) notFound();
-  const messages = await bookingMessages(b.id, nowMs);
-  const { booking, customer, payments, visit } = joinBooking(db, b);
+  const [{ id }, { move }, nowMs] = await Promise.all([params, searchParams, requestNow()]);
+  const row = await getAdminBooking(id);
+  if (!row) notFound();
+  const { booking, customer, payments, visit } = row;
+  const [messages, audit] = await Promise.all([bookingMessages(booking.id, nowMs), bookingAudit(booking.id)]);
   const paid = paidKobo(payments);
   const due = balanceDue(booking, payments);
-  const audit = db.audit.filter((e) => e.bookingId === booking.id).sort((x, y) => y.at.localeCompare(x.at));
   const minutes = (Date.parse(booking.endAt) - Date.parse(booking.startAt)) / 60_000;
   const isPast = Date.parse(booking.endAt) < nowMs;
   const started = Date.parse(booking.startAt) <= nowMs;
