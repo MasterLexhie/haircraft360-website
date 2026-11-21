@@ -47,14 +47,23 @@ async function Customers({ searchParams }: { searchParams: Promise<{ q?: string;
         <ul className="divide-y divide-line overflow-hidden rounded-[var(--radius)] border border-line bg-surface">
           {rows.map(({ c, count, paid, outstanding, last }) => (
             <li key={c.id}>
-              <Link href={`/admin/customers/${c.id}`} className="flex flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 hover:bg-sand/50">
-                <span className="min-w-0 flex-1">
+              <Link
+                href={`/admin/customers/${c.id}`}
+                className="grid gap-1 px-4 py-3 hover:bg-sand/50 lg:grid-cols-[minmax(0,1fr)_16.5rem_8rem_9rem] lg:items-center lg:gap-x-6"
+              >
+                <span className="min-w-0">
                   <span className="block font-semibold">{c.displayName}</span>
-                  <span className="block truncate text-sm text-ink-3">{[...c.phones.map(formatPhone), ...c.emails.filter((e) => !e.isPlaceholder).map((e) => e.value)].join(" · ")}</span>
+                  <span className="flex flex-wrap gap-x-3 text-sm text-ink-3">
+                    {[...c.phones.map(formatPhone), ...c.emails.filter((e) => !e.isPlaceholder).map((e) => e.value)].map((v) => (
+                      <span key={v} className="min-w-0 [overflow-wrap:anywhere]">{v}</span>
+                    ))}
+                  </span>
                 </span>
                 <span className="text-sm text-ink-2">{count} booking{count === 1 ? "" : "s"}{last && ` · last ${formatDate(last)}`}</span>
-                <span className="tabular text-sm">Paid {formatNaira(paid)}</span>
-                <span className={`tabular text-sm font-semibold ${outstanding ? "text-danger" : "text-ink-3"}`}>{outstanding ? `Owes ${formatNaira(outstanding)}` : "Nothing owed"}</span>
+                <span className="mt-1 flex items-baseline justify-between gap-4 lg:contents">
+                  <span className="tabular text-sm">Paid {formatNaira(paid)}</span>
+                  <span className={`tabular text-sm font-semibold lg:text-right ${outstanding ? "text-danger" : "text-ink-3"}`}>{outstanding ? `Owes ${formatNaira(outstanding)}` : "Nothing owed"}</span>
+                </span>
               </Link>
             </li>
           ))}
