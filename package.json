@@ -19,7 +19,9 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "cron": "tsx --env-file=.env.local scripts/cron.ts",
-    "admin": "tsx scripts/admin-user.ts"
+    "admin": "tsx scripts/admin-user.ts",
+    "remote:migrate": "node --env-file=.env.remote.local node_modules/prisma/build/index.js migrate deploy",
+    "remote:admin": "tsx --env-file=.env.remote.local scripts/admin-user.ts"
   },
   "dependencies": {
     "@paystack/inline-js": "2.28.2",
