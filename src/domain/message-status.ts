@@ -4,6 +4,8 @@
  * has nothing to do until the retries run out.
  */
 
+import { ALLOWLIST_NOTE } from "./email-allowlist";
+
 export interface MessageRowLike {
   type: "confirmation" | "reminder";
   channel: "email" | "whatsapp_manual";
@@ -37,6 +39,7 @@ export function messageStatus(row: MessageRowLike, nowMs: number, dailyLimitNote
     case "bounced":
       return { label: "Couldn't reach this customer by email", tone: "danger", sendOnWhatsapp: true, fixEmail: true };
     case "skipped":
+      if (row.lastError === ALLOWLIST_NOTE) return plain(`${what} not sent: staging copy, address not on the email allowlist`, "neutral");
       return plain(`${what} not needed${row.lastError ? `: ${lowerFirst(row.lastError)}` : ""}`, "neutral");
     case "pending":
       if (row.channel === "whatsapp_manual") {

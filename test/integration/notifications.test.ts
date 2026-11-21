@@ -26,6 +26,7 @@ vi.mock("@/server/email/transport", async (importOriginal) => {
 vi.mock("next/server", () => ({ connection: async () => {} }));
 
 const { EmailSendError } = await import("@/server/email/transport");
+const { ALLOWLIST_NOTE } = await import("@/domain/email-allowlist");
 const { createPendingBooking, moveBooking, recordManualPayment, setBookingStatus, findBookingByToken } = await import("@/server/booking-service");
 const { runScheduler, sendDueNotifications, queueDailySummary, checkOpenPayments, MAX_ATTEMPTS } = await import("@/server/notifications");
 const { startBookingPayment } = await import("@/server/payments/checkout");
@@ -96,6 +97,30 @@ describe("sending", () => {
     const [a, b] = await Promise.all([runScheduler(), runScheduler()]);
     expect(a.sent + b.sent).toBe(2);
     expect(mail.sent).toHaveLength(2);
+  });
+});
+
+describe("staging allowlist", () => {
+  it("emails only listed addresses on staging and marks the rest not sent", async () => {
+    vi.stubEnv("SITE_ENV", "staging");
+    vi.stubEnv("EMAIL_ALLOWLIST", "tester@example.com, @example.org");
+    const listed = await confirmedBooking({ email: "Tester@Example.com", startAt: slot(3, "10:00") });
+    const domain = await confirmedBooking({ email: "anyone@example.org", startAt: slot(3, "13:00") });
+    const stranger = await confirmedBooking({ email: "real.customer@gmail.com", startAt: slot(3, "16:00") });
+    await runScheduler();
+    expect(mail.sent.map((m) => m.msg.to).sort()).toEqual(["anyone@example.org", "tester@example.com"]);
+    expect(await confirmationOf(listed.id)).toMatchObject({ status: "sent" });
+    expect(await confirmationOf(domain.id)).toMatchObject({ status: "sent" });
+    expect(await confirmationOf(stranger.id)).toMatchObject({ status: "skipped", lastError: ALLOWLIST_NOTE });
+  });
+
+  it("sends nothing on staging when no allowlist is set", async () => {
+    vi.stubEnv("SITE_ENV", "staging");
+    vi.stubEnv("EMAIL_ALLOWLIST", "");
+    const b = await confirmedBooking();
+    await runScheduler();
+    expect(mail.sent.filter((m) => m.msg.to === b.contactEmail)).toHaveLength(0);
+    expect(await confirmationOf(b.id)).toMatchObject({ status: "skipped" });
   });
 });
 

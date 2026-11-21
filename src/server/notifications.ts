@@ -12,6 +12,8 @@ import { toBooking } from "./mappers";
 import { bookingUrl, ensureMessageToken, siteUrl } from "./booking-access";
 import { calendarEventFor } from "./booking-calendar";
 import { EmailSendError, sendEmail, type EmailMessage } from "./email/transport";
+import { ALLOWLIST_NOTE, emailAllowed } from "@/domain/email-allowlist";
+import { isStaging } from "@/lib/site-env";
 import { applicationReceivedEmail, confirmationEmail, dailySummaryEmail, newApplicationEmail, ownerAlertEmail, reminderEmail, type SalonInfo } from "./email/templates";
 import { settlePayment } from "./payments/checkout";
 import { isPaystackConfigured } from "./payments/paystack";
@@ -205,6 +207,11 @@ export async function sendDueNotifications(opts: { nowMs?: number; deadlineMs?: 
 
     try {
       const message = await render(row);
+      if (!emailAllowed(message.to, process.env.EMAIL_ALLOWLIST, isStaging())) {
+        await db.notification.update({ where: { id: row.id }, data: { status: "skipped", lastError: ALLOWLIST_NOTE, nextAttemptAt: null } });
+        result.skipped++;
+        continue;
+      }
       // The due time is part of the key: a reminder reset by a move is a new message.
       const { id } = await sendEmail(message, `${row.id}:${row.dueAt.getTime()}`);
       await db.notification.update({

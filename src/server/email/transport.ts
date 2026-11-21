@@ -7,6 +7,9 @@
  * scheduler acts on: stop the batch, retry later, or give up.
  */
 
+import { ALLOWLIST_NOTE, emailAllowed } from "@/domain/email-allowlist";
+import { isStaging } from "@/lib/site-env";
+
 export interface EmailAttachment {
   filename: string;
   /** UTF-8 text; encoded to base64 here. */
@@ -114,6 +117,8 @@ function viaConsole(msg: EmailMessage, idempotencyKey: string): { id: string } {
 
 /** Sends one email. The idempotency key is the notification ID, so a retry can't send twice. */
 export async function sendEmail(msg: EmailMessage, idempotencyKey: string): Promise<{ id: string }> {
+  // Backstop for the staging allowlist; the sender checks it first and marks the row skipped.
+  if (!emailAllowed(msg.to, process.env.EMAIL_ALLOWLIST, isStaging())) throw new EmailSendError(ALLOWLIST_NOTE, "permanent");
   const transport = process.env.EMAIL_TRANSPORT ?? "console";
   if (transport === "resend") return viaResend(msg, idempotencyKey);
   if (transport === "mailpit") return viaMailpit(msg);

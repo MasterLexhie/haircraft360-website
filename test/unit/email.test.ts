@@ -142,3 +142,20 @@ describe("message templates", () => {
     );
   });
 });
+
+describe("staging email allowlist", () => {
+  it("matches whole addresses and @domain entries, ignoring case and spaces", async () => {
+    const { emailAllowed } = await import("@/domain/email-allowlist");
+    const list = " Me@Example.com , @test.dev ";
+    expect(emailAllowed("me@example.com", list, true)).toBe(true);
+    expect(emailAllowed("someone@test.dev", list, true)).toBe(true);
+    expect(emailAllowed("me@example.com.evil.io", list, true)).toBe(false);
+    expect(emailAllowed("customer@gmail.com", list, true)).toBe(false);
+  });
+
+  it("sends freely without a list except on staging", async () => {
+    const { emailAllowed } = await import("@/domain/email-allowlist");
+    expect(emailAllowed("customer@gmail.com", "", false)).toBe(true);
+    expect(emailAllowed("customer@gmail.com", undefined, true)).toBe(false);
+  });
+});
