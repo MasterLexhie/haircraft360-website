@@ -23,7 +23,7 @@ vi.mock("@/server/email/transport", async (importOriginal) => {
     }),
   };
 });
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const { EmailSendError } = await import("@/server/email/transport");
 const { ALLOWLIST_NOTE } = await import("@/domain/email-allowlist");

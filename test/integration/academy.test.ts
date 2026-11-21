@@ -9,7 +9,7 @@ vi.mock("@/server/email/transport", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/server/email/transport")>();
   return { ...actual, sendEmail: vi.fn(async (msg: EmailMessage) => (mail.sent.push(msg), { id: `fake_${mail.sent.length}` })) };
 });
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const { submitApplication, listPublicPrograms, openProgramIds, listApplications, setApplicationStatus, saveProgram, applicationCounts } = await import("@/server/academy");
 const { sendDueNotifications } = await import("@/server/notifications");

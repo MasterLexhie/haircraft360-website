@@ -4,7 +4,7 @@ import { bookingInput, createServices, createSettings, slot } from "../factories
 import { lagosDateKey, lagosToUtcMs } from "@/lib/time";
 import { whatsappLink } from "@/lib/whatsapp";
 
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const { createPendingBooking, recordManualPayment, findBookingByToken } = await import("@/server/booking-service");
 const { manualMessagesDue, markWhatsappSent } = await import("@/server/whatsapp-messages");

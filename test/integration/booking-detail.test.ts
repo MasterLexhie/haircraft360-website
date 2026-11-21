@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { db, resetDatabase } from "../db";
 import { bookingInput, createServices, createSettings, slot } from "../factories";
 
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const { createPendingBooking, recordManualPayment, setBookingStatus, completeBooking, updateBookingEmail } = await import("@/server/booking-service");
 const { bookingMessages, balanceLinkWhatsapp } = await import("@/server/whatsapp-messages");

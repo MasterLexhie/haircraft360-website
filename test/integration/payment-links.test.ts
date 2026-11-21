@@ -4,7 +4,7 @@ import { bookingInput, createServices, createSettings } from "../factories";
 import { paid, usePaystackFake } from "../fake-paystack";
 import { BookingError, createPendingBooking, setBookingStatus } from "@/server/booking-service";
 
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const actor = { id: null, label: "Test admin" };
 const { startBookingPayment, settlePayment } = await import("@/server/payments/checkout");

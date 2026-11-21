@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { sendDueSoon } from "@/server/send-soon";
 import { requireAdmin } from "@/server/auth";
 import {
   BookingError,
@@ -189,6 +190,7 @@ export async function manualPaymentAction(bookingIdRaw: string, _: ActionState, 
   if (!METHODS.includes(method)) return { error: "Choose how the payment was received.", fieldErrors: { method: "Choose a method." } };
   try {
     await recordManualPayment(bookingId, { amountKobo: negative ? -parsed : parsed, method, note, purpose }, actor);
+    sendDueSoon();
     refresh();
     return { ok: true, message: purpose === "correction" ? "Correction recorded." : "Payment recorded." };
   } catch (e) {

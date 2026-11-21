@@ -6,7 +6,7 @@ import { balanceDue, paidKobo, paymentSummaryState } from "@/domain/pricing";
 import { addDays, lagosDateKey, lagosToUtcMs } from "@/lib/time";
 import type { BookingFilters } from "@/server/admin-queries";
 
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const { createPendingBooking, recordManualPayment } = await import("@/server/booking-service");
 const q = await import("@/server/admin-queries");

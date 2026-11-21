@@ -5,13 +5,16 @@ import { hmacHex } from "@/lib/crypto";
 import { paid, paystack, SECRET, usePaystackFake } from "../fake-paystack";
 import { createPendingBooking } from "@/server/booking-service";
 
-vi.mock("next/server", () => ({ connection: async () => {} }));
+/** Work the routes schedule to run after their response (sending due emails straight away). */
+const afterQueue = vi.hoisted(() => [] as (() => Promise<void> | void)[]);
+vi.mock("next/server", () => ({ connection: async () => {}, after: (fn: () => Promise<void> | void) => afterQueue.push(fn) }));
 
 const { startBookingPayment, settlePayment } = await import("@/server/payments/checkout");
 const { isValidSignature } = await import("@/server/payments/paystack");
 const { POST: webhook } = await import("@/app/api/webhooks/paystack/route");
 
 beforeEach(async () => {
+  afterQueue.length = 0;
   usePaystackFake();
   await resetDatabase();
   await createSettings();
@@ -19,6 +22,7 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
 });
@@ -216,6 +220,22 @@ describe("webhook", () => {
     expect(await db.payment.count()).toBe(1);
     expect((await db.booking.findUniqueOrThrow({ where: { id: booking.id } })).status).toBe("confirmed");
     expect(await db.webhookEvent.count({ where: { status: "processed" } })).toBe(2);
+  });
+
+  it("sends the confirmation email straight after a paid webhook, without waiting for the hourly run", async () => {
+    vi.stubEnv("EMAIL_TRANSPORT", "console");
+    vi.stubEnv("AUTH_SECRET", "test-auth-secret-of-a-decent-length");
+    vi.spyOn(console, "info").mockImplementation(() => {});
+    const { reference, accessToken, booking } = await newBooking();
+    const { reference: ref } = await startBookingPayment(reference, accessToken, "deposit");
+    paid(ref);
+    expect((await signedWebhook({ event: "charge.success", data: { reference: ref } })).status).toBe(200);
+    expect(afterQueue).toHaveLength(1);
+    for (const run of afterQueue.splice(0)) await run();
+    expect(await db.notification.findUniqueOrThrow({ where: { dedupeKey: `confirmation:${booking.id}` } })).toMatchObject({ status: "sent" });
+    // An event that confirms nothing schedules nothing.
+    expect((await signedWebhook({ event: "charge.success", data: { reference: "HC-ZZZZZ-D-AAAAAA" } })).status).toBe(200);
+    expect(afterQueue).toHaveLength(0);
   });
 
   it("handles events in any order: the browser settles first, the webhook arrives later", async () => {

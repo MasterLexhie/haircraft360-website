@@ -15,7 +15,7 @@ vi.mock("next/headers", () => ({
   }),
   headers: async () => new Headers({ "x-forwarded-for": ip, "user-agent": "vitest", ...(path ? { "x-hc360-path": path } : {}) }),
 }));
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 vi.mock("next/navigation", () => ({
   redirect: (to: string) => {
     throw new Error(`REDIRECT:${to}`);

@@ -1,6 +1,7 @@
 "use server";
 
 import { validateApplication } from "@/domain/academy";
+import { sendDueSoon } from "@/server/send-soon";
 import { lagosDateKey } from "@/lib/time";
 import { openProgramIds, submitApplication } from "@/server/academy";
 import { BookingError } from "@/server/booking-service";
@@ -30,6 +31,7 @@ export async function applyAction(_: ApplyState, formData: FormData): Promise<Ap
   if (!parsed.ok) return { ok: false, error: "Please check the highlighted fields.", fieldErrors: parsed.fieldErrors };
   try {
     const { reference, programName } = await submitApplication(parsed.value);
+    sendDueSoon();
     return { ok: true, reference, programName, email: parsed.value.email };
   } catch (err) {
     if (err instanceof BookingError) return { ok: false, error: err.message, fieldErrors: err.fieldErrors };

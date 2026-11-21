@@ -6,7 +6,7 @@ import { findBookingSummary, getCustomerBooking } from "@/server/queries";
 
 // next/server's connection() needs a request; tests call queries directly.
 import { vi } from "vitest";
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const actor = { id: null, label: "Test admin" };
 

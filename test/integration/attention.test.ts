@@ -3,7 +3,7 @@ import { db, resetDatabase } from "../db";
 import { bookingInput, createServices, createSettings, slot } from "../factories";
 import { developerContactLink, schedulerStale } from "@/domain/attention";
 
-vi.mock("next/server", () => ({ connection: async () => {} }));
+vi.mock("next/server", () => ({ connection: async () => {}, after: () => {} }));
 
 const { createPendingBooking, recordManualPayment } = await import("@/server/booking-service");
 const { getAttention, attentionCount } = await import("@/server/attention");

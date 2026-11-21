@@ -1,4 +1,5 @@
 import { settlePayment } from "@/server/payments/checkout";
+import { sendDueSoon } from "@/server/send-soon";
 import { paymentErrorResponse } from "@/server/payments/http";
 import { clientIpFrom, hit, LIMITS, retryMessage } from "@/server/rate-limit";
 import { attemptReferenceParam } from "@/domain/schemas";
@@ -19,7 +20,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ reference:
   const reference = attemptReferenceParam.safeParse((await ctx.params).reference);
   if (!reference.success) return Response.json({ outcome: "unknown" }, { status: 404 });
   try {
-    return Response.json({ outcome: await settlePayment(reference.data, "Paystack") });
+    const outcome = await settlePayment(reference.data, "Paystack");
+    if (outcome === "paid") sendDueSoon();
+    return Response.json({ outcome });
   } catch (err) {
     return paymentErrorResponse(err);
   }

@@ -1,4 +1,5 @@
 import type { Prisma } from "@/generated/prisma/client";
+import { sendDueSoon } from "@/server/send-soon";
 import { db } from "@/server/db";
 import { clientIpFrom, hit, LIMITS } from "@/server/rate-limit";
 import { settlePayment } from "@/server/payments/checkout";
@@ -60,6 +61,7 @@ export async function POST(request: Request) {
 
   try {
     const outcome = await settlePayment(reference, "Paystack");
+    if (outcome === "paid") sendDueSoon();
     if (outcome === "pending") {
       // Paystack signed a success but Verify doesn't agree yet. Answer 500 so Paystack sends
       // it again later; otherwise a payment whose customer closed the page would never land.
