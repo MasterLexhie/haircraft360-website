@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat, Playfair_Display } from "next/font/google";
 import "./globals.css";
+import { isStaging } from "@/lib/site-env";
+import { StagingMark } from "@/components/staging-mark";
 
 const playfair = Playfair_Display({
   subsets: ["latin"],
@@ -30,7 +32,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en-NG" className={`${playfair.variable} ${montserrat.variable}`}>
-      <body className="min-h-dvh">{children}</body>
+      <body className="min-h-dvh">
+        {isStaging() && <StagingMark />}
+        {children}
+      </body>
     </html>
   );
 }

@@ -55,6 +55,8 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },
+      // The staging copy (SITE_ENV=staging) is kept out of every search engine.
+      ...(process.env.SITE_ENV?.trim().toLowerCase() === "staging" ? [{ source: "/:path*", headers: noindex }] : []),
       { source: "/admin/:path*", headers: noindex },
       { source: "/admin", headers: noindex },
       { source: "/booking/:path*", headers: noindex },
