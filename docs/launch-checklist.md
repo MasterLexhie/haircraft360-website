@@ -22,8 +22,8 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 - [ ] Test bank transfer confirms the same way.
 - [ ] Close the payment window, then come back: the booking still confirms.
 - [ ] Payment after the hold expired, with the time taken: "Needs a new time" on the dashboard.
-- [ ] The customer booking page opens from the email link and shows only that booking.
-- [ ] Find my booking works and is rate-limited after repeated tries.
+- [x] **Customer booking link** (21 Nov, HC-BRPE5, link taken from the WhatsApp message): shows only that booking; a wrong token shows "We couldn't open that booking" and nothing else.
+- [x] **Find my booking** (HC-DUNSQ + phone): shows only date, time, status and balance. Wrong lookups are refused with "Too many lookups" after the limit (10 per 15 minutes).
 
 ## Messages
 
@@ -32,22 +32,22 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 
 - [x] **Confirmation email sent** (21 Nov, HC-ERYXW): sent by the cron test run at 7:29 pm Lagos time, accepted by Resend. The booking page shows "Confirmation sent by email" and "Reminder goes out by email Tue, 24 Nov, 10:00 am".
 - [ ] The email arrives in the inbox and the calendar file opens.
-- [ ] An email to a non-allowlisted address shows "not sent: staging copy".
-- [ ] The cron run sends the reminder; running it again sends nothing twice.
-- [ ] A "no email" booking appears in Reminders due, and the WhatsApp link opens with the message filled in.
+- [x] **Allowlist** (HC-BRPE5, cash deposit): "Confirmation not sent: staging copy, address not on the email allowlist".
+- [ ] The cron run sends the reminder (first one due Sun 22 Nov). Running the cron twice in a row sent nothing twice (checked 21 Nov).
+- [x] **No-email booking** (HC-DUNSQ, cash deposit): appears in Reminders due with the filled WhatsApp message; Mark as sent clears it and the booking shows "Confirmation sent on WhatsApp".
 
 ## Admin
 
 - [ ] Login needs the password and the 2FA code; a backup code works once.
 - [ ] The sixth wrong password is slowed down.
-- [ ] Balance link payment, manual cash payment and a correction all record correctly.
+- [x] **Money actions** (HC-BRPE5): payment link page shows ₦3,500 balance plus fee; cash balance ₦2,000 recorded; a correction without a reason is blocked; −₦500 correction with a reason recorded. Paid ₦3,000, balance ₦2,000. (Paying the link itself not tested.)
 - [ ] Complete a booking with an extra item, then mark a no-show.
-- [ ] Add, edit and delete an expense; Finances totals match the payments.
-- [ ] Locs Mastery application, then the owner email arrives, then mark it contacted.
-- [ ] The dashboard's attention box, figures and balances look right.
+- [x] **Expenses and Finances:** added ₦2,500, edited to ₦3,000, deleted after a confirmation. Finances matched the database (revenue ₦16,800, expenses ₦3,000 then ₦0).
+- [x] **Locs Mastery application** (LM-NU4Z7E): applicant receipt and owner alert sent within a second; dashboard showed it; marked contacted and logged.
+- [x] **Dashboard:** attention box, next 7 days (5), popular services and new customers all add up.
 
 ## Security and usage
 
 - [ ] A Supabase Data API request returns nothing.
-- [ ] A faked `cf-connecting-ip` header doesn't get around the login rate limit.
+- [x] **Faked IP headers:** three requests with different made-up IPs were all counted against the one real IP.
 - [ ] Netlify credits and Supabase transfer used after the test week.
