@@ -19,8 +19,8 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 
 - [x] **Card deposit confirms through the webhook** (21 Nov, HC-ERYXW): Test consultation, ₦5,000. Deposit ₦1,500 plus ₦22.85 Paystack charge, recorded separately. `charge.success` arrived 23 seconds after booking, signature valid, from a published Paystack address, processed with no error. Booking confirmed and the hold cleared.
 - [x] **Booking with an add-on** (21 Nov, HC-TCVQD): Test retwist + Test wash, review showed ₦18,000 total, ₦5,400 deposit, ₦12,600 balance; paid in Paystack test mode and confirmed. (Desktop width; phone width still to check.)
-- [ ] Test bank transfer confirms the same way.
-- [ ] Close the payment window, then come back: the booking still confirms.
+- [x] **Bank transfer** (local, HC-2J87E, Paystack test mode): sent via "I've sent the money"; Paystack was still waiting when the window was closed, the app checked again on close and confirmed. Recorded as transfer, ₦2,000 plus ₦30.46 charge kept separate; confirmation email sent.
+- [x] **Window closed** (local): after a transfer, closing triggers a final check that confirms the booking (HC-2J87E). Closing without paying leaves the booking "Awaiting deposit" with a Pay deposit button (HC-AXP86). Tested locally because staging payments need someone to press Paystack's test buttons; the code is the same.
 - [ ] Payment after the hold expired, with the time taken: "Needs a new time" on the dashboard.
 - [x] **Customer booking link** (21 Nov, HC-BRPE5, link taken from the WhatsApp message): shows only that booking; a wrong token shows "We couldn't open that booking" and nothing else.
 - [x] **Find my booking** (HC-DUNSQ + phone): shows only date, time, status and balance. Wrong lookups are refused with "Too many lookups" after the limit (10 per 15 minutes).
@@ -39,7 +39,7 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 ## Admin
 
 - [ ] Login needs the password and the 2FA code; a backup code works once.
-- [ ] The sixth wrong password is slowed down.
+- [x] **Login rate limit** (local): five wrong passwords refused normally; the 6th and 7th were blocked with "Too many sign-in attempts. Please try again in 8 minutes".
 - [x] **Money actions** (HC-BRPE5): payment link page shows ₦3,500 balance plus fee; cash balance ₦2,000 recorded; a correction without a reason is blocked; −₦500 correction with a reason recorded. Paid ₦3,000, balance ₦2,000. (Paying the link itself not tested.)
 - [ ] Complete a booking with an extra item, then mark a no-show.
 - [x] **Expenses and Finances:** added ₦2,500, edited to ₦3,000, deleted after a confirmation. Finances matched the database (revenue ₦16,800, expenses ₦3,000 then ₦0).
