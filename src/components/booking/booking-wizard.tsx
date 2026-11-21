@@ -442,8 +442,8 @@ export function BookingWizard({
                     <input type="checkbox" className="mt-0.5 size-5 accent-[var(--color-accent)]" checked={contact.onWhatsapp}
                       onChange={(e) => setContact({ ...contact, onWhatsapp: e.target.checked })} />
                     <span>
-                      This number is on WhatsApp.{" "}
-                      <span className="text-ink-3">{contact.onWhatsapp ? "The salon will message you there." : "The salon will text or call you instead."}</span>
+                      This number is on WhatsApp
+                      <span className="block text-ink-3">Untick if it isn&apos;t, and the salon will text or call you instead.</span>
                     </span>
                   </label>
                 )}
