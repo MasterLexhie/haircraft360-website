@@ -36,15 +36,15 @@ export async function dailyTotals(fromKey: string, toKey: string): Promise<Perio
       SELECT d::date AS day FROM generate_series(${fromKey}::date, ${toKey}::date, interval '1 day') AS d
     ),
     revenue AS (
-      SELECT (p."createdAt" AT TIME ZONE 'Africa/Lagos')::date AS day, SUM(p."amountKobo")::bigint AS kobo
-      FROM "Payment" p
-      WHERE p.status = 'success' AND p."createdAt" >= ${fromUtc} AND p."createdAt" < ${toUtc}
+      SELECT (p.created_at AT TIME ZONE 'Africa/Lagos')::date AS day, SUM(p.amount_kobo)::bigint AS kobo
+      FROM payments p
+      WHERE p.status = 'success' AND p.created_at >= ${fromUtc} AND p.created_at < ${toUtc}
       GROUP BY 1
     ),
     spent AS (
-      SELECT e.date AS day, SUM(e."amountKobo")::bigint AS kobo
-      FROM "Expense" e
-      WHERE e."deletedAt" IS NULL AND e.date BETWEEN ${fromKey}::date AND ${toKey}::date
+      SELECT e.date AS day, SUM(e.amount_kobo)::bigint AS kobo
+      FROM expenses e
+      WHERE e.deleted_at IS NULL AND e.date BETWEEN ${fromKey}::date AND ${toKey}::date
       GROUP BY 1
     )
     SELECT to_char(days.day, 'YYYY-MM-DD') AS day, COALESCE(revenue.kobo, 0)::bigint AS revenue, COALESCE(spent.kobo, 0)::bigint AS expenses

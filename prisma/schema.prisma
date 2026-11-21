@@ -26,12 +26,16 @@ enum BookingStatus {
   no_show
   expired
   needs_attention
+
+  @@map("booking_status")
 }
 
 enum BookingItemKind {
   main // the main service picked by the customer
   add_on // an extra picked by the customer when booking
   extra // added by the salon on the day
+
+  @@map("booking_item_kind")
 }
 
 enum PaymentType {
@@ -39,6 +43,8 @@ enum PaymentType {
   balance_online
   manual
   adjustment
+
+  @@map("payment_type")
 }
 
 enum PaymentMethod {
@@ -46,11 +52,15 @@ enum PaymentMethod {
   transfer
   cash
   other
+
+  @@map("payment_method")
 }
 
 enum PaymentStatus {
   success
   failed
+
+  @@map("payment_status")
 }
 
 enum PaymentAttemptStatus {
@@ -58,15 +68,21 @@ enum PaymentAttemptStatus {
   success
   failed
   abandoned
+
+  @@map("payment_attempt_status")
 }
 
 enum PaymentAttemptPurpose {
   deposit
   balance_online
+
+  @@map("payment_attempt_purpose")
 }
 
 enum PaymentLinkPurpose {
   balance
+
+  @@map("payment_link_purpose")
 }
 
 enum WebhookEventStatus {
@@ -74,6 +90,8 @@ enum WebhookEventStatus {
   processed
   ignored
   failed
+
+  @@map("webhook_event_status")
 }
 
 enum NotificationType {
@@ -82,11 +100,15 @@ enum NotificationType {
   owner_alert
   owner_daily_summary
   application_received
+
+  @@map("notification_type")
 }
 
 enum NotificationChannel {
   email
   whatsapp_manual
+
+  @@map("notification_channel")
 }
 
 enum NotificationStatus {
@@ -96,74 +118,85 @@ enum NotificationStatus {
   failed
   skipped
   bounced
+
+  @@map("notification_status")
 }
 
 enum DepositType {
   fixed
   percent
+
+  @@map("deposit_type")
 }
 
 enum DepositScope {
   main_only
   full_total
+
+  @@map("deposit_scope")
 }
 
 // ───────────────────────────── Customers ─────────────────────────────
 
 model Customer {
   id                 String    @id @default(cuid())
-  displayName        String
+  displayName        String    @map("display_name")
   notes              String    @default("")
   tags               String[]  @default([])
-  marketingConsent   Boolean   @default(false)
-  marketingConsentAt DateTime? @db.Timestamptz(3)
-  createdAt          DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt          DateTime  @updatedAt @db.Timestamptz(3)
+  marketingConsent   Boolean   @default(false) @map("marketing_consent")
+  marketingConsentAt DateTime? @map("marketing_consent_at") @db.Timestamptz(3)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   phones       CustomerPhone[]
   emails       CustomerEmail[]
   nameVariants CustomerNameVariant[]
   bookings     Booking[]
+
+  @@map("customers")
 }
 
 /// Phones are stored in E.164 (for example +2348031234567) and are unique across customers.
 model CustomerPhone {
   id         String   @id @default(cuid())
-  customerId String
+  customerId String   @map("customer_id")
   e164       String   @unique
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([customerId])
+  @@map("customer_phones")
 }
 
 /// Emails are trimmed and lowercased, unique across customers.
 /// Placeholders (generated from the phone for Paystack) and bounced addresses are never emailed.
 model CustomerEmail {
   id            String    @id @default(cuid())
-  customerId    String
+  customerId    String    @map("customer_id")
   value         String    @unique
-  isPlaceholder Boolean   @default(false)
-  bouncedAt     DateTime? @db.Timestamptz(3)
-  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  isPlaceholder Boolean   @default(false) @map("is_placeholder")
+  bouncedAt     DateTime? @map("bounced_at") @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
 
   @@index([customerId])
+  @@map("customer_emails")
 }
 
 /// Every name a customer has typed. Kept for the record, never used for matching.
 model CustomerNameVariant {
   id         String   @id @default(cuid())
-  customerId String
+  customerId String   @map("customer_id")
   name       String
-  firstUsed  DateTime @default(now()) @db.Timestamptz(3)
-  lastUsed   DateTime @default(now()) @db.Timestamptz(3)
+  firstUsed  DateTime @default(now()) @map("first_used") @db.Timestamptz(3)
+  lastUsed   DateTime @default(now()) @map("last_used") @db.Timestamptz(3)
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@unique([customerId, name])
+  @@map("customer_name_variants")
 }
 
 // ───────────────────────────── Services ─────────────────────────────
@@ -172,32 +205,35 @@ model Service {
   id                   String   @id @default(cuid())
   name                 String
   description          String   @default("")
-  priceKobo            Int
-  durationMinutes      Int
-  bookableAlone        Boolean  @default(true)
-  availableAsAddOn     Boolean  @default(false)
+  priceKobo            Int      @map("price_kobo")
+  durationMinutes      Int      @map("duration_minutes")
+  bookableAlone        Boolean  @default(true) @map("bookable_alone")
+  availableAsAddOn     Boolean  @default(false) @map("available_as_add_on")
   /// Price and duration when sold as an add-on. Falls back to priceKobo and durationMinutes.
-  addOnPriceKobo       Int?
-  addOnDurationMinutes Int?
+  addOnPriceKobo       Int?     @map("add_on_price_kobo")
+  addOnDurationMinutes Int?     @map("add_on_duration_minutes")
   active               Boolean  @default(true)
-  sortOrder            Int      @default(0)
-  createdAt            DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt            DateTime @updatedAt @db.Timestamptz(3)
+  sortOrder            Int      @default(0) @map("sort_order")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   addOns       ServiceAddOn[] @relation("MainService")
   addOnFor     ServiceAddOn[] @relation("AddOnService")
   bookingItems BookingItem[]
+
+  @@map("services")
 }
 
 /// Which add-ons each main service offers.
 model ServiceAddOn {
-  mainServiceId  String
-  addOnServiceId String
+  mainServiceId  String @map("main_service_id")
+  addOnServiceId String @map("add_on_service_id")
 
   mainService  Service @relation("MainService", fields: [mainServiceId], references: [id], onDelete: Cascade)
   addOnService Service @relation("AddOnService", fields: [addOnServiceId], references: [id], onDelete: Cascade)
 
   @@id([mainServiceId, addOnServiceId])
+  @@map("service_add_ons")
 }
 
 // ───────────────────────────── Bookings ─────────────────────────────
@@ -207,28 +243,28 @@ model Booking {
   /// Short human reference shown to customers, for example HC-7KQ2M.
   reference        String        @unique
   /// SHA-256 of the customer's booking link token.
-  accessTokenHash  String        @unique
+  accessTokenHash  String        @unique @map("access_token_hash")
   /// SHA-256 of the link token used in emails and WhatsApp messages (see src/server/booking-access.ts).
-  messageTokenHash String?       @unique
-  accessExpiresAt  DateTime      @db.Timestamptz(3)
-  customerId       String
+  messageTokenHash String?       @unique @map("message_token_hash")
+  accessExpiresAt  DateTime      @map("access_expires_at") @db.Timestamptz(3)
+  customerId       String        @map("customer_id")
   /// What the customer typed for this booking. Customer pages show only these, never the stored profile.
-  contactName      String
-  contactPhone     String
-  contactEmail     String?
-  startAt          DateTime      @db.Timestamptz(3)
+  contactName      String        @map("contact_name")
+  contactPhone     String        @map("contact_phone")
+  contactEmail     String?       @map("contact_email")
+  startAt          DateTime      @map("start_at") @db.Timestamptz(3)
   /// Includes every item's duration. The buffer is added at availability time, not stored here.
-  endAt            DateTime      @db.Timestamptz(3)
+  endAt            DateTime      @map("end_at") @db.Timestamptz(3)
   status           BookingStatus @default(pending_payment)
-  holdExpiresAt    DateTime?     @db.Timestamptz(3)
-  totalKobo        Int
-  depositDueKobo   Int
-  customerNote     String        @default("")
-  privateNote      String        @default("")
-  completedAt      DateTime?     @db.Timestamptz(3)
-  cancelledAt      DateTime?     @db.Timestamptz(3)
-  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+  holdExpiresAt    DateTime?     @map("hold_expires_at") @db.Timestamptz(3)
+  totalKobo        Int           @map("total_kobo")
+  depositDueKobo   Int           @map("deposit_due_kobo")
+  customerNote     String        @default("") @map("customer_note")
+  privateNote      String        @default("") @map("private_note")
+  completedAt      DateTime?     @map("completed_at") @db.Timestamptz(3)
+  cancelledAt      DateTime?     @map("cancelled_at") @db.Timestamptz(3)
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   items           BookingItem[]
@@ -240,24 +276,26 @@ model Booking {
   @@index([startAt])
   @@index([status, startAt])
   @@index([customerId])
+  @@map("bookings")
 }
 
 /// One row per main service, add-on or on-the-day extra. Price and duration are copied at the time.
 model BookingItem {
   id              String          @id @default(cuid())
-  bookingId       String
-  serviceId       String?
+  bookingId       String          @map("booking_id")
+  serviceId       String?         @map("service_id")
   kind            BookingItemKind
   name            String
-  priceKobo       Int
-  durationMinutes Int
+  priceKobo       Int             @map("price_kobo")
+  durationMinutes Int             @map("duration_minutes")
   note            String          @default("")
-  createdAt       DateTime        @default(now()) @db.Timestamptz(3)
+  createdAt       DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
 
   booking Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
   @@index([bookingId])
+  @@map("booking_items")
 }
 
 // ───────────────────────────── Payments ─────────────────────────────
@@ -267,84 +305,88 @@ model BookingItem {
 /// Balance owed = booking total minus the sum of successful payments.
 model Payment {
   id                String        @id @default(cuid())
-  bookingId         String
+  bookingId         String        @map("booking_id")
   type              PaymentType
   method            PaymentMethod
   /// What counts toward the booking. Never includes a fee the customer paid on top.
-  amountKobo        Int
+  amountKobo        Int           @map("amount_kobo")
   /// Paystack's fee when it was added to the customer's charge ("pass fees to customers"). Not ours.
-  customerFeeKobo   Int           @default(0)
+  customerFeeKobo   Int           @default(0) @map("customer_fee_kobo")
   /// Paystack's whole fee for the charge, as Verify reports it, whoever bore it. Null for manual entries.
-  paystackFeeKobo   Int?
+  paystackFeeKobo   Int?          @map("paystack_fee_kobo")
   status            PaymentStatus @default(success)
   /// Unique when present, so a replayed webhook can never record the same charge twice.
-  paystackReference String?       @unique
-  recordedById      String?
+  paystackReference String?       @unique @map("paystack_reference")
+  recordedById      String?       @map("recorded_by_id")
   note              String        @default("")
-  createdAt         DateTime      @default(now()) @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
 
   booking    Booking    @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   recordedBy AdminUser? @relation(fields: [recordedById], references: [id], onDelete: SetNull)
 
   @@index([bookingId])
   @@index([createdAt])
+  @@map("payments")
 }
 
 /// One row per Paystack transaction we initialise. Mutable working state; the ledger is `Payment`.
 model PaymentAttempt {
   id            String                @id @default(cuid())
-  bookingId     String
+  bookingId     String                @map("booking_id")
   purpose       PaymentAttemptPurpose
   reference     String                @unique
-  amountKobo    Int
-  accessCode    String?
+  amountKobo    Int                   @map("amount_kobo")
+  accessCode    String?               @map("access_code")
   status        PaymentAttemptStatus  @default(initialized)
-  paymentLinkId String?
+  paymentLinkId String?               @map("payment_link_id")
   /// When the scheduler last asked Paystack about it (backstop for a missed webhook).
-  lastCheckedAt DateTime?             @db.Timestamptz(3)
-  createdAt     DateTime              @default(now()) @db.Timestamptz(3)
-  updatedAt     DateTime              @updatedAt @db.Timestamptz(3)
+  lastCheckedAt DateTime?             @map("last_checked_at") @db.Timestamptz(3)
+  createdAt     DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   booking     Booking      @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   paymentLink PaymentLink? @relation(fields: [paymentLinkId], references: [id], onDelete: SetNull)
 
   @@index([bookingId])
+  @@map("payment_attempts")
 }
 
 /// Customer-facing payment link. URLs carry the token; only its hash is stored.
 model PaymentLink {
   id          String             @id @default(cuid())
-  tokenHash   String             @unique
-  bookingId   String
+  tokenHash   String             @unique @map("token_hash")
+  bookingId   String             @map("booking_id")
   purpose     PaymentLinkPurpose
-  expiresAt   DateTime           @db.Timestamptz(3)
-  usedAt      DateTime?          @db.Timestamptz(3)
-  createdById String?
-  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  expiresAt   DateTime           @map("expires_at") @db.Timestamptz(3)
+  usedAt      DateTime?          @map("used_at") @db.Timestamptz(3)
+  createdById String?            @map("created_by_id")
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
 
   booking   Booking          @relation(fields: [bookingId], references: [id], onDelete: Restrict)
   createdBy AdminUser?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
   attempts  PaymentAttempt[]
 
   @@index([bookingId])
+  @@map("payment_links")
 }
 
 /// Every incoming Paystack event, kept for idempotency and as evidence in disputes.
 model WebhookEvent {
   id             String             @id @default(cuid())
   provider       String             @default("paystack")
-  eventType      String
+  eventType      String             @map("event_type")
   reference      String?
   payload        Json
-  signatureValid Boolean
-  sourceIp       String?
+  signatureValid Boolean            @map("signature_valid")
+  sourceIp       String?            @map("source_ip")
   status         WebhookEventStatus @default(received)
   error          String?
-  receivedAt     DateTime           @default(now()) @db.Timestamptz(3)
-  processedAt    DateTime?          @db.Timestamptz(3)
+  receivedAt     DateTime           @default(now()) @map("received_at") @db.Timestamptz(3)
+  processedAt    DateTime?          @map("processed_at") @db.Timestamptz(3)
 
   @@index([reference])
   @@index([status, receivedAt])
+  @@map("webhook_events")
 }
 
 // ───────────────────────────── Notifications ─────────────────────────────
@@ -354,28 +396,29 @@ model WebhookEvent {
 /// `summary:2026-12-01`) guarantees one row per message.
 model Notification {
   id                String              @id @default(cuid())
-  dedupeKey         String              @unique
-  bookingId         String?
-  customerId        String?
+  dedupeKey         String              @unique @map("dedupe_key")
+  bookingId         String?             @map("booking_id")
+  customerId        String?             @map("customer_id")
   type              NotificationType
   channel           NotificationChannel
   status            NotificationStatus  @default(pending)
-  dueAt             DateTime            @db.Timestamptz(3)
+  dueAt             DateTime            @map("due_at") @db.Timestamptz(3)
   attempts          Int                 @default(0)
   /// Not before this time: the next retry after a failure, or a short claim while a run sends it.
-  nextAttemptAt     DateTime?           @db.Timestamptz(3)
-  lastError         String?
-  providerMessageId String?
-  sentAt            DateTime?           @db.Timestamptz(3)
+  nextAttemptAt     DateTime?           @map("next_attempt_at") @db.Timestamptz(3)
+  lastError         String?             @map("last_error")
+  providerMessageId String?             @map("provider_message_id")
+  sentAt            DateTime?           @map("sent_at") @db.Timestamptz(3)
   /// Free-form content for owner alerts (booking-related types render from the booking).
   payload           Json?
-  createdAt         DateTime            @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime            @updatedAt @db.Timestamptz(3)
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime            @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   booking Booking? @relation(fields: [bookingId], references: [id], onDelete: Cascade)
 
   @@index([status, dueAt])
   @@index([bookingId])
+  @@map("notifications")
 }
 
 // ───────────────────────────── Settings and blocks ─────────────────────────────
@@ -384,40 +427,43 @@ model Notification {
 model Settings {
   id                  Int          @id @default(1)
   timezone            String       @default("Africa/Lagos")
-  slotIntervalMinutes Int          @default(30)
-  bufferMinutes       Int          @default(0)
-  holdMinutes         Int          @default(15)
-  minimumLeadMinutes  Int          @default(120)
-  bookingHorizonDays  Int          @default(60)
+  slotIntervalMinutes Int          @default(30) @map("slot_interval_minutes")
+  bufferMinutes       Int          @default(0) @map("buffer_minutes")
+  holdMinutes         Int          @default(15) @map("hold_minutes")
+  minimumLeadMinutes  Int          @default(120) @map("minimum_lead_minutes")
+  bookingHorizonDays  Int          @default(60) @map("booking_horizon_days")
   /// { "0": null | { "open": "09:00", "close": "18:00" }, ... "6": ... } with 0 = Sunday.
-  weeklyHours         Json
+  weeklyHours         Json         @map("weekly_hours")
   /// { "0": 0, "1": 2, ... "6": 2 }: customers served at once, per weekday.
-  capacityByWeekday   Json
-  depositType         DepositType  @default(percent)
-  depositFixedKobo    Int          @default(0)
-  depositPercent      Int          @default(30)
-  depositScope        DepositScope @default(full_total)
+  capacityByWeekday   Json         @map("capacity_by_weekday")
+  depositType         DepositType  @default(percent) @map("deposit_type")
+  depositFixedKobo    Int          @default(0) @map("deposit_fixed_kobo")
+  depositPercent      Int          @default(30) @map("deposit_percent")
+  depositScope        DepositScope @default(full_total) @map("deposit_scope")
   /// Optional floor for percentage deposits. Null means no minimum.
-  depositMinimumKobo  Int?
-  messageTemplates    Json
-  salonDetails        Json
-  schedulerHeartbeat  DateTime?    @db.Timestamptz(3)
-  updatedAt           DateTime     @updatedAt @db.Timestamptz(3)
+  depositMinimumKobo  Int?         @map("deposit_minimum_kobo")
+  messageTemplates    Json         @map("message_templates")
+  salonDetails        Json         @map("salon_details")
+  schedulerHeartbeat  DateTime?    @map("scheduler_heartbeat") @db.Timestamptz(3)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  @@map("settings")
 }
 
 /// Admin-created period that reduces capacity (or closes the salon when capacityReduction is null).
 model Block {
   id                String   @id @default(cuid())
-  startAt           DateTime @db.Timestamptz(3)
-  endAt             DateTime @db.Timestamptz(3)
-  capacityReduction Int?
+  startAt           DateTime @map("start_at") @db.Timestamptz(3)
+  endAt             DateTime @map("end_at") @db.Timestamptz(3)
+  capacityReduction Int?     @map("capacity_reduction")
   reason            String   @default("")
-  createdById       String?
-  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  createdById       String?  @map("created_by_id")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   createdBy AdminUser? @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([startAt, endAt])
+  @@map("blocks")
 }
 
 // ───────────────────────────── Finances ─────────────────────────────
@@ -425,28 +471,31 @@ model Block {
 model ExpenseCategory {
   id        String    @id @default(cuid())
   name      String    @unique
-  sortOrder Int       @default(0)
+  sortOrder Int       @default(0) @map("sort_order")
   active    Boolean   @default(true)
   expenses  Expense[]
+
+  @@map("expense_categories")
 }
 
 model Expense {
   id          String        @id @default(cuid())
   /// Calendar day in Lagos time.
   date        DateTime      @db.Date
-  amountKobo  Int
-  categoryId  String
+  amountKobo  Int           @map("amount_kobo")
+  categoryId  String        @map("category_id")
   method      PaymentMethod
   note        String        @default("")
-  createdById String?
-  deletedAt   DateTime?     @db.Timestamptz(3)
-  createdAt   DateTime      @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime      @updatedAt @db.Timestamptz(3)
+  createdById String?       @map("created_by_id")
+  deletedAt   DateTime?     @map("deleted_at") @db.Timestamptz(3)
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   category  ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   createdBy AdminUser?      @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([date])
+  @@map("expenses")
 }
 
 // ───────────────────────────── Admin, security and audit ─────────────────────────────
@@ -454,24 +503,24 @@ model Expense {
 model AdminUser {
   id                String    @id @default(cuid())
   email             String    @unique
-  displayName       String
+  displayName       String    @map("display_name")
   /// PBKDF2 hash in the form pbkdf2-sha256$<iterations>$<salt b64url>$<hash b64url>.
-  passwordHash      String
-  passwordChangedAt DateTime  @default(now()) @db.Timestamptz(3)
+  passwordHash      String    @map("password_hash")
+  passwordChangedAt DateTime  @default(now()) @map("password_changed_at") @db.Timestamptz(3)
   /// TOTP secret, encrypted with a key derived from AUTH_SECRET. Set during setup;
   /// 2FA is only active once totpEnabledAt is set.
-  totpSecret        String?
-  totpEnabledAt     DateTime? @db.Timestamptz(3)
+  totpSecret        String?   @map("totp_secret")
+  totpEnabledAt     DateTime? @map("totp_enabled_at") @db.Timestamptz(3)
   /// SHA-256 hashes of unused one-time backup codes.
-  backupCodeHashes  String[]  @default([])
+  backupCodeHashes  String[]  @default([]) @map("backup_code_hashes")
   /// Last TOTP time step accepted, so a code can never be used twice.
-  lastTotpStep      Int?
+  lastTotpStep      Int?      @map("last_totp_step")
   /// Consecutive failed sign-ins. Waits grow after 5; reset on success. No hard lockout.
-  failedLoginCount  Int       @default(0)
-  loginBlockedUntil DateTime? @db.Timestamptz(3)
-  lastLoginAt       DateTime? @db.Timestamptz(3)
-  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+  failedLoginCount  Int       @default(0) @map("failed_login_count")
+  loginBlockedUntil DateTime? @map("login_blocked_until") @db.Timestamptz(3)
+  lastLoginAt       DateTime? @map("last_login_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   sessions     AdminSession[]
   payments     Payment[]
@@ -479,59 +528,66 @@ model AdminUser {
   blocks       Block[]
   expenses     Expense[]
   auditLogs    AuditLog[]
+
+  @@map("admin_users")
 }
 
 model AdminSession {
   id          String   @id @default(cuid())
   /// SHA-256 of the session cookie value.
-  tokenHash   String   @unique
-  adminUserId String
+  tokenHash   String   @unique @map("token_hash")
+  adminUserId String   @map("admin_user_id")
   /// False between a correct password and a correct 2FA code.
-  mfaVerified Boolean  @default(false)
+  mfaVerified Boolean  @default(false) @map("mfa_verified")
   ip          String?
-  userAgent   String?
-  createdAt   DateTime @default(now()) @db.Timestamptz(3)
-  lastSeenAt  DateTime @default(now()) @db.Timestamptz(3)
-  expiresAt   DateTime @db.Timestamptz(3)
+  userAgent   String?  @map("user_agent")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
 
   adminUser AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
 
   @@index([adminUserId])
+  @@map("admin_sessions")
 }
 
 /// Fixed-window counters for rate limiting, shared by every server instance.
 model RateLimitBucket {
   key         String
-  windowStart DateTime @db.Timestamptz(3)
+  windowStart DateTime @map("window_start") @db.Timestamptz(3)
   count       Int      @default(0)
-  expiresAt   DateTime @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
 
   @@id([key, windowStart])
   @@index([expiresAt])
+  @@map("rate_limit_buckets")
 }
 
 model AuditLog {
   id         String   @id @default(cuid())
-  actorId    String?
+  actorId    String?  @map("actor_id")
   /// "Customer", "System", "Paystack" or the admin's display name.
-  actorLabel String
+  actorLabel String   @map("actor_label")
   action     String
-  entityType String
-  entityId   String?
-  bookingId  String?
-  customerId String?
+  entityType String   @map("entity_type")
+  entityId   String?  @map("entity_id")
+  bookingId  String?  @map("booking_id")
+  customerId String?  @map("customer_id")
   summary    String
   data       Json?
-  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
 
   actor AdminUser? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([bookingId])
   @@index([customerId])
   @@index([createdAt])
+  @@map("audit_logs")
 }
 
-/* ───────────────────────── Locs Mastery programs ───────────────────────── */
+/**
+ * ───────────────────────── Locs Mastery programs ─────────────────────────
+ */
 
 enum ApplicationStatus {
   new
@@ -539,12 +595,16 @@ enum ApplicationStatus {
   accepted
   declined
   withdrawn
+
+  @@map("application_status")
 }
 
 enum ExperienceLevel {
   none
   some
   working
+
+  @@map("experience_level")
 }
 
 /// A training program shown on /locs-mastery. Edited by the owner in Settings; no price is shown.
@@ -563,12 +623,14 @@ model Program {
   /// Listed on the page.
   active                Boolean  @default(true)
   /// Open for applications. A listed program can be closed ("next intake soon").
-  acceptingApplications Boolean  @default(true)
-  sortOrder             Int      @default(0)
-  createdAt             DateTime @default(now()) @db.Timestamptz(3)
-  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+  acceptingApplications Boolean  @default(true) @map("accepting_applications")
+  sortOrder             Int      @default(0) @map("sort_order")
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   applications ProgramApplication[]
+
+  @@map("programs")
 }
 
 /// An application to a program, with basic personal details (no ID documents).
@@ -576,30 +638,31 @@ model ProgramApplication {
   id               String            @id @default(cuid())
   /// Shown to the applicant, for example "LM-7KQ2X9".
   reference        String            @unique
-  programId        String
-  fullName         String
+  programId        String            @map("program_id")
+  fullName         String            @map("full_name")
   /// E.164.
   phone            String
   email            String
   /// A calendar date.
-  dateOfBirth      DateTime          @db.Date
+  dateOfBirth      DateTime          @map("date_of_birth") @db.Date
   city             String
   state            String
   experience       ExperienceLevel
   motivation       String
-  howHeard         String            @default("")
-  marketingConsent Boolean           @default(false)
+  howHeard         String            @default("") @map("how_heard")
+  marketingConsent Boolean           @default(false) @map("marketing_consent")
   /// When the applicant agreed to their details being used for the application.
-  consentAt        DateTime          @db.Timestamptz(3)
+  consentAt        DateTime          @map("consent_at") @db.Timestamptz(3)
   status           ApplicationStatus @default(new)
-  privateNote      String            @default("")
-  statusChangedAt  DateTime?         @db.Timestamptz(3)
-  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
-  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+  privateNote      String            @default("") @map("private_note")
+  statusChangedAt  DateTime?         @map("status_changed_at") @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   program Program @relation(fields: [programId], references: [id], onDelete: Restrict)
 
   @@index([status, createdAt])
   @@index([programId])
   @@index([phone])
+  @@map("program_applications")
 }

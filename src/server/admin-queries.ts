@@ -184,11 +184,11 @@ export interface DashboardData {
 export async function unpaidCompletedIds(): Promise<string[]> {
   const rows = await db.$queryRaw<{ id: string }[]>`
     SELECT b.id
-    FROM "Booking" b
-    LEFT JOIN "Payment" p ON p."bookingId" = b.id AND p.status = 'success'
+    FROM bookings b
+    LEFT JOIN payments p ON p.booking_id = b.id AND p.status = 'success'
     WHERE b.status = 'completed'
     GROUP BY b.id
-    HAVING b."totalKobo" > COALESCE(SUM(p."amountKobo"), 0)`;
+    HAVING b.total_kobo > COALESCE(SUM(p.amount_kobo), 0)`;
   return rows.map((r) => r.id);
 }
 

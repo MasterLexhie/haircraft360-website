@@ -42,9 +42,9 @@ export async function hit(key: string, { limit, windowSeconds }: Limit, nowMs = 
   const windowStart = new Date(Math.floor(nowMs / windowMs) * windowMs);
   const expiresAt = new Date(windowStart.getTime() + windowMs);
   const rows = await db.$queryRaw<{ count: number }[]>`
-    INSERT INTO "RateLimitBucket" ("key", "windowStart", "count", "expiresAt")
+    INSERT INTO rate_limit_buckets ("key", window_start, "count", expires_at)
     VALUES (${key}, ${windowStart}, 1, ${expiresAt})
-    ON CONFLICT ("key", "windowStart") DO UPDATE SET "count" = "RateLimitBucket"."count" + 1
+    ON CONFLICT ("key", window_start) DO UPDATE SET "count" = rate_limit_buckets."count" + 1
     RETURNING "count"`;
   const count = Number(rows[0]?.count ?? 1);
 
