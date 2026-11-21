@@ -55,6 +55,10 @@ function row(label: string, value: string, strong = false): string {
   return `<tr><td style="padding:6px 0;${w}">${escapeHtml(label)}</td><td style="padding:6px 0;text-align:right;${w}">${escapeHtml(value)}</td></tr>`;
 }
 
+function callLine(salon: SalonInfo): string {
+  return salon.phoneDisplay ? `Need to change something? Call the salon on ${salon.phoneDisplay}.` : "Need to change something? Contact the salon.";
+}
+
 function layout(salon: SalonInfo, title: string, body: string): string {
   return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title></head>
 <body style="margin:0;padding:0;background:${C.bg};font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:${C.ink};">
@@ -62,7 +66,7 @@ function layout(salon: SalonInfo, title: string, body: string): string {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border:1px solid ${C.line};border-radius:10px;">
 <tr><td style="padding:22px 24px;border-bottom:1px solid ${C.line};font-size:15px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:${C.accent};">${escapeHtml(salon.name)}</td></tr>
 <tr><td style="padding:24px;font-size:15px;line-height:1.55;">${body}</td></tr>
-<tr><td style="padding:18px 24px;border-top:1px solid ${C.line};font-size:13px;line-height:1.5;color:${C.ink3};">${escapeHtml(salon.name)} · ${escapeHtml(salon.address)}<br>Questions? Call ${escapeHtml(salon.phoneDisplay)}.</td></tr>
+<tr><td style="padding:18px 24px;border-top:1px solid ${C.line};font-size:13px;line-height:1.5;color:${C.ink3};">${escapeHtml(salon.name)} · ${escapeHtml(salon.address)}${salon.phoneDisplay ? `<br>Questions? Call ${escapeHtml(salon.phoneDisplay)}.` : ""}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 
@@ -94,7 +98,7 @@ ${row("Paid so far", formatNaira(d.paidKobo))}
 ${row("Balance due at the salon", formatNaira(d.balanceKobo), true)}
 </table>
 <div style="margin-top:22px;">${button(d.bookingUrl, "View your booking", true)}${button(d.icsUrl, "Add to calendar")}${button(d.googleCalendarUrl, "Google Calendar")}</div>
-<p style="margin:14px 0 0;font-size:13px;color:${C.ink3};">Need to change something? Call the salon on ${escapeHtml(d.salon.phoneDisplay)}.</p>`;
+<p style="margin:14px 0 0;font-size:13px;color:${C.ink3};">${escapeHtml(callLine(d.salon))}</p>`;
   const text = [
     heading,
     "",
@@ -116,7 +120,7 @@ ${row("Balance due at the salon", formatNaira(d.balanceKobo), true)}
     `Add to calendar: ${d.icsUrl}`,
     `Google Calendar: ${d.googleCalendarUrl}`,
     "",
-    `Need to change something? Call the salon on ${d.salon.phoneDisplay}.`,
+    callLine(d.salon),
   ].join("\n");
   return { html, text };
 }
@@ -192,5 +196,50 @@ export function ownerAlertEmail(salon: SalonInfo, message: string, adminUrl: str
       `<h1 style="margin:0 0 10px;font-size:20px;">Security notice</h1><p style="margin:0 0 16px;color:${C.ink2};">${escapeHtml(message)}</p><p style="margin:0 0 18px;color:${C.ink2};">If this wasn't you, change your password straight away and contact your developer.</p>${button(adminUrl, "Open the admin", true)}`,
     ),
     text: `Security notice\n\n${message}\n\nIf this wasn't you, change your password straight away and contact your developer.\n\n${adminUrl}`,
+  };
+}
+
+/* ───────────── Locs Mastery ───────────── */
+
+export interface ApplicationEmailData {
+  salon: SalonInfo;
+  applicantName: string;
+  reference: string;
+  programName: string;
+  pageUrl: string;
+}
+
+/** To the applicant: received, what happens next. */
+export function applicationReceivedEmail(d: ApplicationEmailData): RenderedEmail {
+  const next = "We read every application. Someone from the salon will contact you by phone, WhatsApp or email within a few days to talk it through.";
+  const html = layout(
+    d.salon,
+    "Application received",
+    `<h1 style="margin:0 0 10px;font-size:20px;">We've received your application</h1>
+<p style="margin:0 0 14px;color:${C.ink2};">Hello ${escapeHtml(d.applicantName)}, thank you for applying to <strong>${escapeHtml(d.programName)}</strong> at ${escapeHtml(d.salon.name)}.</p>
+<table role="presentation" width="100%" style="border-collapse:collapse;font-size:14px;margin:0 0 14px;">${row("Reference", d.reference, true)}${row("Program", d.programName)}</table>
+<p style="margin:0 0 18px;color:${C.ink2};">${escapeHtml(next)}</p>${button(d.pageUrl, "About the programs")}`,
+  );
+  const text = [
+    "We've received your application",
+    "",
+    `Hello ${d.applicantName}, thank you for applying to ${d.programName} at ${d.salon.name}.`,
+    "",
+    `Reference: ${d.reference}`,
+    "",
+    next,
+    "",
+    d.pageUrl,
+  ].join("\n");
+  return { subject: `Application received: ${d.programName}`, html, text };
+}
+
+/** To the owner: a new application to look at. */
+export function newApplicationEmail(salon: SalonInfo, d: { applicantName: string; programName: string; reference: string; adminUrl: string }): RenderedEmail {
+  const line = `${d.applicantName} applied for ${d.programName} (${d.reference}).`;
+  return {
+    subject: `New Locs Mastery application: ${d.applicantName}`,
+    html: layout(salon, "New application", `<h1 style="margin:0 0 10px;font-size:20px;">New application</h1><p style="margin:0 0 18px;color:${C.ink2};">${escapeHtml(line)}</p>${button(d.adminUrl, "Open the application", true)}`),
+    text: `New application\n\n${line}\n\n${d.adminUrl}`,
   };
 }

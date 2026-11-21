@@ -81,6 +81,7 @@ enum NotificationType {
   reminder
   owner_alert
   owner_daily_summary
+  application_received
 }
 
 enum NotificationChannel {
@@ -528,4 +529,77 @@ model AuditLog {
   @@index([bookingId])
   @@index([customerId])
   @@index([createdAt])
+}
+
+/* ───────────────────────── Locs Mastery programs ───────────────────────── */
+
+enum ApplicationStatus {
+  new
+  contacted
+  accepted
+  declined
+  withdrawn
+}
+
+enum ExperienceLevel {
+  none
+  some
+  working
+}
+
+/// A training program shown on /locs-mastery. Edited by the owner in Settings; no price is shown.
+model Program {
+  id                    String   @id @default(cuid())
+  name                  String
+  summary               String
+  /// For example "6 weeks" or "3 days".
+  duration              String
+  /// For example "In the salon, Saturdays 10am to 4pm".
+  format                String   @default("")
+  /// Who it suits, for example "Complete beginners".
+  level                 String   @default("")
+  /// What a student learns, one item per entry.
+  outcomes              String[] @default([])
+  /// Listed on the page.
+  active                Boolean  @default(true)
+  /// Open for applications. A listed program can be closed ("next intake soon").
+  acceptingApplications Boolean  @default(true)
+  sortOrder             Int      @default(0)
+  createdAt             DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime @updatedAt @db.Timestamptz(3)
+
+  applications ProgramApplication[]
+}
+
+/// An application to a program, with basic personal details (no ID documents).
+model ProgramApplication {
+  id               String            @id @default(cuid())
+  /// Shown to the applicant, for example "LM-7KQ2X9".
+  reference        String            @unique
+  programId        String
+  fullName         String
+  /// E.164.
+  phone            String
+  email            String
+  /// A calendar date.
+  dateOfBirth      DateTime          @db.Date
+  city             String
+  state            String
+  experience       ExperienceLevel
+  motivation       String
+  howHeard         String            @default("")
+  marketingConsent Boolean           @default(false)
+  /// When the applicant agreed to their details being used for the application.
+  consentAt        DateTime          @db.Timestamptz(3)
+  status           ApplicationStatus @default(new)
+  privateNote      String            @default("")
+  statusChangedAt  DateTime?         @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @db.Timestamptz(3)
+
+  program Program @relation(fields: [programId], references: [id], onDelete: Restrict)
+
+  @@index([status, createdAt])
+  @@index([programId])
+  @@index([phone])
 }

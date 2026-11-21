@@ -104,6 +104,37 @@ const LAST = ["Okafor", "Adeyemi", "Balogun", "Eze", "Ojo", "Nwosu", "Bello", "A
 
 /* ───────────────────────────── Main ───────────────────────────── */
 
+/** Sample Locs Mastery programs: placeholders until the owner writes the real ones in Settings › Programs. */
+const PROGRAMS = [
+  {
+    id: "seed_prog_foundations",
+    name: "Loc Foundations (sample)",
+    summary: "For complete beginners. Learn to start and care for locs properly, from consultation to the finished install.",
+    duration: "6 weeks",
+    format: "In the salon, two days a week",
+    level: "Beginners",
+    outcomes: ["Hair and scalp consultation", "Sectioning and parting patterns", "Starter methods: comb coils, two-strand twists and interlocking", "Washing and drying locs safely", "Aftercare advice for clients"],
+  },
+  {
+    id: "seed_prog_maintenance",
+    name: "Retwist and Maintenance (sample)",
+    summary: "For people who already do some hair. Get neat, lasting retwists and handle common problems with confidence.",
+    duration: "4 weeks",
+    format: "In the salon, weekends",
+    level: "Some experience",
+    outcomes: ["Palm rolling and retwisting for clean roots", "Interlocking maintenance", "Fixing thinning, weak and combined locs", "Product choice and build-up removal", "Working faster without losing quality"],
+  },
+  {
+    id: "seed_prog_business",
+    name: "Styling and Loc Business (sample)",
+    summary: "For working stylists. Add styling to your services and run a steady loc business.",
+    duration: "3 weeks",
+    format: "In the salon, plus practice with real clients",
+    level: "Working stylists",
+    outcomes: ["Updos, barrel rolls and petal styles", "Loc extensions and repairs", "Pricing your services", "Taking bookings and deposits", "Photos and social media that bring clients"],
+  },
+];
+
 async function main() {
   const url = assertLocalDatabase(process.env.DATABASE_URL);
   const db = new PrismaClient({ adapter: pgAdapter(url) });
@@ -156,6 +187,10 @@ async function main() {
     for (const [i, s] of SERVICES.entries()) {
       const data = { ...s, sortOrder: i, active: true, addOnPriceKobo: s.addOnPriceKobo ?? null, addOnDurationMinutes: s.addOnDurationMinutes ?? null };
       await db.service.upsert({ where: { id: s.id }, create: data, update: data });
+    }
+    for (const [i, p] of PROGRAMS.entries()) {
+      const data = { ...p, sortOrder: i, active: true, acceptingApplications: i < 2 };
+      await db.program.upsert({ where: { id: p.id }, create: data, update: data });
     }
     await db.serviceAddOn.deleteMany({ where: { mainServiceId: { startsWith: "seed_" } } });
     await db.serviceAddOn.createMany({

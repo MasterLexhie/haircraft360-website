@@ -12,7 +12,7 @@ import { toBooking } from "./mappers";
 import { bookingUrl, ensureMessageToken, siteUrl } from "./booking-access";
 import { calendarEventFor } from "./booking-calendar";
 import { EmailSendError, sendEmail, type EmailMessage } from "./email/transport";
-import { confirmationEmail, dailySummaryEmail, ownerAlertEmail, reminderEmail, type SalonInfo } from "./email/templates";
+import { applicationReceivedEmail, confirmationEmail, dailySummaryEmail, newApplicationEmail, ownerAlertEmail, reminderEmail, type SalonInfo } from "./email/templates";
 import { settlePayment } from "./payments/checkout";
 import { isPaystackConfigured } from "./payments/paystack";
 
@@ -95,10 +95,24 @@ export function messageVarsFor(b: Row["booking"] & {}, link: string, salon: Pick
 }
 
 async function render(row: Row): Promise<EmailMessage> {
+  if (row.type === "application_received") {
+    const { applicationId } = (row.payload ?? {}) as { applicationId?: string };
+    const app = applicationId ? await db.programApplication.findUnique({ where: { id: applicationId }, include: { program: { select: { name: true } } } }) : null;
+    if (!app) throw new EmailSendError("The application no longer exists.", "permanent");
+    return {
+      to: app.email,
+      ...applicationReceivedEmail({ salon: await salonInfo(), applicantName: app.fullName, reference: app.reference, programName: app.program.name, pageUrl: `${siteUrl()}/locs-mastery` }),
+    };
+  }
   if (row.type === "owner_alert" || row.type === "owner_daily_summary") {
     const to = process.env.OWNER_NOTIFICATION_EMAIL?.trim();
     if (!to) throw new EmailSendError("OWNER_NOTIFICATION_EMAIL is not set.", "permanent");
-    const payload = (row.payload ?? {}) as { message?: string; dateKey?: string };
+    const payload = (row.payload ?? {}) as { message?: string; dateKey?: string; kind?: string; applicationId?: string };
+    if (payload.kind === "application") {
+      const app = payload.applicationId ? await db.programApplication.findUnique({ where: { id: payload.applicationId }, include: { program: { select: { name: true } } } }) : null;
+      if (!app) throw new EmailSendError("The application no longer exists.", "permanent");
+      return { to, ...newApplicationEmail(await salonInfo(), { applicantName: app.fullName, programName: app.program.name, reference: app.reference, adminUrl: `${siteUrl()}/admin/applications/${app.id}` }) };
+    }
     if (row.type === "owner_daily_summary") return { to, ...dailySummaryEmail(await dailySummaryData(payload.dateKey ?? lagosDateKey(row.dueAt), row.dueAt.getTime())) };
     return { to, ...ownerAlertEmail(await salonInfo(), payload.message ?? "Something on your admin account needs a look.", `${siteUrl()}/admin`) };
   }
