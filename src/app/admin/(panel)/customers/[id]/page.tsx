@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { CalendarDays, CreditCard, Lock, Mail, Phone } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData, requestNow } from "@/server/queries";
+import { requestNow } from "@/server/queries";
+import { getCustomerProfile } from "@/server/admin-queries";
 import { customerStats } from "@/domain/crm";
 import { paymentMethodLabel, paymentTypeLabel } from "@/domain/labels";
 import { formatPhone } from "@/domain/phone";
@@ -27,12 +28,10 @@ export default function CustomerPage({ params }: { params: Promise<{ id: string 
 
 async function CustomerView({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
-  const [{ id }, db, nowMs] = await Promise.all([params, getAdminData(), requestNow()]);
-  const c = db.customers.find((x) => x.id === id);
-  if (!c) notFound();
-  const bookings = db.bookings.filter((b) => b.customerId === c.id);
-  const ids = new Set(bookings.map((b) => b.id));
-  const payments = db.payments.filter((p) => ids.has(p.bookingId));
+  const { id } = await params;
+  const [profile, nowMs] = await Promise.all([getCustomerProfile(id), requestNow()]);
+  if (!profile) notFound();
+  const { customer: c, bookings, payments } = profile;
   const stats = customerStats(bookings, payments, nowMs);
   const refOf = (bookingId: string) => bookings.find((b) => b.id === bookingId)?.reference ?? "";
 

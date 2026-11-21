@@ -3,8 +3,9 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Search } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData } from "@/server/queries";
-import { balanceDue, paidKobo } from "@/domain/pricing";
+import { listAdminCustomers } from "@/server/admin-queries";
+import { pageHref } from "@/domain/paginate";
+import { Pagination } from "@/components/admin/pagination";
 import { formatNaira } from "@/lib/money";
 import { formatDate } from "@/lib/time";
 import { formatPhone } from "@/domain/phone";
@@ -13,7 +14,9 @@ import { EmptyState, Skeleton, buttonClass, inputClass } from "@/components/ui/p
 
 export const metadata: Metadata = { title: "Customers" };
 
-export default function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+const PAGE_SIZE = 20;
+
+export default function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
       <Customers searchParams={searchParams} />
@@ -21,21 +24,11 @@ export default function CustomersPage({ searchParams }: { searchParams: Promise<
   );
 }
 
-async function Customers({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+async function Customers({ searchParams }: { searchParams: Promise<{ q?: string; page?: string }> }) {
   await requireAdmin();
-  const [db, { q }] = await Promise.all([getAdminData(), searchParams]);
-  const needle = (q ?? "").trim().toLowerCase();
-  const rows = db.customers
-    .filter((c) => !needle || [c.displayName, ...c.phones, ...c.phones.map(formatPhone), ...c.emails.map((e) => e.value)].join(" ").toLowerCase().includes(needle))
-    .map((c) => {
-      const bookings = db.bookings.filter((b) => b.customerId === c.id);
-      const ids = new Set(bookings.map((b) => b.id));
-      const payments = db.payments.filter((p) => ids.has(p.bookingId));
-      const outstanding = bookings.filter((b) => b.status === "completed").reduce((s, b) => s + balanceDue(b, payments.filter((p) => p.bookingId === b.id)), 0);
-      const last = bookings.map((b) => b.startAt).sort().at(-1);
-      return { c, count: bookings.length, paid: paidKobo(payments), outstanding, last };
-    })
-    .sort((a, b) => (b.last ?? "").localeCompare(a.last ?? ""));
+  const { q, page } = await searchParams;
+  const list = await listAdminCustomers(q ?? "", page, PAGE_SIZE);
+  const rows = list.items.map((r) => ({ c: r.customer, count: r.bookingCount, paid: r.paidKobo, outstanding: r.outstandingKobo, last: r.lastVisitAt }));
 
   return (
     <>
@@ -67,6 +60,7 @@ async function Customers({ searchParams }: { searchParams: Promise<{ q?: string 
           ))}
         </ul>
       )}
+      {list.total > 0 && <Pagination label="Customer pages" noun="customers" {...list} hrefFor={(n) => pageHref("/admin/customers", { q }, n)} />}
     </>
   );
 }
