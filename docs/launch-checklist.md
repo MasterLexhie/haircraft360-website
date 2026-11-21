@@ -48,6 +48,6 @@ Results of Stage 9 in `docs/DEPLOY_STAGING.md`, run on https://haircraft360.netl
 
 ## Security and usage
 
-- [ ] A Supabase Data API request returns nothing.
+- [x] **Supabase Data API** (21 Nov, with the project's public key): reads of bookings, customers, payments, admin_users and settings, and an insert into expenses, all refused (503, PGRST002). No data returned. Row level security is also on for every table.
 - [x] **Faked IP headers:** three requests with different made-up IPs were all counted against the one real IP.
 - [ ] Netlify credits and Supabase transfer used after the test week.
