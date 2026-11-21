@@ -141,6 +141,8 @@ Use a **different** value for `AUTH_SECRET` and `CRON_SECRET`.
 
 Then **Deploys > Trigger deploy > Deploy project**.
 
+Also turn off the badge: **Project configuration > General > Powered by Netlify badge**, off, then save. Free projects created from 19 August 2026 show it bottom right on every page, where it covers the phone's Book button. It takes effect without a redeploy.
+
 **Check:** the deploy succeeds, the home page loads, and these respond:
 ```bash
 curl -sI https://<name>.netlify.app/ | grep -i -E "x-robots-tag|strict-transport|content-security"
@@ -232,7 +234,7 @@ Same stages, with production values. What changes:
 | Stage | Production difference |
 | - | - |
 | 0 | Nothing: the same code |
-| 1 | The client's accounts, 2FA on each, you added as a member. Netlify deploys **`main`**. |
+| 1 | The client's accounts, 2FA on each, you added as a member. Netlify deploys **`main`**. Turn off the **Powered by Netlify badge** (Project configuration > General). |
 | 2 to 3 | The client's Netlify team and Supabase organisation, same region rule. Fresh migrations, no copied data. |
 | 4 | The client's domain verified in Resend. `EMAIL_ALLOWLIST` **removed**. |
 | 5 | The **client's** Paystack account in **live** mode (business verification done), Live Webhook URL set to the production domain. |
