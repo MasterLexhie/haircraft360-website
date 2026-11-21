@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useState, useTransition } from "react";
-import { Check, Copy, Link2, MessageCircle, Plus, Trash2 } from "lucide-react";
+import { Check, Copy, Link2, MessageCircle, Plus, Trash2, MessageSquareText } from "lucide-react";
 import type { Booking, Kobo } from "@/domain/types";
 import { formatNaira, parseNairaToKobo } from "@/lib/money";
 import { formatTime } from "@/lib/time";
@@ -215,9 +215,15 @@ export function BalanceLink({ bookingId }: { bookingId: string }) {
       {state?.link ? (
         <div className="space-y-2">
           {state.whatsappUrl && (
-            <a href={state.whatsappUrl} target="_blank" rel="noopener noreferrer" className={buttonClass("primary", "sm")}>
-              <MessageCircle aria-hidden className="size-4" /> Send on WhatsApp
-            </a>
+            state.sendVia === "sms" ? (
+              <a href={state.whatsappUrl} className={buttonClass("primary", "sm")}>
+                <MessageSquareText aria-hidden className="size-4" /> Send by text message
+              </a>
+            ) : (
+              <a href={state.whatsappUrl} target="_blank" rel="noopener noreferrer" className={buttonClass("primary", "sm")}>
+                <MessageCircle aria-hidden className="size-4" /> Send on WhatsApp
+              </a>
+            )
           )}
           <div className="flex gap-2">
             <label htmlFor="balance-link" className="sr-only">Payment link</label>

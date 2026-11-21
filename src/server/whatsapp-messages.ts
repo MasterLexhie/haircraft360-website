@@ -6,7 +6,7 @@ import { messageStatus, type MessageStatus } from "@/domain/message-status";
 import { fillTemplate } from "@/domain/messages";
 import { formatPhone } from "@/domain/phone";
 import { addDays, lagosDateKey, lagosToUtcMs } from "@/lib/time";
-import { whatsappLink } from "@/lib/whatsapp";
+import { whatsappLink, smsLink, telLink } from "@/lib/whatsapp";
 import { db } from "./db";
 import { audit } from "./audit";
 import { loadSettings } from "./settings";
@@ -30,6 +30,10 @@ export interface ManualMessage {
   startAt: string;
   text: string;
   whatsappUrl: string;
+  /** False when the customer said their number isn't on WhatsApp: call or text instead. */
+  onWhatsapp: boolean;
+  smsUrl: string;
+  telUrl: string;
 }
 
 export async function manualMessagesDue(nowMs = Date.now()): Promise<ManualMessage[]> {
@@ -69,6 +73,9 @@ export async function buildManualMessage(row: MessageRow, settings: Pick<Setting
     startAt: b.startAt.toISOString(),
     text,
     whatsappUrl: whatsappLink(b.contactPhone, text),
+    onWhatsapp: b.contactOnWhatsapp,
+    smsUrl: smsLink(b.contactPhone, text),
+    telUrl: telLink(b.contactPhone),
   };
 }
 
@@ -120,8 +127,11 @@ export interface BookingMessage {
 
 export interface BookingMessages {
   messages: BookingMessage[];
-  /** "Send on WhatsApp" at any time for an upcoming confirmed booking, whatever happened by email. */
-  whatsapp: { confirmation: string; reminder: string } | null;
+  /**
+   * "Send again" at any time for an upcoming confirmed booking, whatever happened by email:
+   * on WhatsApp, or by text message when the customer said they aren't on WhatsApp.
+   */
+  whatsapp: { via: "whatsapp" | "sms"; confirmation: string; reminder: string; telUrl: string } | null;
 }
 
 export async function bookingMessages(bookingId: string, nowMs = Date.now()): Promise<BookingMessages> {
@@ -143,6 +153,7 @@ export async function bookingMessages(bookingId: string, nowMs = Date.now()): Pr
       { type: row.type as BookingMessage["type"], channel: row.channel, status: row.status, dueAt: row.dueAt.toISOString(), sentAt: row.sentAt?.toISOString() ?? null, lastError: row.lastError },
       nowMs,
       DAILY_LIMIT_NOTE,
+      booking.contactOnWhatsapp,
     );
     messages.push({
       id: row.id,
@@ -155,17 +166,21 @@ export async function bookingMessages(bookingId: string, nowMs = Date.now()): Pr
   let whatsapp: BookingMessages["whatsapp"] = null;
   if (live) {
     const vars = messageVarsFor(booking, bookingUrl(booking.reference, await ensureMessageToken(booking)), salonFrom(settings.salonDetails));
+    const link = booking.contactOnWhatsapp ? whatsappLink : smsLink;
     whatsapp = {
-      confirmation: whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.confirmationWhatsapp, vars)),
-      reminder: whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.reminderWhatsapp, vars)),
+      via: booking.contactOnWhatsapp ? "whatsapp" : "sms",
+      confirmation: link(booking.contactPhone, fillTemplate(messageTemplates.confirmationWhatsapp, vars)),
+      reminder: link(booking.contactPhone, fillTemplate(messageTemplates.reminderWhatsapp, vars)),
+      telUrl: telLink(booking.contactPhone),
     };
   }
   return { messages, whatsapp };
 }
 
-/** The balance link message, in the owner's wording, ready to open in WhatsApp. */
-export async function balanceLinkWhatsapp(bookingId: string, link: string): Promise<string> {
+/** The balance link message, in the owner's wording: on WhatsApp, or by text message for a customer who isn't on it. */
+export async function balanceLinkWhatsapp(bookingId: string, link: string): Promise<{ url: string; via: "whatsapp" | "sms" }> {
   const booking = await db.booking.findUniqueOrThrow({ where: { id: bookingId }, include: { items: true, payments: true } });
   const { messageTemplates, salonDetails } = await loadSettings();
-  return whatsappLink(booking.contactPhone, fillTemplate(messageTemplates.balanceLinkWhatsapp, messageVarsFor(booking, link, salonFrom(salonDetails))));
+  const text = fillTemplate(messageTemplates.balanceLinkWhatsapp, messageVarsFor(booking, link, salonFrom(salonDetails)));
+  return booking.contactOnWhatsapp ? { url: whatsappLink(booking.contactPhone, text), via: "whatsapp" } : { url: smsLink(booking.contactPhone, text), via: "sms" };
 }

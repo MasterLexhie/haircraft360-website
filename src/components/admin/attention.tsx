@@ -51,7 +51,7 @@ export function AttentionBox({ attention: a }: { attention: Attention }) {
               title="Couldn't reach this customer by email"
               action={
                 <div className="flex flex-col gap-2 sm:items-end">
-                  <WhatsappSend notificationId={m.id} href={m.whatsappUrl} name={m.name} />
+                  <WhatsappSend message={m} />
                   <Link href={`/admin/bookings/${m.bookingId}#messages`} className="inline-flex min-h-10 items-center text-sm font-semibold underline">
                     Fix the email
                   </Link>
@@ -68,7 +68,7 @@ export function AttentionBox({ attention: a }: { attention: Attention }) {
                 {a.delayed.map((m) => (
                   <li key={m.id} className="flex flex-col gap-2 rounded-[var(--radius)] border border-line p-3 sm:flex-row sm:items-center sm:justify-between">
                     <span className="text-sm text-ink"><MessageLine message={m} /></span>
-                    <WhatsappSend notificationId={m.id} href={m.whatsappUrl} name={m.name} />
+                    <WhatsappSend message={m} />
                   </li>
                 ))}
               </ul>

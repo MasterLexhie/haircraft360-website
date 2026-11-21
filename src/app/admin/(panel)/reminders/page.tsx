@@ -31,7 +31,7 @@ async function Reminders() {
     <div>
       <PageHeader
         title="Reminders due"
-        description="Customers without an email get their messages on WhatsApp. Open the message in WhatsApp and send it there, then tap Mark as sent. A message stays here until you mark it."
+        description="Customers without an email get their messages on WhatsApp, or by text or call if they said they aren't on WhatsApp. Send each one, then tap Mark as sent. A message stays here until you mark it."
       />
       {messages.length === 0 ? (
         <EmptyState icon={<MessageCircle aria-hidden className="size-6" />} title="Nothing to send today">
@@ -73,7 +73,7 @@ function Group({ title, items }: { title: string; items: ManualMessage[] }) {
                 <p className="mt-2 whitespace-pre-line rounded-[var(--radius)] bg-accent-soft/60 p-3 text-sm text-ink-2">{m.text}</p>
               </div>
               <div className="shrink-0">
-                <WhatsappSend notificationId={m.id} href={m.whatsappUrl} name={m.name} />
+                <WhatsappSend message={m} />
               </div>
             </Card>
           </li>

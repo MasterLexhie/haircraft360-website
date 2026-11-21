@@ -239,32 +239,35 @@ model ServiceAddOn {
 // ───────────────────────────── Bookings ─────────────────────────────
 
 model Booking {
-  id               String        @id @default(cuid())
+  id                String        @id @default(cuid())
   /// Short human reference shown to customers, for example HC-7KQ2M.
-  reference        String        @unique
+  reference         String        @unique
   /// SHA-256 of the customer's booking link token.
-  accessTokenHash  String        @unique @map("access_token_hash")
+  accessTokenHash   String        @unique @map("access_token_hash")
   /// SHA-256 of the link token used in emails and WhatsApp messages (see src/server/booking-access.ts).
-  messageTokenHash String?       @unique @map("message_token_hash")
-  accessExpiresAt  DateTime      @map("access_expires_at") @db.Timestamptz(3)
-  customerId       String        @map("customer_id")
+  messageTokenHash  String?       @unique @map("message_token_hash")
+  accessExpiresAt   DateTime      @map("access_expires_at") @db.Timestamptz(3)
+  customerId        String        @map("customer_id")
   /// What the customer typed for this booking. Customer pages show only these, never the stored profile.
-  contactName      String        @map("contact_name")
-  contactPhone     String        @map("contact_phone")
-  contactEmail     String?       @map("contact_email")
-  startAt          DateTime      @map("start_at") @db.Timestamptz(3)
+  contactName       String        @map("contact_name")
+  contactPhone      String        @map("contact_phone")
+  contactEmail      String?       @map("contact_email")
+  /// The customer's answer to "This number is on WhatsApp", asked only when they have no email
+  /// (true otherwise). When false, the admin calls or texts instead of opening WhatsApp.
+  contactOnWhatsapp Boolean       @default(true) @map("contact_on_whatsapp")
+  startAt           DateTime      @map("start_at") @db.Timestamptz(3)
   /// Includes every item's duration. The buffer is added at availability time, not stored here.
-  endAt            DateTime      @map("end_at") @db.Timestamptz(3)
-  status           BookingStatus @default(pending_payment)
-  holdExpiresAt    DateTime?     @map("hold_expires_at") @db.Timestamptz(3)
-  totalKobo        Int           @map("total_kobo")
-  depositDueKobo   Int           @map("deposit_due_kobo")
-  customerNote     String        @default("") @map("customer_note")
-  privateNote      String        @default("") @map("private_note")
-  completedAt      DateTime?     @map("completed_at") @db.Timestamptz(3)
-  cancelledAt      DateTime?     @map("cancelled_at") @db.Timestamptz(3)
-  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  endAt             DateTime      @map("end_at") @db.Timestamptz(3)
+  status            BookingStatus @default(pending_payment)
+  holdExpiresAt     DateTime?     @map("hold_expires_at") @db.Timestamptz(3)
+  totalKobo         Int           @map("total_kobo")
+  depositDueKobo    Int           @map("deposit_due_kobo")
+  customerNote      String        @default("") @map("customer_note")
+  privateNote       String        @default("") @map("private_note")
+  completedAt       DateTime?     @map("completed_at") @db.Timestamptz(3)
+  cancelledAt       DateTime?     @map("cancelled_at") @db.Timestamptz(3)
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   items           BookingItem[]

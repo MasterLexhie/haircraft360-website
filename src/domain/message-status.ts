@@ -26,15 +26,17 @@ export interface MessageStatus {
   fixEmail: boolean;
 }
 
-export function messageStatus(row: MessageRowLike, nowMs: number, dailyLimitNote: string): MessageStatus {
+export function messageStatus(row: MessageRowLike, nowMs: number, dailyLimitNote: string, onWhatsapp = true): MessageStatus {
   const what = row.type === "confirmation" ? "Confirmation" : "Reminder";
+  // Manual messages go on WhatsApp, or by text or call for a customer who isn't on it.
+  const by = onWhatsapp ? "on WhatsApp" : "by text or call";
   const plain = (label: string, tone: MessageTone): MessageStatus => ({ label, tone, sendOnWhatsapp: false, fixEmail: false });
 
   switch (row.status) {
     case "delivered":
       return plain(`${what} delivered`, "success");
     case "sent":
-      return plain(row.channel === "whatsapp_manual" ? `${what} sent on WhatsApp` : `${what} sent by email`, "success");
+      return plain(row.channel === "whatsapp_manual" ? `${what} sent ${by}` : `${what} sent by email`, "success");
     case "failed":
     case "bounced":
       return { label: "Couldn't reach this customer by email", tone: "danger", sendOnWhatsapp: true, fixEmail: true };
@@ -44,8 +46,8 @@ export function messageStatus(row: MessageRowLike, nowMs: number, dailyLimitNote
     case "pending":
       if (row.channel === "whatsapp_manual") {
         return Date.parse(row.dueAt) > nowMs
-          ? { label: `${what} to send on WhatsApp from ${dayLabel(row.dueAt)}`, tone: "info", sendOnWhatsapp: false, fixEmail: true }
-          : { label: `${what} to send on WhatsApp`, tone: "warning", sendOnWhatsapp: true, fixEmail: true };
+          ? { label: `${what} to send ${by} from ${dayLabel(row.dueAt)}`, tone: "info", sendOnWhatsapp: false, fixEmail: true }
+          : { label: `${what} to send ${by}`, tone: "warning", sendOnWhatsapp: true, fixEmail: true };
       }
       if (row.lastError === dailyLimitNote) return { label: `${what} delayed by the daily email limit`, tone: "warning", sendOnWhatsapp: true, fixEmail: false };
       if (Date.parse(row.dueAt) > nowMs) return plain(`${what} goes out by email ${dayLabel(row.dueAt)}`, "neutral");

@@ -3,7 +3,7 @@ import Form from "next/form";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { Lock, Mail, MessageCircle, Phone } from "lucide-react";
+import { Lock, Mail, MessageCircle, Phone, MessageSquareText } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { getMoveSlots, requestNow } from "@/server/queries";
 import { bookingAudit, getAdminBooking } from "@/server/admin-queries";
@@ -162,7 +162,7 @@ async function Detail({ params, searchParams }: Props) {
               {booking.contactEmail ? (
                 <li className="flex items-center gap-2"><Mail aria-hidden className="size-4 text-ink-3" /><a className="break-all underline" href={`mailto:${booking.contactEmail}`}>{booking.contactEmail}</a></li>
               ) : (
-                <li className="flex items-center gap-2 text-ink-3"><Mail aria-hidden className="size-4" />No email: message on WhatsApp</li>
+                <li className="flex items-center gap-2 text-ink-3"><Mail aria-hidden className="size-4" />{booking.contactOnWhatsapp ? "No email: message on WhatsApp" : "No email and not on WhatsApp: text or call"}</li>
               )}
             </ul>
           </Panel>
@@ -228,21 +228,33 @@ function MessagesPanel({ bookingId, contactEmail, view }: { bookingId: string; c
             <li key={m.id} className="space-y-2">
               <Badge tone={m.status.tone}>{m.status.label}</Badge>
               {m.sentAt && m.status.tone === "success" && <p className="text-xs text-ink-3">{formatDateTime(m.sentAt)}</p>}
-              {m.manual && <WhatsappSend notificationId={m.manual.id} href={m.manual.whatsappUrl} name={m.manual.name} />}
+              {m.manual && <WhatsappSend message={m.manual} />}
             </li>
           ))}
         </ul>
       )}
       {view.whatsapp && (
         <div className="mt-4 border-t border-line pt-4">
-          <p className="mb-2 text-xs text-ink-3">Send again on WhatsApp, in your wording from Settings:</p>
+          <p className="mb-2 text-xs text-ink-3">
+            {view.whatsapp.via === "whatsapp"
+              ? "Send again on WhatsApp, in your wording from Settings:"
+              : "Not on WhatsApp, the customer said. Send again by text message, in your wording from Settings, or call:"}
+          </p>
           <div className="flex flex-wrap gap-2">
-            <a href={view.whatsapp.confirmation} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "sm")}>
-              <MessageCircle aria-hidden className="size-4" /> Confirmation
-            </a>
-            <a href={view.whatsapp.reminder} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "sm")}>
-              <MessageCircle aria-hidden className="size-4" /> Reminder
-            </a>
+            {(["confirmation", "reminder"] as const).map((k) => {
+              const Icon = view.whatsapp!.via === "whatsapp" ? MessageCircle : MessageSquareText;
+              const newTab = view.whatsapp!.via === "whatsapp" ? { target: "_blank", rel: "noopener noreferrer" } : {};
+              return (
+                <a key={k} href={view.whatsapp![k]} {...newTab} className={buttonClass("secondary", "sm")}>
+                  <Icon aria-hidden className="size-4" /> {k === "confirmation" ? "Confirmation" : "Reminder"}
+                </a>
+              );
+            })}
+            {view.whatsapp.via === "sms" && (
+              <a href={view.whatsapp.telUrl} className={buttonClass("secondary", "sm")}>
+                <Phone aria-hidden className="size-4" /> Call
+              </a>
+            )}
           </div>
         </div>
       )}

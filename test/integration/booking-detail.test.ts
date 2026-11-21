@@ -69,8 +69,30 @@ describe("Messages on the booking page", () => {
 
   it("fills the balance link message with the owner's wording and the link", async () => {
     const b = await confirmed();
-    const url = await balanceLinkWhatsapp(b.id, "https://example.test/pay/abc");
+    const { url, via } = await balanceLinkWhatsapp(b.id, "https://example.test/pay/abc");
+    expect(via).toBe("whatsapp");
     expect(decodeURIComponent(url.split("?text=")[1]!)).toMatch(/Your balance is ₦.*https:\/\/example\.test\/pay\/abc$/);
+  });
+});
+
+describe("a customer who isn't on WhatsApp", () => {
+  it("is asked only without an email: anyone with an email counts as on WhatsApp", async () => {
+    expect((await confirmed({ onWhatsapp: false })).contactOnWhatsapp).toBe(true);
+    expect((await confirmed({ email: "", noEmail: true, startAt: slot(3, "13:00") })).contactOnWhatsapp).toBe(true);
+    expect((await confirmed({ email: "", noEmail: true, onWhatsapp: false, startAt: slot(3, "15:00") })).contactOnWhatsapp).toBe(false);
+  });
+
+  it("gets text messages and calls instead of WhatsApp, everywhere in the admin", async () => {
+    const b = await confirmed({ email: "", noEmail: true, onWhatsapp: false, phone: "0803 555 1212" });
+    const view = await bookingMessages(b.id);
+    expect(view.whatsapp).toMatchObject({ via: "sms", telUrl: "tel:+2348035551212" });
+    expect(view.whatsapp!.confirmation.startsWith("sms:+2348035551212?body=")).toBe(true);
+    const manual = view.messages.find((m) => m.type === "confirmation")!.manual!;
+    expect(manual).toMatchObject({ onWhatsapp: false, telUrl: "tel:+2348035551212" });
+    expect(decodeURIComponent(manual.smsUrl.split("?body=")[1]!)).toContain(b.reference);
+    const balance = await balanceLinkWhatsapp(b.id, "https://example.test/pay/abc");
+    expect(balance.via).toBe("sms");
+    expect(balance.url.startsWith("sms:+2348035551212?body=")).toBe(true);
   });
 });
 

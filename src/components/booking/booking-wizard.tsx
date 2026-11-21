@@ -31,11 +31,13 @@ interface Contact {
   phone: string;
   email: string;
   noEmail: boolean;
+  /** Asked only with noEmail. */
+  onWhatsapp: boolean;
   marketingConsent: boolean;
   note: string;
 }
 
-const EMPTY_CONTACT: Contact = { name: "", phone: "", email: "", noEmail: false, marketingConsent: false, note: "" };
+const EMPTY_CONTACT: Contact = { name: "", phone: "", email: "", noEmail: false, onWhatsapp: true, marketingConsent: false, note: "" };
 
 export function BookingWizard({
   services,
@@ -234,6 +236,7 @@ export function BookingWizard({
           phone: contact.phone,
           email: contact.noEmail ? "" : contact.email,
           noEmail: contact.noEmail,
+          onWhatsapp: contact.noEmail ? contact.onWhatsapp : true,
           marketingConsent: contact.marketingConsent,
           customerNote: contact.note,
           website,
@@ -432,8 +435,18 @@ export function BookingWizard({
                       setContact(updated);
                       setErrors(validateContact(updated));
                     }} />
-                  <span>I don&apos;t have an email. <span className="text-ink-3">The salon will message you on WhatsApp instead.</span></span>
+                  <span>I don&apos;t have an email. <span className="text-ink-3">The salon will send your confirmation and reminder another way.</span></span>
                 </label>
+                {contact.noEmail && (
+                  <label className="ml-8 flex min-h-11 cursor-pointer items-start gap-3 text-sm text-ink">
+                    <input type="checkbox" className="mt-0.5 size-5 accent-[var(--color-accent)]" checked={contact.onWhatsapp}
+                      onChange={(e) => setContact({ ...contact, onWhatsapp: e.target.checked })} />
+                    <span>
+                      This number is on WhatsApp.{" "}
+                      <span className="text-ink-3">{contact.onWhatsapp ? "The salon will message you there." : "The salon will text or call you instead."}</span>
+                    </span>
+                  </label>
+                )}
                 <Field id="f-note" label="Anything the salon should know?" optional hint="For example, your current loc length or a style you have in mind. The salon can see this.">
                   <textarea id="f-note" rows={3} maxLength={500} className={cx(inputClass, "min-h-24")} value={contact.note}
                     aria-describedby="f-note-hint" onChange={(e) => setContact({ ...contact, note: e.target.value })} />
@@ -477,7 +490,7 @@ export function BookingWizard({
                 </ReviewBlock>
                 <ReviewBlock title="Your details" onEdit={() => go(DETAILS)}>
                   <p className="font-medium">{contact.name}</p>
-                  <p className="text-ink-2">{[contact.phone, contact.noEmail ? "No email" : contact.email].filter(Boolean).join(" · ")}</p>
+                  <p className="text-ink-2">{[contact.phone, contact.noEmail ? (contact.onWhatsapp ? "No email: WhatsApp" : "No email: text or call") : contact.email].filter(Boolean).join(" · ")}</p>
                   {contact.note && <p className="mt-1 text-sm text-ink-3">Note: {contact.note}</p>}
                 </ReviewBlock>
 

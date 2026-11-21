@@ -12,6 +12,7 @@ function booking(startAt: string, status: BookingStatus, main = "Loc retwist", t
     contactName: "Ada",
     contactPhone: "+2348030000000",
     contactEmail: null,
+    contactOnWhatsapp: true,
     startAt,
     endAt: startAt,
     status,

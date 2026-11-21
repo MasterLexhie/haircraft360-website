@@ -99,7 +99,7 @@ async function CustomerView({ params }: { params: Promise<{ id: string }> }) {
               {c.emails.filter((e) => !e.isPlaceholder).map((e) => (
                 <li key={e.value} className="flex items-center gap-2"><Mail aria-hidden className="size-4 text-ink-3" /><a className="break-all underline" href={`mailto:${e.value}`}>{e.value}</a>{e.bounced && <Badge tone="danger">Bounced</Badge>}</li>
               ))}
-              {!c.emails.some((e) => !e.isPlaceholder && !e.bounced) && <li className="text-ink-3">No usable email: message on WhatsApp</li>}
+              {!c.emails.some((e) => !e.isPlaceholder && !e.bounced) && <li className="text-ink-3">No usable email: message on WhatsApp, or by text or call</li>}
               <li className="border-t border-line pt-3"><MarketingConsentSwitch customerId={c.id} consent={c.marketingConsent} /></li>
             </ul>
           </Panel>

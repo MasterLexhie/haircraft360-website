@@ -19,6 +19,8 @@ export const createBookingSchema = z.object({
   phone: z.string().max(40).default(""),
   email: z.string().max(200).default(""),
   noEmail: z.boolean().default(false),
+  /** Only asked when noEmail is ticked. */
+  onWhatsapp: z.boolean().default(true),
   marketingConsent: z.boolean().default(false),
   customerNote: z.string().max(2000).default(""),
   /** Honeypot. */

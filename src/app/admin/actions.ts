@@ -35,7 +35,7 @@ import { z } from "zod";
 import type { PaymentMethod } from "@/domain/types";
 import { capacityByWeekdaySchema, parseSalonDetailsInput, parseTemplatesInput, weeklyHoursSchema, type CapacityByWeekday, type WeekdayKey, type WeeklyHours } from "@/domain/settings";
 
-export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string; whatsappUrl?: string } | null;
+export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string; whatsappUrl?: string; sendVia?: "whatsapp" | "sms" } | null;
 
 function fail(err: unknown): ActionState {
   if (err instanceof BookingError) return { error: err.message, fieldErrors: err.fieldErrors };
@@ -205,9 +205,10 @@ export async function balanceLinkAction(bookingIdRaw: string): Promise<ActionSta
   if (!bookingId) return INVALID;
   try {
     const { url } = await createBalanceLink(bookingId, actor);
-    const whatsappUrl = await balanceLinkWhatsapp(bookingId, url);
+    const send = await balanceLinkWhatsapp(bookingId, url);
     refresh();
-    return { ok: true, message: "Link ready. Send it on WhatsApp, or copy it.", link: url, whatsappUrl };
+    const how = send.via === "whatsapp" ? "on WhatsApp" : "by text message (they're not on WhatsApp)";
+    return { ok: true, message: `Link ready. Send it ${how}, or copy it.`, link: url, whatsappUrl: send.url, sendVia: send.via };
   } catch (e) {
     return fail(e);
   }

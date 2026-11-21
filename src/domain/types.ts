@@ -55,6 +55,8 @@ export interface Booking {
   contactName: string;
   contactPhone: string;
   contactEmail: string | null;
+  /** The customer said their phone gets WhatsApp (asked only when there's no email). */
+  contactOnWhatsapp: boolean;
   startAt: string;
   endAt: string;
   status: BookingStatus;

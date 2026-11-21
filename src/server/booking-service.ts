@@ -103,6 +103,8 @@ export interface CreateBookingInput {
   phone: string;
   email: string;
   noEmail: boolean;
+  /** Asked only with noEmail; a customer with an email is never asked, so counts as true. */
+  onWhatsapp?: boolean;
   marketingConsent: boolean;
   customerNote: string;
 }
@@ -179,6 +181,7 @@ export async function createPendingBooking(input: CreateBookingInput): Promise<C
         contactName: name,
         contactPhone: phone,
         contactEmail: input.noEmail ? null : email,
+        contactOnWhatsapp: input.noEmail ? input.onWhatsapp !== false : true,
         startAt,
         endAt,
         status: "pending_payment",

@@ -49,6 +49,7 @@ export function toBooking(row: P.Booking & { items: P.BookingItem[] }): Booking 
     contactName: row.contactName,
     contactPhone: row.contactPhone,
     contactEmail: row.contactEmail,
+    contactOnWhatsapp: row.contactOnWhatsapp,
     startAt: iso(row.startAt),
     endAt: iso(row.endAt),
     status: row.status,
