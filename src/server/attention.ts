@@ -33,6 +33,8 @@ export interface Attention {
   whatsappDue: number;
   /** Paid after the time was taken. */
   newTimeNeeded: AttentionBooking[];
+  /** Locs Mastery applications nobody has looked at yet. */
+  newApplications: number;
   /** Appointments that have ended but aren't marked completed or no-show. */
   toComplete: AttentionBooking[];
   scheduler: { stopped: boolean; lastRunAt: string | null; developerUrl: string | null };
@@ -44,6 +46,7 @@ export function attentionCount(a: Attention): number {
     a.unreachable.length +
     a.delayed.length +
     (a.whatsappDue ? 1 : 0) +
+    (a.newApplications ? 1 : 0) +
     a.newTimeNeeded.length +
     (a.toComplete.length ? 1 : 0) +
     (a.scheduler.stopped ? 1 : 0) +
@@ -60,7 +63,7 @@ export async function getAttention(nowMs = Date.now()): Promise<Attention> {
   const since = new Date(nowMs - SYSTEM_ERROR_WINDOW_MS);
   const settings = await loadSettings();
 
-  const [failedRows, delayedRows, whatsappDue, newTime, toComplete, badWebhooks, badOwnerEmails] = await Promise.all([
+  const [failedRows, delayedRows, whatsappDue, newTime, toComplete, badWebhooks, badOwnerEmails, newApplications] = await Promise.all([
     db.notification.findMany({ where: { channel: "email", status: { in: ["failed", "bounced"] }, ...bookingMessage(nowMs) }, include: withBooking, orderBy: { booking: { startAt: "asc" } } }),
     db.notification.findMany({ where: { channel: "email", status: "pending", lastError: DAILY_LIMIT_NOTE, ...bookingMessage(nowMs) }, include: withBooking, orderBy: { booking: { startAt: "asc" } } }),
     db.notification.count({ where: { channel: "whatsapp_manual", status: "pending", dueAt: { lt: endOfToday }, ...bookingMessage(nowMs) } }),
@@ -68,6 +71,7 @@ export async function getAttention(nowMs = Date.now()): Promise<Attention> {
     db.booking.findMany({ where: { status: "confirmed", endAt: { lt: now } }, orderBy: { startAt: "asc" } }),
     db.webhookEvent.findMany({ where: { status: "failed", signatureValid: true, receivedAt: { gte: since } }, orderBy: { receivedAt: "desc" }, take: 5 }),
     db.notification.findMany({ where: { type: { in: ["owner_alert", "owner_daily_summary"] }, status: "failed", updatedAt: { gte: since } }, orderBy: { updatedAt: "desc" }, take: 5 }),
+    db.programApplication.count({ where: { status: "new" } }),
   ]);
 
   const toItem = (b: { id: string; reference: string; contactName: string; startAt: Date }): AttentionBooking => ({ id: b.id, reference: b.reference, name: b.contactName, startAt: b.startAt.toISOString() });
@@ -84,6 +88,7 @@ export async function getAttention(nowMs = Date.now()): Promise<Attention> {
     unreachable: await Promise.all(failedRows.map((r) => buildManualMessage(r, settings))),
     delayed: await Promise.all(delayedRows.map((r) => buildManualMessage(r, settings))),
     whatsappDue,
+    newApplications,
     newTimeNeeded: newTime.map(toItem),
     toComplete: toComplete.map(toItem),
     scheduler: {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, LayoutDashboard, MessageCircle, Settings2, UserRoundCog, Users, Wallet } from "lucide-react";
+import { CalendarDays, GraduationCap, LayoutDashboard, MessageCircle, Settings2, UserRoundCog, Users, Wallet } from "lucide-react";
 import { cx } from "@/components/ui/primitives";
 
 /** `sidebarOnly`: on phones it sits in the top bar instead, so five items fit the bottom bar. */
@@ -12,6 +12,7 @@ const ITEMS: { href: string; label: string; shortLabel?: string; icon: typeof La
   { href: "/admin/reminders", label: "Reminders due", shortLabel: "Reminders", icon: MessageCircle },
   { href: "/admin/customers", label: "Customers", icon: Users },
   { href: "/admin/finances", label: "Finances", icon: Wallet },
+  { href: "/admin/applications", label: "Locs Mastery", icon: GraduationCap, sidebarOnly: true },
   { href: "/admin/settings", label: "Settings", icon: Settings2, sidebarOnly: true },
   { href: "/admin/account", label: "Account", icon: UserRoundCog, sidebarOnly: true },
 ];

@@ -24,6 +24,8 @@ import { createBalanceLink } from "@/server/payments/links";
 import { balanceLinkWhatsapp, markWhatsappSent } from "@/server/whatsapp-messages";
 import { createExpense, saveExpenseCategory, softDeleteExpense, updateExpense } from "@/server/expenses";
 import { unknownPlaceholders } from "@/domain/messages";
+import { validateProgram } from "@/domain/academy";
+import { saveProgram, setApplicationStatus, updateApplicationNote } from "@/server/academy";
 import { normalizePhone } from "@/domain/phone";
 import { parseNairaToKobo } from "@/lib/money";
 import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
@@ -485,6 +487,52 @@ export async function expenseCategoryAction(categoryIdRaw: string | null, _: Act
     await saveExpenseCategory({ id, name: String(formData.get("name") ?? "").slice(0, 200), active: id === null || formData.get("active") === "on" }, actor);
     refresh();
     return { ok: true, message: id ? "Category saved." : "Category added." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/* ───────────── Locs Mastery ───────────── */
+
+const applicationStatusSchema = z.enum(["new", "contacted", "accepted", "declined", "withdrawn"]);
+
+export async function applicationStatusAction(applicationIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const id = validId(applicationIdRaw);
+  const status = applicationStatusSchema.safeParse(formData.get("status"));
+  if (!id || !status.success) return INVALID;
+  try {
+    await setApplicationStatus(id, status.data, actor);
+    refresh();
+    return { ok: true, message: "Status saved." };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function applicationNoteAction(applicationIdRaw: string, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const id = validId(applicationIdRaw);
+  if (!id) return INVALID;
+  try {
+    await updateApplicationNote(id, String(formData.get("privateNote") ?? ""), actor);
+    refresh();
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function programAction(programIdRaw: string | null, _: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await adminActor();
+  const id = programIdRaw === null ? null : validId(programIdRaw);
+  if (programIdRaw !== null && !id) return INVALID;
+  const parsed = validateProgram(formStrings(formData));
+  if (!parsed.ok) return { error: "Please fix the highlighted fields.", fieldErrors: parsed.fieldErrors };
+  try {
+    await saveProgram(id, parsed.value, actor);
+    refresh();
+    return { ok: true, message: id ? "Program saved." : "Program added." };
   } catch (e) {
     return fail(e);
   }

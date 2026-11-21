@@ -93,6 +93,18 @@ describe("Needs your attention", () => {
   });
 });
 
+describe("Locs Mastery on the dashboard", () => {
+  it("counts applications nobody has looked at yet", async () => {
+    const program = await db.program.create({ data: { name: "Foundations", summary: "x", duration: "6 weeks", outcomes: ["x"] } });
+    const base = { programId: program.id, fullName: "A", phone: "+2348031234567", email: "a@example.com", dateOfBirth: new Date("2000-01-01"), city: "Ibadan", state: "Oyo", experience: "none" as const, motivation: "x".repeat(30), consentAt: new Date() };
+    await db.programApplication.create({ data: { ...base, reference: "LM-AAAAAA" } });
+    await db.programApplication.create({ data: { ...base, reference: "LM-BBBBBB", status: "contacted" } });
+    const a = await getAttention();
+    expect(a.newApplications).toBe(1);
+    expect(attentionCount(a)).toBe(1);
+  });
+});
+
 describe("attention rules", () => {
   it("treats a missing heartbeat as stopped", () => {
     expect(schedulerStale(null, Date.now())).toBe(true);

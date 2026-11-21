@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarOff, Clock, MessageSquareText, Receipt, Scissors, Store } from "lucide-react";
+import { CalendarOff, Clock, GraduationCap, MessageSquareText, Receipt, Scissors, Store } from "lucide-react";
 import { Suspense } from "react";
 import { requireAdmin } from "@/server/auth";
 import { getAdminData, getUpcomingBlocks, requestNow } from "@/server/queries";
@@ -10,6 +10,8 @@ import { PageHeader } from "@/components/admin/bits";
 import { AvailabilityForm, ServicesManager } from "@/components/admin/settings-forms";
 import { ExpenseCategoriesManager, MessageTemplatesForm, SalonDetailsForm } from "@/components/admin/settings-more-forms";
 import { listExpenseCategories } from "@/server/expenses";
+import { listPrograms } from "@/server/academy";
+import { ProgramsManager } from "@/components/admin/academy-forms";
 import { DEFAULT_MESSAGE_TEMPLATES, salonAddress } from "@/domain/settings";
 import { formatPhone } from "@/domain/phone";
 import { formatNaira } from "@/lib/money";
@@ -22,6 +24,7 @@ const TABS = [
   { id: "services", label: "Services", icon: Scissors },
   { id: "availability", label: "Availability & deposit", icon: Clock },
   { id: "closures", label: "Closures", icon: CalendarOff },
+  { id: "programs", label: "Locs Mastery programs", icon: GraduationCap },
   { id: "messages", label: "Messages", icon: MessageSquareText },
   { id: "salon", label: "Salon details", icon: Store },
   { id: "categories", label: "Expense categories", icon: Receipt },
@@ -40,6 +43,7 @@ async function SettingsView({ searchParams }: { searchParams: Promise<{ tab?: st
   await requireAdmin();
   const [db, sp, blocks, nowMs, categories] = await Promise.all([getAdminData(), searchParams, getUpcomingBlocks(), requestNow(), listExpenseCategories()]);
   const tab: TabId = TABS.some((t) => t.id === sp.tab) ? (sp.tab as TabId) : "services";
+  const programs = tab === "programs" ? await listPrograms() : [];
   return (
     <>
       <PageHeader title="Settings" description="Services, opening hours, closures, the deposit rule, your messages and salon details. Changes apply to new bookings only." />
@@ -106,6 +110,8 @@ async function SettingsView({ searchParams }: { searchParams: Promise<{ tab?: st
       )}
 
       {tab === "categories" && <ExpenseCategoriesManager categories={categories} />}
+
+      {tab === "programs" && <ProgramsManager programs={programs} />}
 
     </>
   );

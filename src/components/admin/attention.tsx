@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Clock, MailX, MessageCircle, Wrench } from "lucide-react";
+import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Clock, GraduationCap, MailX, MessageCircle, Wrench } from "lucide-react";
 import type { Attention, AttentionBooking } from "@/server/attention";
 import type { ManualMessage } from "@/server/whatsapp-messages";
 import { formatDateTime, formatShortDate, formatTime } from "@/lib/time";
@@ -82,6 +82,16 @@ export function AttentionBox({ attention: a }: { attention: Attention }) {
               action={<ActionLink href="/admin/reminders">Open Reminders due</ActionLink>}
             >
               For customers without an email address.
+            </Row>
+          )}
+          {a.newApplications > 0 && (
+            <Row
+              tone="info"
+              icon={<GraduationCap />}
+              title={`${a.newApplications} new Locs Mastery application${a.newApplications === 1 ? "" : "s"}`}
+              action={<ActionLink href="/admin/applications?status=new">Review them</ActionLink>}
+            >
+              Get in touch with each applicant, then mark them contacted.
             </Row>
           )}
           {a.toComplete.length > 0 && (
