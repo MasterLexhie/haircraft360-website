@@ -100,7 +100,13 @@ export function usePaystackPayment(onDone: (outcome: PaymentOutcome) => void) {
     onDone(outcome);
   }
 
-  return { pay, phase, error, busy: phase !== "idle" };
+  /** Back to the start, for a fresh booking after this one has finished. */
+  function reset() {
+    setPhase("idle");
+    setError(null);
+  }
+
+  return { pay, reset, phase, error, busy: phase !== "idle" };
 }
 
 /** POSTs to one of our "start a payment" routes and returns the payment, or throws its message. */

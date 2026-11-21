@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Lock, Pencil, ShieldCheck } from "lucide-react";
 import type { Service, Settings } from "@/domain/types";
 import { depositDue } from "@/domain/deposit";
@@ -95,6 +95,39 @@ export function BookingWizard({
   const headingRef = useRef<HTMLHeadingElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
   const firstRender = useRef(true);
+  // Set once a booking exists. With Cache Components, Next.js keeps this page alive (hidden)
+  // after we navigate to the booking, so without a reset a later visit to /book would show the
+  // finished form, still "Confirming payment", and save its details back as a draft.
+  const bookingDone = useRef(false);
+
+  function clearDraft() {
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+    } catch {}
+  }
+
+  // Runs when Activity hides the page. Only resets after a booking was made: a half-filled
+  // form the customer leaves is kept, so they don't lose their work.
+  useLayoutEffect(() => {
+    return () => {
+      if (!bookingDone.current) return;
+      bookingDone.current = false;
+      created.current = null;
+      setStep(0);
+      setMainId(initialServiceId && mains.some((s) => s.id === initialServiceId) ? initialServiceId : null);
+      setAddOnIds([]);
+      setDateKey(null);
+      setStartAt(null);
+      setContact(EMPTY_CONTACT);
+      setWebsite("");
+      setErrors({});
+      setTouched({});
+      setStepError(null);
+      payment.reset();
+      clearDraft();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Restore an in-progress draft (same tab), unless a service came in via the URL.
   // sessionStorage is only readable after hydration, so restoring must happen in an effect.
@@ -119,7 +152,7 @@ export function BookingWizard({
   /* eslint-enable react-hooks/set-state-in-effect */
 
   useEffect(() => {
-    if (!hydrated) return;
+    if (!hydrated || bookingDone.current) return;
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ mainId, addOnIds, dateKey, startAt, ...contact } satisfies Draft));
     } catch {
@@ -253,9 +286,8 @@ export function BookingWizard({
         }
         return;
       }
-      try {
-        sessionStorage.removeItem(DRAFT_KEY);
-      } catch {}
+      bookingDone.current = true;
+      clearDraft();
       created.current = { reference: data.reference, accessToken: data.accessToken };
       const started = data.payment as StartedPayment | null;
       // Paystack couldn't be reached: the time is still held and the booking page offers to pay.
