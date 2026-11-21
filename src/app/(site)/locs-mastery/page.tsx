@@ -210,7 +210,7 @@ function ProgramCard({ program: p, photoIndex }: { program: ProgramRow; photoInd
           ))}
         </ul>
         {p.acceptingApplications ? (
-          <ButtonLink href={`/locs-mastery?program=${p.id}#apply`} scroll={false} className="mt-6 w-full">
+          <ButtonLink href={`/locs-mastery?program=${p.id}#apply`} className="mt-6 w-full">
             Apply for this program
           </ButtonLink>
         ) : (
