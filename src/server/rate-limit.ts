@@ -71,18 +71,24 @@ export async function peek(key: string, { limit, windowSeconds }: Limit, nowMs =
   };
 }
 
+/** Where the visitor's IP comes from: the header the host's edge sets and a visitor can't fake. */
+const TRUSTED_HEADER: Record<string, string> = {
+  netlify: "x-nf-client-connection-ip",
+  cloudflare: "cf-connecting-ip",
+};
+
 /**
- * The visitor's IP address. Cloudflare and Netlify set these headers at the edge;
- * locally there is none, so everyone shares the "local" bucket.
+ * The visitor's IP address, read only from the header the host in front of the app sets
+ * (`TRUSTED_PROXY`: "netlify" or "cloudflare"). Any other IP header could be typed by the
+ * visitor, which would let them dodge the rate limits with a new made-up address each time.
+ * With no host set, the last `x-forwarded-for` entry is used: it is added by the nearest
+ * proxy, not the visitor. Locally there is none, so everyone shares the "local" bucket.
  */
-export function clientIpFrom(h: Headers): string {
-  const cf = h.get("cf-connecting-ip");
-  if (cf) return cf.trim();
-  const netlify = h.get("x-nf-client-connection-ip");
-  if (netlify) return netlify.trim();
-  const forwarded = h.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0]!.trim();
-  return h.get("x-real-ip")?.trim() || "local";
+export function clientIpFrom(h: Headers, trustedProxy = process.env.TRUSTED_PROXY): string {
+  const trusted = trustedProxy ? TRUSTED_HEADER[trustedProxy.trim().toLowerCase()] : undefined;
+  if (trusted) return h.get(trusted)?.trim() || "local";
+  const forwarded = h.get("x-forwarded-for")?.split(",").map((s) => s.trim()).filter(Boolean);
+  return forwarded?.at(-1) || "local";
 }
 
 export async function clientIp(): Promise<string> {

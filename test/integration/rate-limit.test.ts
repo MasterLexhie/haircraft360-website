@@ -31,9 +31,16 @@ describe("rate limiter", () => {
     expect(results.filter((r) => r.ok)).toHaveLength(3);
   });
 
-  it("reads the visitor IP from the edge headers", () => {
-    expect(clientIpFrom(new Headers({ "cf-connecting-ip": "1.2.3.4", "x-forwarded-for": "9.9.9.9" }))).toBe("1.2.3.4");
-    expect(clientIpFrom(new Headers({ "x-forwarded-for": "5.6.7.8, 10.0.0.1" }))).toBe("5.6.7.8");
-    expect(clientIpFrom(new Headers())).toBe("local");
+  it("reads the visitor IP only from the header the host sets", () => {
+    const sent = { "x-nf-client-connection-ip": "1.2.3.4", "cf-connecting-ip": "6.6.6.6", "x-forwarded-for": "7.7.7.7, 9.9.9.9" };
+    expect(clientIpFrom(new Headers(sent), "netlify")).toBe("1.2.3.4");
+    expect(clientIpFrom(new Headers(sent), "cloudflare")).toBe("6.6.6.6");
+    expect(clientIpFrom(new Headers({ "x-forwarded-for": "5.6.7.8, 10.0.0.1" }), undefined)).toBe("10.0.0.1");
+    expect(clientIpFrom(new Headers(), undefined)).toBe("local");
+  });
+
+  it("ignores IP headers a visitor types on Netlify", () => {
+    const faked = (ip: string) => new Headers({ "x-nf-client-connection-ip": "1.2.3.4", "cf-connecting-ip": ip, "x-forwarded-for": ip, "x-real-ip": ip });
+    expect(new Set(["10.0.0.1", "10.0.0.2", "10.0.0.3"].map((ip) => clientIpFrom(faked(ip), "netlify")))).toEqual(new Set(["1.2.3.4"]));
   });
 });
