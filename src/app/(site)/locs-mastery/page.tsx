@@ -1,24 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import {
-  ArrowRight,
-  BadgeCheck,
-  BookOpen,
-  CalendarClock,
-  Check,
-  ClipboardList,
-  GraduationCap,
-  HandHeart,
-  MessageCircle,
-  Ruler,
-  Scissors,
-  ShieldCheck,
-  Sparkles,
-  Store,
-  Wrench,
-} from "lucide-react";
+import { ArrowRight, BadgeCheck, BookOpen, CalendarClock, Check, ClipboardList, GraduationCap, HandHeart, MessageCircle, Ruler, Scissors, ShieldCheck, Sparkles, Store, Wallet, Wrench } from "lucide-react";
 import { latestBirthDate } from "@/domain/academy";
+import { formatNaira } from "@/lib/money";
 import { lagosDateKey } from "@/lib/time";
 import { listPublicPrograms, type ProgramRow } from "@/server/academy";
 import { requestNow } from "@/server/queries";
@@ -43,7 +28,7 @@ export default function LocsMasteryPage({ searchParams }: Props) {
       <section id="programs" aria-labelledby="programs-title" className="scroll-mt-24 bg-sand py-16 sm:py-24">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <SectionHeading id="programs-title" eyebrow="The programs" title={<>Find the program that <em>fits</em> you</>}>
-            Each program is taught hands on. Fees, dates and what to bring are talked through with you after you apply.
+            Each program is taught hands on. Dates and what to bring are talked through with you after you apply.
           </SectionHeading>
           <Suspense fallback={<ProgramsSkeleton />}>
             <Programs />
@@ -192,6 +177,11 @@ function ProgramCard({ program: p, photoIndex }: { program: ProgramRow; photoInd
             <CalendarClock aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-text" />
             <dd className="text-ink">{p.duration}</dd>
           </div>
+          <div className="flex items-start gap-2">
+            <dt className="sr-only">Fee</dt>
+            <Wallet aria-hidden className="mt-0.5 size-4 shrink-0 text-accent-text" />
+            <dd className={p.priceKobo === null ? "text-ink-2" : "font-semibold text-ink"}>{p.priceKobo === null ? "Fee shared after you apply" : formatNaira(p.priceKobo)}</dd>
+          </div>
           {p.format && (
             <div className="flex items-start gap-2">
               <dt className="sr-only">Where and when</dt>
@@ -297,7 +287,7 @@ async function Apply({ searchParams }: Props) {
 }
 
 const FAQ = [
-  { q: "Does it cost anything to apply?", a: "No. Applying is free. Fees for the program itself are explained when we contact you, before you commit to anything." },
+  { q: "Does it cost anything to apply?", a: "No. Applying is free. Each program shows its fee, or we explain it when we contact you. You don't pay anything until your place is agreed." },
   { q: "Do I need experience?", a: "Not for the beginner program. Some programs suit people who already do hair; each one says who it's for." },
   { q: "How soon will I hear back?", a: "Usually within a few days. We'll call, WhatsApp or email you using the details on your form." },
   { q: "Can I apply for more than one program?", a: "Yes. Send one application for each program. We'll help you choose the best starting point when we talk." },

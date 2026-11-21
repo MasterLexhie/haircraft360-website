@@ -97,10 +97,18 @@ describe("admin", () => {
   });
 
   it("adds a program at the end and records opening or closing it", async () => {
-    await saveProgram(null, { name: "Styling", summary: "Styles", duration: "2 weeks", format: "", level: "", outcomes: ["Updos"], active: true, acceptingApplications: true }, actor);
-    expect((await listPublicPrograms()).at(-1)?.name).toBe("Styling");
-    await saveProgram(closed, { name: "Advanced", summary: "Next step", duration: "4 weeks", format: "", level: "", outcomes: ["Repairs"], active: true, acceptingApplications: true }, actor);
+    await saveProgram(null, { name: "Styling", summary: "Styles", duration: "2 weeks", format: "", level: "", outcomes: ["Updos"], priceKobo: 15_000_000, active: true, acceptingApplications: true }, actor);
+    expect((await listPublicPrograms()).at(-1)).toMatchObject({ name: "Styling", priceKobo: 15_000_000 });
+    await saveProgram(closed, { name: "Advanced", summary: "Next step", duration: "4 weeks", format: "", level: "", outcomes: ["Repairs"], priceKobo: null, active: true, acceptingApplications: true }, actor);
     expect(await openProgramIds()).toHaveLength(3);
     expect((await db.auditLog.findFirstOrThrow({ where: { action: "program.updated" } })).summary).toBe("Program Advanced updated: opened for applications");
+  });
+
+  it("records a fee being set and removed", async () => {
+    const base = { name: "Advanced", summary: "Next step", duration: "4 weeks", format: "", level: "", outcomes: ["Repairs"], active: true, acceptingApplications: false };
+    await saveProgram(closed, { ...base, priceKobo: 25_000_000 }, actor);
+    await saveProgram(closed, { ...base, priceKobo: null }, actor);
+    const notes = (await db.auditLog.findMany({ where: { action: "program.updated" }, orderBy: { createdAt: "asc" } })).map((a) => a.summary);
+    expect(notes).toEqual(["Program Advanced updated: fee set to ₦250,000", "Program Advanced updated: fee removed from the page"]);
   });
 });

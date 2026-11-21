@@ -1,4 +1,5 @@
 import "server-only";
+import { formatNaira } from "@/lib/money";
 import { connection } from "next/server";
 import { applicationStatusLabel, type ApplicationInput, type ApplicationStatus, type ExperienceLevel, type ProgramInput } from "@/domain/academy";
 import { db } from "./db";
@@ -19,6 +20,7 @@ export interface ProgramRow {
   format: string;
   level: string;
   outcomes: string[];
+  priceKobo: number | null;
   active: boolean;
   acceptingApplications: boolean;
   applicationCount: number;
@@ -55,6 +57,7 @@ const toProgram = (p: ProgramRecord & { _count?: { applications: number } }): Pr
   format: p.format,
   level: p.level,
   outcomes: p.outcomes,
+  priceKobo: p.priceKobo,
   active: p.active,
   acceptingApplications: p.acceptingApplications,
   applicationCount: p._count?.applications ?? 0,
@@ -248,6 +251,7 @@ export async function saveProgram(id: string | null, input: ProgramInput, actor:
     const notes = [
       before.active !== input.active && (input.active ? "shown on the page" : "hidden from the page"),
       before.acceptingApplications !== input.acceptingApplications && (input.acceptingApplications ? "opened for applications" : "closed for applications"),
+      before.priceKobo !== input.priceKobo && (input.priceKobo === null ? "fee removed from the page" : `fee set to ${formatNaira(input.priceKobo)}`),
     ].filter(Boolean);
     await audit(tx, {
       action: "program.updated",

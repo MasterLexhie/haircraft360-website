@@ -5,6 +5,7 @@ import { Check, Pencil, Plus } from "lucide-react";
 import { APPLICATION_STATUSES, MAX_OUTCOMES, applicationStatusLabel, type ApplicationStatus } from "@/domain/academy";
 import { applicationNoteAction, applicationStatusAction, programAction, type ActionState } from "@/app/admin/actions";
 import type { ProgramRow } from "@/server/academy";
+import { formatNaira, koboToInput } from "@/lib/money";
 import { ActionFeedback } from "@/components/admin/action-feedback";
 import { Badge, Button, Field, cx, inputClass } from "@/components/ui/primitives";
 
@@ -87,7 +88,7 @@ export function ProgramsManager({ programs }: { programs: ProgramRow[] }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="max-w-xl text-sm text-ink-2">
-          The programs on the <a href="/locs-mastery" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Locs Mastery page</a>. No prices are shown; fees are discussed with each applicant.
+          The programs on the <a href="/locs-mastery" target="_blank" rel="noopener noreferrer" className="font-semibold underline">Locs Mastery page</a>. Each program can show its fee; leave it blank to discuss the fee with each applicant instead.
         </p>
         {editing !== "new" && (
           <Button variant="secondary" size="sm" onClick={() => { setMessage(null); setEditing("new"); }}>
@@ -111,7 +112,7 @@ export function ProgramsManager({ programs }: { programs: ProgramRow[] }) {
                     <p className="font-semibold text-ink">{p.name}</p>
                     <p className="text-sm text-ink-3">
                       {p.duration}
-                      {p.level ? ` · ${p.level}` : ""} · {p.outcomes.length} {p.outcomes.length === 1 ? "thing" : "things"} to learn · {p.applicationCount}{" "}
+                      {p.level ? ` · ${p.level}` : ""} · {p.priceKobo === null ? "fee not shown" : formatNaira(p.priceKobo)} · {p.outcomes.length} {p.outcomes.length === 1 ? "thing" : "things"} to learn · {p.applicationCount}{" "}
                       {p.applicationCount === 1 ? "application" : "applications"}
                     </p>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -160,6 +161,12 @@ function ProgramForm({ program, onDone }: { program?: ProgramRow; onDone: (messa
           <input id={`${pre}-format`} name="format" defaultValue={program?.format} maxLength={120} className={cx(inputClass, "text-sm")} />
         </Field>
       </div>
+      <Field id={`${pre}-price`} label="Program fee" optional hint="Shown on the page. Leave blank to discuss the fee with each applicant." error={fe.price}>
+        <span className="relative block max-w-xs">
+          <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-ink-3">₦</span>
+          <input id={`${pre}-price`} name="price" inputMode="decimal" defaultValue={koboToInput(program?.priceKobo ?? null)} placeholder="For example 150000" className={cx(inputClass, "pl-8 text-sm tabular")} />
+        </span>
+      </Field>
       <Field id={`${pre}-outcomes`} label="What students learn" required hint={`One per line, up to ${MAX_OUTCOMES}.`} error={fe.outcomes}>
         <textarea id={`${pre}-outcomes`} name="outcomes" rows={5} defaultValue={program?.outcomes.join("\n")} className={cx(inputClass, "min-h-28 text-sm")} />
       </Field>

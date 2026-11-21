@@ -1,3 +1,4 @@
+import { parseNairaToKobo } from "@/lib/money";
 import { addDays, isValidDateKey } from "@/lib/time";
 import { isValidEmail, normalizeEmail, normalizePhone } from "./phone";
 
@@ -132,6 +133,8 @@ export interface ProgramInput {
   format: string;
   level: string;
   outcomes: string[];
+  /** Null when the fee is discussed with each applicant instead of shown. */
+  priceKobo: number | null;
   active: boolean;
   acceptingApplications: boolean;
 }
@@ -159,6 +162,9 @@ export function validateProgram(raw: Record<string, string | undefined>): { ok: 
   if (outcomes.length === 0) e.outcomes = "Add at least one thing students learn, one per line.";
   else if (outcomes.length > MAX_OUTCOMES) e.outcomes = `Keep it to ${MAX_OUTCOMES} lines or fewer.`;
   else if (outcomes.some((o) => o.length > 160)) e.outcomes = "Keep each line under 160 characters.";
+  const priceRaw = get("price");
+  const priceKobo = priceRaw ? parseNairaToKobo(priceRaw) : null;
+  if (priceRaw && (priceKobo === null || priceKobo <= 0)) e.price = "Enter the fee in naira, for example 150000, or leave it blank to discuss it with each applicant.";
   if (Object.keys(e).length) return { ok: false, fieldErrors: e };
-  return { ok: true, value: { name, summary, duration, format, level, outcomes, active: raw.active === "on", acceptingApplications: raw.acceptingApplications === "on" } };
+  return { ok: true, value: { name, summary, duration, format, level, outcomes, priceKobo, active: raw.active === "on", acceptingApplications: raw.acceptingApplications === "on" } };
 }

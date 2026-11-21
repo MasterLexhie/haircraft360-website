@@ -620,6 +620,8 @@ model Program {
   level                 String   @default("")
   /// What a student learns, one item per entry.
   outcomes              String[] @default([])
+  /// The program fee in kobo, shown on the page. Null: the fee is shared after someone applies.
+  priceKobo             Int?     @map("price_kobo")
   /// Listed on the page.
   active                Boolean  @default(true)
   /// Open for applications. A listed program can be closed ("next intake soon").

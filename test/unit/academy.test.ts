@@ -56,6 +56,16 @@ describe("program form", () => {
     const r = validateProgram({ name: "Foundations", summary: "Start here.", duration: "6 weeks", outcomes: "- Sectioning\n\n• Starter methods\r\nClient care", active: "on" });
     expect(r).toMatchObject({ ok: true, value: { outcomes: ["Sectioning", "Starter methods", "Client care"], active: true, acceptingApplications: false } });
   });
+  it("takes an optional fee in naira", () => {
+    const base = { name: "Foundations", summary: "Start here.", duration: "6 weeks", outcomes: "Sectioning" };
+    expect(validateProgram(base)).toMatchObject({ ok: true, value: { priceKobo: null } });
+    expect(validateProgram({ ...base, price: " ₦150,000 " })).toMatchObject({ ok: true, value: { priceKobo: 15_000_000 } });
+    for (const price of ["abc", "0", "-5", "12.345"]) {
+      const r = validateProgram({ ...base, price });
+      expect(r.ok, price).toBe(false);
+      if (!r.ok) expect(Object.keys(r.fieldErrors)).toEqual(["price"]);
+    }
+  });
   it("needs a name, description, length and at least one outcome", () => {
     const r = validateProgram({});
     expect(r.ok).toBe(false);
