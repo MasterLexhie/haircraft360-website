@@ -124,3 +124,17 @@ export const GALLERY_PAIRS: GalleryPair[] = [
     },
   },
 ];
+
+/**
+ * Locs Mastery page. Reuses the stand-ins above with briefs for the training photos the
+ * salon should supply (students at work, the tutor demonstrating).
+ */
+export const ACADEMY_PHOTOS = {
+  hero: { ...SERVICE_PHOTOS.seed_svc_consult!, brief: "The tutor demonstrating on a client while students watch" },
+  apply: { ...HERO_PHOTO, brief: "A past student with a client whose locs they started" },
+  programs: [
+    { ...SERVICE_PHOTOS.seed_svc_starter!, brief: "A student sectioning hair for starter locs" },
+    { ...SERVICE_PHOTOS.seed_svc_retwist!, brief: "Close-up of a student's retwist work" },
+    { ...SERVICE_PHOTOS.seed_svc_style!, brief: "A finished style done by a student" },
+  ],
+} satisfies { hero: StockPhoto; apply: StockPhoto; programs: StockPhoto[] };

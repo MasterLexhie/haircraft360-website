@@ -24,6 +24,8 @@ export const LIMITS = {
   /** Checks after the popup closes. A few per payment, so this is generous. */
   paymentVerifyPerIp: { limit: 30, windowSeconds: 10 * 60 },
   findBookingPerIp: { limit: 10, windowSeconds: 15 * 60 },
+  /** Locs Mastery applications. A person sends one or two; a script sends many. */
+  applicationPerIp: { limit: 5, windowSeconds: 60 * 60 },
   /** Badly signed webhook calls we still store as evidence; past this they are refused unstored. */
   webhookBadSignaturePerIp: { limit: 20, windowSeconds: 60 * 60 },
 } satisfies Record<string, Limit>;

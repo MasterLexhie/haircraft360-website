@@ -34,6 +34,7 @@ export function SiteFooter() {
             <li><Link className={linkCls} href="/book">Book an appointment</Link></li>
             <li><Link className={linkCls} href="/#services">Services</Link></li>
             <li><Link className={linkCls} href="/#visit">Location &amp; hours</Link></li>
+            <li><Link className={linkCls} href="/locs-mastery">Locs Mastery programs</Link></li>
             <li><Link className={linkCls} href="/booking">Find my booking</Link></li>
             <li><Link className={linkCls} href="/terms">Booking terms</Link></li>
           </ul>
