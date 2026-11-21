@@ -3,7 +3,8 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { CalendarClock, CalendarDays, Hourglass, Wallet } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData, joinBooking, requestNow, type AdminBookingRow } from "@/server/queries";
+import { requestNow } from "@/server/queries";
+import { getDashboard, type AdminBookingRow, type MonthBooking } from "@/server/admin-queries";
 import { getAttention } from "@/server/attention";
 import { dailyTotals } from "@/server/finances";
 import { balanceDue } from "@/domain/pricing";
@@ -25,34 +26,25 @@ export default function DashboardPage() {
 }
 
 /** Bookings that count as real appointments for the month's figures. */
-const BOOKED = new Set(["confirmed", "completed", "needs_attention"]);
 
 async function Dashboard() {
   await requireAdmin();
   const nowMs = await requestNow();
   const today = lagosDateKey(nowMs);
   const span = monthToDateComparison(today);
-  const [db, attention, thisMonth, lastMonth] = await Promise.all([
-    getAdminData(),
+  const [dash, attention, thisMonth, lastMonth] = await Promise.all([
+    getDashboard(nowMs, today),
     getAttention(nowMs),
     dailyTotals(span.fromKey, span.toKey),
     dailyTotals(span.lastFromKey, span.lastToKey),
   ]);
   const weekEnd = addDays(today, 7);
-  const rows = db.bookings.map((b) => joinBooking(db, b));
-
-  const todays = rows.filter((r) => ["confirmed", "completed"].includes(r.booking.status) && lagosDateKey(r.booking.startAt) === today);
-  const upcoming = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.startAt) > nowMs && lagosDateKey(r.booking.startAt) <= weekEnd);
-  const nextUp = rows.filter((r) => r.booking.status === "confirmed" && Date.parse(r.booking.startAt) > nowMs).slice(0, 5);
-  const awaiting = rows.filter((r) => r.booking.status === "pending_payment" && r.booking.holdExpiresAt !== null && Date.parse(r.booking.holdExpiresAt) > nowMs);
-  const unpaid = rows.filter((r) => r.booking.status === "completed" && balanceDue(r.booking, r.payments) > 0);
+  const { todays, nextUp, unpaid } = dash;
   const unpaidSum = unpaid.reduce((s, r) => s + balanceDue(r.booking, r.payments), 0);
 
   // This calendar month's appointments, for popular services and new versus returning.
-  const monthKey = today.slice(0, 7);
-  const monthRows = rows.filter((r) => BOOKED.has(r.booking.status) && lagosDateKey(r.booking.startAt).startsWith(monthKey));
-  const popular = topServices(monthRows);
-  const mix = newVersusReturning(monthRows);
+  const popular = topServices(dash.month);
+  const mix = newVersusReturning(dash.month);
   const monthName = formatMonthYear(today);
 
   const money = [
@@ -62,8 +54,8 @@ async function Dashboard() {
   ];
   const stats = [
     { label: "Today", value: todays.length, sub: todays.length === 1 ? "appointment" : "appointments", icon: CalendarDays, href: `/admin/bookings?from=${today}&to=${today}` },
-    { label: "Next 7 days", value: upcoming.length, sub: "confirmed", icon: CalendarClock, href: `/admin/bookings?status=confirmed&from=${today}&to=${weekEnd}` },
-    { label: "Awaiting deposit", value: awaiting.length, sub: "times on hold", icon: Hourglass, href: "/admin/bookings?status=pending_payment" },
+    { label: "Next 7 days", value: dash.upcomingCount, sub: "confirmed", icon: CalendarClock, href: `/admin/bookings?status=confirmed&from=${today}&to=${weekEnd}` },
+    { label: "Awaiting deposit", value: dash.awaitingCount, sub: "times on hold", icon: Hourglass, href: "/admin/bookings?status=pending_payment" },
     { label: "Balances due", value: unpaid.length, sub: unpaidSum ? `${formatNaira(unpaidSum)} to collect` : "nothing to collect", icon: Wallet, href: "/admin/bookings?payment=balance_due" },
   ];
 
@@ -191,18 +183,18 @@ async function Dashboard() {
 }
 
 /** Main services booked this month, most booked first. */
-function topServices(rows: AdminBookingRow[]): { name: string; count: number }[] {
+function topServices(rows: MonthBooking[]): { name: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const r of rows) {
-    for (const item of r.booking.items) if (item.kind === "main") counts.set(item.name, (counts.get(item.name) ?? 0) + 1);
+    for (const name of r.mainServices) counts.set(name, (counts.get(name) ?? 0) + 1);
   }
   return [...counts].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name)).slice(0, 5);
 }
 
-/** Each customer once, judged by their first appointment of the month. */
-function newVersusReturning(rows: AdminBookingRow[]): { new: number; returning: number } {
-  const first = new Map<string, AdminBookingRow>();
-  for (const r of rows) if (!first.has(r.customer.id)) first.set(r.customer.id, r);
+/** Each customer counted once, by their first appointment this month. */
+function newVersusReturning(rows: MonthBooking[]): { new: number; returning: number } {
+  const first = new Map<string, MonthBooking>();
+  for (const r of rows) if (!first.has(r.customerId)) first.set(r.customerId, r);
   let returning = 0;
   for (const r of first.values()) if (r.visit.returning) returning++;
   return { new: first.size - returning, returning };

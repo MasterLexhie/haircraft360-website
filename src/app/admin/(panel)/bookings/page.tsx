@@ -3,16 +3,16 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { Search, X } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
-import { getAdminData, joinBooking } from "@/server/queries";
-import { balanceDue, paidKobo, paymentSummaryState } from "@/domain/pricing";
+import { listAdminBookings } from "@/server/admin-queries";
+import { balanceDue, paidKobo } from "@/domain/pricing";
 import { bookingStatusLabel, paymentSummaryLabel } from "@/domain/labels";
 import type { Booking, BookingStatus } from "@/domain/types";
 import { formatPhone } from "@/domain/phone";
 import { formatNaira } from "@/lib/money";
-import { formatDate, formatTime, lagosDateKey } from "@/lib/time";
+import { formatDate, formatTime } from "@/lib/time";
 import { BookingStatusBadge, PageHeader, PaymentStateBadge, VisitBadge } from "@/components/admin/bits";
 import { Pagination } from "@/components/admin/pagination";
-import { pageHref, paginate } from "@/domain/paginate";
+import { pageHref } from "@/domain/paginate";
 import { EmptyState, Skeleton, buttonClass, cx, inputClass } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Bookings" };
@@ -31,40 +31,16 @@ export default function BookingsPage({ searchParams }: { searchParams: Promise<F
 
 async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
   await requireAdmin();
-  const [db, f] = await Promise.all([getAdminData(), searchParams]);
-  const q = (f.q ?? "").trim().toLowerCase();
-
-  const rows = db.bookings
-    .map((b) => joinBooking(db, b))
-    .filter(({ booking, customer, payments }) => {
-      if (f.status && booking.status !== f.status) return false;
-      if (f.payment && paymentSummaryState(booking, payments) !== f.payment) return false;
-      const day = lagosDateKey(booking.startAt);
-      if (f.from && day < f.from) return false;
-      if (f.to && day > f.to) return false;
-      if (q) {
-        const hay = [booking.reference, customer.displayName, booking.contactName, ...customer.phones, ...customer.emails.map((e) => e.value), ...booking.items.map((l) => l.name)].join(" ").toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    })
-    .sort((a, b) => b.booking.startAt.localeCompare(a.booking.startAt));
-
+  const f = await searchParams;
   const { page: _page, ...filters } = f;
   const active = Object.values(filters).some(Boolean);
-
-  // Totals cover every booking matching the filters, not just the visible page.
-  const totalPaid = rows.reduce((s, r) => s + paidKobo(r.payments), 0);
-  // Only completed appointments owe a balance; confirmed ones pay theirs on the day.
-  const totalBalance = rows.filter((r) => r.booking.status === "completed").reduce((s, r) => s + balanceDue(r.booking, r.payments), 0);
-
-  const paged = paginate(rows, _page, PAGE_SIZE);
-  const pageRows = paged.items;
+  const list = await listAdminBookings(filters, _page, PAGE_SIZE);
+  const { items: pageRows, allCount, totalPaidKobo: totalPaid, totalBalanceKobo: totalBalance, ...paged } = list;
   const hrefFor = (n: number) => pageHref("/admin/bookings", filters, n);
 
   return (
     <>
-      <PageHeader title="Bookings" description={`${rows.length} of ${db.bookings.length} bookings`} />
+      <PageHeader title="Bookings" description={`${list.total} of ${allCount} bookings`} />
 
       <form method="get" className="mb-5 grid gap-3 rounded-[var(--radius)] border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[1.6fr_1fr_1fr_0.9fr_0.9fr_auto]">
         <label className="block">
@@ -106,7 +82,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
         </div>
       </form>
 
-      {rows.length === 0 ? (
+      {list.total === 0 ? (
         <EmptyState title="No bookings match these filters" action={<Link href="/admin/bookings" className="font-semibold underline">Clear filters</Link>} />
       ) : (
         <>
@@ -185,7 +161,7 @@ async function Bookings({ searchParams }: { searchParams: Promise<Filters> }) {
 
           <Pagination label="Bookings pages" {...paged} hrefFor={hrefFor} />
 
-          <TotalsBar count={rows.length} paidKobo={totalPaid} balanceKobo={totalBalance} />
+          <TotalsBar count={list.total} paidKobo={totalPaid} balanceKobo={totalBalance} />
         </>
       )}
     </>
