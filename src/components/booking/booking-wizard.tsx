@@ -9,7 +9,7 @@ import { depositDue } from "@/domain/deposit";
 import { addOnTerms, itemsDuration, itemsTotal } from "@/domain/pricing";
 import { validateContact, type ContactErrors } from "@/domain/validation";
 import { formatNaira } from "@/lib/money";
-import { formatDateKey, formatDuration, formatTime, lagosDateKey } from "@/lib/time";
+import { formatDateKey, formatDuration, formatTime } from "@/lib/time";
 import { Alert, Button, Field, cx, describedBy, inputClass } from "@/components/ui/primitives";
 import { ServiceMeta } from "./service-bits";
 import { BookingSummaryPanel, MoneyRows, describeDepositRule, type SummaryLine } from "./booking-summary";
@@ -23,7 +23,8 @@ const SERVICE = 0;
 const EXTRAS = 1;
 const WHEN = 2;
 const DETAILS = 3;
-const DRAFT_KEY = "hc360-booking-draft-v2";
+/** Drafts saved by earlier versions of this form. Removed on first visit; nothing is saved any more. */
+const OLD_DRAFT_KEYS = ["hc360-booking-draft-v2", "hc360-booking-draft-v1", "hc360-booking-draft"];
 
 interface Contact {
   name: string;
@@ -34,23 +35,7 @@ interface Contact {
   note: string;
 }
 
-interface Draft extends Contact {
-  mainId: string | null;
-  addOnIds: string[];
-  dateKey: string | null;
-  startAt: string | null;
-}
-
 const EMPTY_CONTACT: Contact = { name: "", phone: "", email: "", noEmail: false, marketingConsent: false, note: "" };
-
-function readDraft(): Partial<Draft> | null {
-  try {
-    const raw = sessionStorage.getItem(DRAFT_KEY);
-    return raw ? (JSON.parse(raw) as Partial<Draft>) : null;
-  } catch {
-    return null;
-  }
-}
 
 export function BookingWizard({
   services,
@@ -90,7 +75,6 @@ export function BookingWizard({
     router.push(`/booking/${b.reference}?t=${encodeURIComponent(b.accessToken)}${paid}`);
   });
   const [slotRefresh, setSlotRefresh] = useState(0);
-  const [hydrated, setHydrated] = useState(false);
   const [summaryFocus, setSummaryFocus] = useState(0);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
@@ -100,65 +84,52 @@ export function BookingWizard({
   // finished form, still "Confirming payment", and save its details back as a draft.
   const bookingDone = useRef(false);
 
-  function clearDraft() {
+  function clearOldDrafts() {
     try {
-      sessionStorage.removeItem(DRAFT_KEY);
+      for (const k of OLD_DRAFT_KEYS) sessionStorage.removeItem(k);
     } catch {}
   }
 
-  // Runs when Activity hides the page. Only resets after a booking was made: a half-filled
-  // form the customer leaves is kept, so they don't lose their work.
+  /** Back to an empty form, once a booking has been made. */
+  function resetAfterBooking() {
+    bookingDone.current = false;
+    created.current = null;
+    setStep(0);
+    setMainId(initialServiceId && mains.some((s) => s.id === initialServiceId) ? initialServiceId : null);
+    setAddOnIds([]);
+    setDateKey(null);
+    setStartAt(null);
+    setContact(EMPTY_CONTACT);
+    setWebsite("");
+    setErrors({});
+    setTouched({});
+    setStepError(null);
+    payment.reset();
+  }
+
+  // After a booking, the old form must never come back. Three ways it could:
+  // - Next.js hides this page (Activity) when we move to the booking: the cleanup resets it.
+  // - Next.js shows it again: this effect runs again and resets it, in case hiding didn't.
+  // - Safari's back-forward cache restores the frozen page (pageshow with persisted).
+  // A half-filled form the customer leaves for another page before booking is kept.
   useLayoutEffect(() => {
+    if (bookingDone.current) resetAfterBooking();
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted && bookingDone.current) resetAfterBooking();
+    };
+    window.addEventListener("pageshow", onPageShow);
     return () => {
-      if (!bookingDone.current) return;
-      bookingDone.current = false;
-      created.current = null;
-      setStep(0);
-      setMainId(initialServiceId && mains.some((s) => s.id === initialServiceId) ? initialServiceId : null);
-      setAddOnIds([]);
-      setDateKey(null);
-      setStartAt(null);
-      setContact(EMPTY_CONTACT);
-      setWebsite("");
-      setErrors({});
-      setTouched({});
-      setStepError(null);
-      payment.reset();
-      clearDraft();
+      window.removeEventListener("pageshow", onPageShow);
+      if (bookingDone.current) resetAfterBooking();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Restore an in-progress draft (same tab), unless a service came in via the URL.
-  // sessionStorage is only readable after hydration, so restoring must happen in an effect.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // Nothing survives a refresh: a reload always starts an empty form. (Moving between pages
+  // inside the site keeps a half-filled form, because Next.js keeps this page alive.)
   useEffect(() => {
-    const d = readDraft();
-    if (d) {
-      if (!initialServiceId && d.mainId && mains.some((s) => s.id === d.mainId)) {
-        setMainId(d.mainId);
-        const offered = byId.get(d.mainId)?.addOnIds ?? [];
-        setAddOnIds((d.addOnIds ?? []).filter((id) => offered.includes(id) && byId.has(id)));
-      }
-      if (d.dateKey && d.dateKey >= lagosDateKey(Date.now())) {
-        setDateKey(d.dateKey);
-        setStartAt(d.startAt ?? null);
-      }
-      setContact({ ...EMPTY_CONTACT, ...pickContact(d) });
-    }
-    setHydrated(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    clearOldDrafts();
   }, []);
-  /* eslint-enable react-hooks/set-state-in-effect */
-
-  useEffect(() => {
-    if (!hydrated || bookingDone.current) return;
-    try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ mainId, addOnIds, dateKey, startAt, ...contact } satisfies Draft));
-    } catch {
-      /* storage unavailable: the flow still works */
-    }
-  }, [hydrated, mainId, addOnIds, dateKey, startAt, contact]);
 
   // Move focus to the step heading on step change (not on first load).
   useEffect(() => {
@@ -287,7 +258,6 @@ export function BookingWizard({
         return;
       }
       bookingDone.current = true;
-      clearDraft();
       created.current = { reference: data.reference, accessToken: data.accessToken };
       const started = data.payment as StartedPayment | null;
       // Paystack couldn't be reached: the time is still held and the booking page offers to pay.
@@ -584,17 +554,6 @@ export function BookingWizard({
 
     </div>
   );
-}
-
-function pickContact(d: Partial<Draft>): Partial<Contact> {
-  return {
-    name: d.name ?? "",
-    phone: d.phone ?? "",
-    email: d.email ?? "",
-    noEmail: d.noEmail ?? false,
-    marketingConsent: d.marketingConsent ?? false,
-    note: d.note ?? "",
-  };
 }
 
 function StepIndicator({ step, onJump }: { step: number; onJump: (i: number) => void }) {
