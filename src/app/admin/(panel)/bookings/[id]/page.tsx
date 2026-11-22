@@ -16,6 +16,7 @@ import { formatDateKey, formatDateTime, formatDuration, formatLongDate, formatTi
 import { BookingStatusBadge, KeyValue, PageHeader, Panel, PaymentStateBadge, VisitBadge } from "@/components/admin/bits";
 import { BalanceLink, BookingEmailForm, CompletionForm, ManualPaymentForm, MoveTimes, PrivateNoteForm, StatusActions } from "@/components/admin/booking-forms";
 import { WhatsappSend } from "@/components/admin/whatsapp-send";
+import { DetailTabs, TabSection } from "@/components/admin/detail-tabs";
 import { PaymentHistory } from "@/components/booking/payment-history";
 import { Alert, Badge, Button, Field, Skeleton, buttonClass, inputClass } from "@/components/ui/primitives";
 
@@ -49,6 +50,7 @@ async function Detail({ params, searchParams }: Props) {
   const today = lagosDateKey(nowMs);
   const bookingDay = lagosDateKey(booking.startAt);
   const moveDay = move && isValidDateKey(move) && move >= today ? move : bookingDay >= today ? bookingDay : today;
+  const canCollect = due > 0 && booking.status !== "pending_payment" && booking.status !== "expired" && booking.status !== "cancelled";
 
   return (
     <>
@@ -57,7 +59,19 @@ async function Detail({ params, searchParams }: Props) {
         title={<span className="flex flex-wrap items-center gap-3">{booking.reference} <BookingStatusBadge status={booking.status} /> <PaymentStateBadge booking={booking} payments={payments} /> <VisitBadge visit={visit} /></span>}
         description={`${formatLongDate(booking.startAt)} · ${formatTime(booking.startAt)} – ${formatTime(booking.endAt)} (${formatDuration(minutes)})`}
         actions={<StatusActions bookingId={booking.id} status={booking.status} started={started} />}
+        phoneActions={false}
       />
+
+      <DetailTabs
+        tabs={[
+          { id: "overview", label: "Overview" },
+          { id: "payments", label: "Payments", count: payments.length },
+          { id: "messages", label: "Messages", count: messages.messages.filter((m) => m.manual).length },
+          { id: "activity", label: "Activity" },
+        ]}
+        collect={canCollect ? `Collect balance · ${formatNaira(due)}` : undefined}
+      >
+      <TabSection tab="overview">
 
       {booking.status === "pending_payment" && booking.holdExpiresAt && (
         <Alert tone="warning" className="mb-6" title={`Time held until ${formatTime(booking.holdExpiresAt)} while the customer pays the deposit`}>
@@ -75,9 +89,12 @@ async function Detail({ params, searchParams }: Props) {
           Add anything done on the day and mark it completed below, so the balance can be collected.
         </Alert>
       )}
+        <MoneyStrip total={booking.totalKobo} paid={paid} due={due} />
+      </TabSection>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
         <div className="space-y-6">
+          <TabSection tab="overview">
           <Panel title="Services (prices as booked)">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
@@ -105,14 +122,16 @@ async function Detail({ params, searchParams }: Props) {
             </div>
             {booking.customerNote && <p className="mt-3 rounded-[var(--radius)] bg-sand/60 p-3 text-sm"><span className="font-semibold">Customer note:</span> {booking.customerNote}</p>}
           </Panel>
+          </TabSection>
 
+          <TabSection tab="payments" id="payments" className="scroll-mt-20">
           <Panel title="Money">
             <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
               <Stat label="Total" value={formatNaira(booking.totalKobo)} sub={`Deposit due was ${formatNaira(booking.depositDueKobo)}`} />
               <Stat label="Paid" value={formatNaira(paid)} />
               <Stat label="Balance due" value={formatNaira(due)} strong />
             </dl>
-            {booking.status !== "pending_payment" && booking.status !== "expired" && booking.status !== "cancelled" && due > 0 && (
+            {canCollect && (
               <div className="mt-5 border-t border-line pt-4">
                 <BalanceLink bookingId={booking.id} />
               </div>
@@ -124,9 +143,10 @@ async function Detail({ params, searchParams }: Props) {
               <div className="border-t border-line p-4"><ManualPaymentForm bookingId={booking.id} awaitingDeposit={booking.status === "pending_payment"} /></div>
             </details>
           </Panel>
+          </TabSection>
 
           {canMove && (
-            <section id="move" className="scroll-mt-20">
+            <TabSection tab="overview" id="move" className="scroll-mt-20">
               <Panel title="Move to another time">
                 {/* A soft navigation that keeps the scroll position, so the new times appear in place. */}
                 <Form action={`/admin/bookings/${booking.id}`} scroll={false} replace className="flex flex-wrap items-end gap-3">
@@ -141,19 +161,20 @@ async function Detail({ params, searchParams }: Props) {
                   </Suspense>
                 </div>
               </Panel>
-            </section>
+            </TabSection>
           )}
 
           {canComplete && (
-            <section id="complete" className="scroll-mt-20">
+            <TabSection tab="overview" id="complete" className="scroll-mt-20">
               <Panel title={booking.status === "completed" ? "Add to this appointment" : "Complete this appointment"}>
                 <CompletionForm booking={booking} paidKobo={paid} />
               </Panel>
-            </section>
+            </TabSection>
           )}
         </div>
 
         <div className="space-y-6">
+          <TabSection tab="overview">
           <Panel title="Customer" action={<Link href={`/admin/customers/${customer.id}`} className="text-sm font-semibold underline">History</Link>}>
             <p className="font-semibold">{customer.displayName}</p>
             {booking.contactName !== customer.displayName && <p className="text-xs text-ink-3">Booked as “{booking.contactName}”</p>}
@@ -166,11 +187,13 @@ async function Detail({ params, searchParams }: Props) {
               )}
             </ul>
           </Panel>
+          </TabSection>
 
-          <section id="messages" className="scroll-mt-20">
+          <TabSection tab="messages" id="messages" className="scroll-mt-20">
             <MessagesPanel bookingId={booking.id} contactEmail={booking.contactEmail} view={messages} />
-          </section>
+          </TabSection>
 
+          <TabSection tab="overview">
           <Panel title={<span className="flex items-center gap-1.5"><Lock aria-hidden className="size-3.5" /> Private booking note</span>}>
             <PrivateNoteForm kind="booking" id={booking.id} defaultValue={booking.privateNote} />
           </Panel>
@@ -184,7 +207,9 @@ async function Detail({ params, searchParams }: Props) {
               ]}
             />
           </Panel>
+          </TabSection>
 
+          <TabSection tab="activity">
           <Panel title="Activity">
             <ol className="relative space-y-4 border-l border-line pl-4">
               {audit.map((e) => (
@@ -196,8 +221,14 @@ async function Detail({ params, searchParams }: Props) {
               ))}
             </ol>
           </Panel>
+          </TabSection>
         </div>
       </div>
+
+      <TabSection tab="overview" className="mt-6 md:hidden">
+        <StatusActions bookingId={booking.id} status={booking.status} started={started} />
+      </TabSection>
+      </DetailTabs>
     </>
   );
 }
@@ -277,5 +308,23 @@ function Stat({ label, value, sub, strong }: { label: string; value: string; sub
       <dd className={`mt-0.5 tabular ${strong ? "text-xl font-semibold" : "font-semibold"}`}>{value}</dd>
       {sub && <dd className="text-xs text-ink-3">{sub}</dd>}
     </div>
+  );
+}
+
+/** Phone overview: the three money numbers at a glance; the Payments tab has the detail. */
+function MoneyStrip({ total, paid, due }: { total: number; paid: number; due: number }) {
+  return (
+    <dl className="mb-4 grid grid-cols-3 gap-2 rounded-[var(--radius)] bg-surface p-3.5 shadow-[var(--shadow-admin-card)] md:hidden">
+      {[
+        { label: "Total", value: total, tone: "text-ink" },
+        { label: "Paid", value: paid, tone: "text-ink" },
+        { label: "Balance due", value: due, tone: due > 0 ? "text-warning" : "text-ink" },
+      ].map((m) => (
+        <div key={m.label}>
+          <dt className="text-[0.7rem] font-semibold text-ink-3">{m.label}</dt>
+          <dd className={`mt-0.5 font-display text-xl tabular ${m.tone}`}>{formatNaira(m.value)}</dd>
+        </div>
+      ))}
+    </dl>
   );
 }
