@@ -62,6 +62,32 @@
   --shadow-admin-card: 0 1px 2px rgb(62 40 61 / 0.08), inset 0 -1px 0 rgb(62 40 61 / 0.06);
 }
 
+/*
+ * Public site look, "Studio Groove" (inside [data-site], set by the site layout): the same plum,
+ * on Groove's warm cream, with Fraunces headings, rounder corners and pill buttons. Every public
+ * page picks it up through these tokens. Use the `site:` variant for site-only utilities.
+ */
+@custom-variant site (&:where([data-site], [data-site] *));
+
+[data-site] {
+  --bg: #fbf1e4;          /* cream; ink 14.5:1 */
+  --sand: #f4e3cf;        /* cream-2; ink-2 8.4:1, ink-3 4.9:1 */
+  --sand-2: #efdcc4;      /* panels; ink-3 4.6:1 */
+  --ink-3: #6a5864;       /* 5.6:1 on cream */
+  --line: #ead8c4;
+  --line-strong: #d6bb9d;
+  --accent-soft: #f6e4ec;
+  --night: #2e1d2d;
+  --radius: 20px;
+  --radius-control: 12px;
+  --shadow-sm: 0 1px 2px rgb(46 29 45 / 0.06);
+  --shadow-md: 0 30px 60px -34px rgb(46 29 45 / 0.45), 0 2px 6px rgb(46 29 45 / 0.05);
+  /* Every serif on the public site becomes Fraunces. */
+  --font-playfair: var(--font-fraunces);
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  background: var(--bg);
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -196,6 +222,23 @@ select:not([multiple]):not([size]) {
 }
 .link-caps:hover {
   text-decoration-color: var(--line-strong);
+}
+
+/* Public site: headings in the Groove serif, labels and links in plain sentence case. */
+[data-site] .type-display {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+[data-site] .type-caps {
+  text-transform: none;
+  letter-spacing: 0;
+}
+[data-site] .link-caps {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.95rem;
+  text-underline-offset: 5px;
 }
 
 /* Arched blush backdrop behind centred intro blocks. */

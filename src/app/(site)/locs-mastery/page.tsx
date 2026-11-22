@@ -1,20 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowRight, BadgeCheck, BookOpen, CalendarClock, Check, ClipboardList, GraduationCap, HandHeart, MessageCircle, Ruler, Scissors, ShieldCheck, Sparkles, Store, Wallet, Wrench } from "lucide-react";
+import { ArrowRight, BookOpen, CalendarClock, Check, ClipboardList, GraduationCap, Ruler, Scissors, ShieldCheck, Sparkles, Store, Wallet, Wrench } from "lucide-react";
 import { latestBirthDate } from "@/domain/academy";
 import { formatNaira } from "@/lib/money";
 import { lagosDateKey } from "@/lib/time";
 import { listPublicPrograms, type ProgramRow } from "@/server/academy";
 import { requestNow } from "@/server/queries";
-import { StockPhoto } from "@/components/site/brand";
+import { StockPhoto, Sticker, Wave } from "@/components/site/brand";
+import { IconTile, Kicker, PageIntro, Strip, Title, wrap } from "@/components/site/groove";
+import { pill } from "@/components/site/pill";
 import { ACADEMY_PHOTOS } from "@/config/stock-photos";
-import { Badge, ButtonLink, SectionHeading, Skeleton } from "@/components/ui/primitives";
+import { Badge, ButtonLink, SectionHeading, Skeleton, cx } from "@/components/ui/primitives";
 import { ApplyForm } from "./apply-form";
 
 export const metadata: Metadata = {
   title: "Locs Mastery programs",
-  description: "Hands-on loc training in Ibadan, from starting locs to styling and running a loc business. Free to apply online.",
+  description: "Hands-on loc training, from starting locs to styling and running a loc business. Free to apply online.",
 };
 
 type Props = { searchParams: Promise<{ program?: string }> };
@@ -26,7 +28,7 @@ export default function LocsMasteryPage({ searchParams }: Props) {
       <Band />
       <Learn />
       <section id="programs" aria-labelledby="programs-title" className="scroll-mt-24 bg-sand py-16 sm:py-24">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        <div className={wrap}>
           <SectionHeading id="programs-title" eyebrow="The programs" title={<>Find the program that <em>fits</em> you</>}>
             Each program is taught hands on. Dates and what to bring are talked through with you after you apply.
           </SectionHeading>
@@ -37,7 +39,7 @@ export default function LocsMasteryPage({ searchParams }: Props) {
       </section>
       <HowToApply />
       <section id="apply" aria-labelledby="apply-title" className="scroll-mt-20 bg-sand py-16 sm:py-24">
-        <div className="mx-auto grid max-w-6xl gap-10 px-4 sm:px-6 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start">
+        <div className={cx(wrap, "grid gap-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:items-start")}>
           <div className="lg:sticky lg:top-24">
             <SectionHeading id="apply-title" eyebrow="Apply" title={<>Apply in about <em>five minutes</em></>}>
               Tell us who you are and why you want to learn. It&apos;s free, and there&apos;s no commitment until you&apos;ve spoken to us.
@@ -58,49 +60,43 @@ export default function LocsMasteryPage({ searchParams }: Props) {
 
 function Hero() {
   return (
-    <section aria-labelledby="lm-hero-title" className="relative overflow-hidden bg-sand">
-      <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-14 pt-12 sm:px-6 md:grid-cols-[1.05fr_0.95fr] md:gap-8 md:pb-20 md:pt-20">
-        <div>
-          <p className="type-caps flex items-center gap-2 text-[0.72rem] text-ink-3">
-            <GraduationCap aria-hidden className="size-4 text-accent-text" />
-            Locs Mastery · Training in Ibadan
-          </p>
-          <h1 id="lm-hero-title" className="type-display mt-5 text-[2.6rem] sm:text-[3.4rem] lg:text-[3.8rem]">
-            Learn the craft of <em>locs</em>, hands on.
-          </h1>
-          <p className="mt-6 max-w-lg text-base text-ink-2 sm:text-lg">
-            Whether you&apos;ve never started a loc or you already have clients in your chair, our programs teach the skills that keep clients coming back: clean
-            parts, neat retwists, healthy scalps and styles people ask about.
-          </p>
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <ButtonLink href="#programs" variant="secondary" size="lg">
-              See the programs
-            </ButtonLink>
-            <ButtonLink href="#apply" size="lg">
-              Apply now <ArrowRight aria-hidden className="size-4" />
-            </ButtonLink>
-          </div>
+    <PageIntro
+      kicker={<span className="inline-flex items-center gap-2"><GraduationCap aria-hidden className="size-5" /> Locs Mastery</span>}
+      title={<>Learn the craft of <em>locs,</em> hands on.</>}
+      lead={
+        <>
+          Whether you&apos;ve never started a loc or you already have clients in your chair, our programs teach the skills that keep clients coming back:
+          clean parts, neat retwists, healthy scalps and styles people ask about.
+        </>
+      }
+      aside={
+        <div className="relative pl-6 md:pl-10">
+          <StockPhoto
+            photo={ACADEMY_PHOTOS.hero}
+            label="replace with the tutor teaching"
+            ratio="4/3"
+            sizes="(min-width: 768px) 45vw, 90vw"
+            priority
+            className="rounded-[28px] border-4 border-orange md:border-[6px]"
+          />
+          <Sticker id="lm-sticker" ring="LEARN · PRACTISE · GROW · " center="360" className="absolute -top-6 left-0 size-[88px] -rotate-[14deg] md:size-[120px]" />
         </div>
-        <StockPhoto photo={ACADEMY_PHOTOS.hero} label="replace with the tutor teaching" ratio="4/3" sizes="(min-width: 768px) 45vw, 100vw" priority />
+      }
+    >
+      <div className="mt-8 flex flex-wrap items-center gap-3">
+        <Link href="#apply" className={pill("pink")}>
+          Apply now <ArrowRight aria-hidden className="size-4" />
+        </Link>
+        <Link href="#programs" className={pill("ghost-dark")}>
+          See the programs
+        </Link>
       </div>
-    </section>
+    </PageIntro>
   );
 }
 
 function Band() {
-  const points = ["Learn by doing", "Beginner to working stylist", "Free to apply"];
-  return (
-    <div className="on-night bg-accent text-on-night">
-      <ul className="mx-auto flex max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-2 px-4 py-4 text-center text-[0.72rem] font-semibold uppercase tracking-[0.2em] sm:text-[0.8rem]">
-        {points.map((p, i) => (
-          <li key={p} className="flex items-center gap-6">
-            {i > 0 && <Sparkles aria-hidden className="size-3.5 text-lilac" />}
-            {p}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+  return <Strip label="About the programs" items={["Learn by doing", "Beginner to working stylist", "Free to apply", "Learn by doing", "Beginner to working stylist", "Free to apply"]} />;
 }
 
 const SKILLS = [
@@ -114,22 +110,23 @@ const SKILLS = [
 
 function Learn() {
   return (
-    <section aria-labelledby="learn-title" className="overflow-hidden bg-bg">
-      <div className="arch-top px-4 pb-16 pt-16 sm:pb-24 sm:pt-20">
-        <div className="mx-auto max-w-3xl text-center">
-          <h2 id="learn-title" className="type-caps text-[1.5rem] leading-tight tracking-[0.18em] text-accent-text sm:text-[2.2rem]">
-            What you could <span className="block">learn</span>
-          </h2>
-          <p className="mx-auto mt-4 max-w-xl text-ink-2">Every program covers some of these. Each one below lists exactly what it teaches.</p>
+    <section aria-labelledby="learn-title" className="py-14 sm:py-24">
+      <div className={wrap}>
+        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+          <div>
+            <Kicker>What you could learn</Kicker>
+            <Title id="learn-title">
+              Skills that keep <em>clients</em> coming back
+            </Title>
+          </div>
+          <p className="max-w-[400px] text-ink-2">Every program covers some of these. Each one below lists exactly what it teaches.</p>
         </div>
-        <ul className="mx-auto mt-12 grid max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SKILLS.map((s) => (
-            <li key={s.title} className="rounded-[var(--radius)] bg-surface p-6 shadow-[var(--shadow-sm)]">
-              <span className="flex size-12 items-center justify-center rounded-full bg-accent-soft">
-                <s.icon aria-hidden className="size-5 text-accent-text" />
-              </span>
-              <h3 className="type-caps mt-4 text-[0.8rem] text-accent-text">{s.title}</h3>
-              <p className="mt-2 text-sm text-ink-2">{s.body}</p>
+        <ul className="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
+          {SKILLS.map((sk, i) => (
+            <li key={sk.title}>
+              <IconTile icon={sk.icon} title={sk.title} tone={i % 2 ? "lilac" : "orange"}>
+                {sk.body}
+              </IconTile>
             </li>
           ))}
         </ul>
@@ -223,33 +220,36 @@ function ProgramsSkeleton() {
 
 function HowToApply() {
   const steps = [
-    { icon: ClipboardList, title: "Send the form", body: "Choose a program and tell us about yourself. It takes about five minutes and costs nothing." },
-    { icon: MessageCircle, title: "We get in touch", body: "Someone from the salon calls or messages you within a few days to talk about your goals." },
-    { icon: BadgeCheck, title: "Confirm your place", body: "If it's a good fit, we agree dates, fees and what to bring, and save your place." },
+    { title: "Send the form", body: "Choose a program and tell us about yourself. It takes about five minutes and costs nothing." },
+    { title: "We get in touch", body: "Someone from the salon calls or messages you within a few days to talk about your goals." },
+    { title: "Confirm your place", body: "If it's a good fit, we agree dates, fees and what to bring, and save your place." },
   ];
   return (
-    <section aria-labelledby="how-title" className="bg-bg py-16 sm:py-24">
-      <div className="mx-auto max-w-6xl px-4 sm:px-6">
-        <SectionHeading id="how-title" align="center" eyebrow="How to apply" title={<>Three steps to your <em>place</em></>} />
-        <ol className="mx-auto mt-12 grid max-w-5xl gap-4 md:grid-cols-3">
-          {steps.map((s, i) => (
-            <li key={s.title} className="rounded-[var(--radius)] border border-line bg-surface p-6 text-center">
-              <span className="mx-auto flex size-12 items-center justify-center rounded-full bg-accent-soft">
-                <s.icon aria-hidden className="size-5 text-accent-text" />
+    <section aria-labelledby="how-title" className="relative overflow-hidden py-14 sm:py-24">
+      <div aria-hidden className="absolute -right-36 top-10 size-[420px] rounded-[48%_52%_60%_40%/50%_40%_60%_50%] bg-lilac/30" />
+      <div className={cx(wrap, "relative grid items-center gap-10 md:grid-cols-2 md:gap-20")}>
+        <div>
+          <Kicker>How to apply</Kicker>
+          <Title id="how-title">
+            Three steps to your <em>place</em>
+          </Title>
+          <p className="mt-5 max-w-[460px] text-ink-2 sm:text-lg">No commitment until you&apos;ve spoken to us, and nothing to pay to apply.</p>
+          <Link href="#apply" className={pill("plum", "lg", "mt-8")}>
+            Start your application <ArrowRight aria-hidden className="size-4" />
+          </Link>
+        </div>
+        <ol className="grid gap-4">
+          {steps.map((st, i) => (
+            <li key={st.title} className="flex gap-5 rounded-[20px] border border-line bg-surface p-5 shadow-[0_18px_36px_-28px_rgb(46_29_45/0.4)] sm:p-6">
+              <span aria-hidden className="w-8 shrink-0 font-groove text-[1.8rem] leading-none text-clay">{i + 1}</span>
+              <span>
+                <span className="sr-only">Step {i + 1}: </span>
+                <span className="block font-serif text-xl font-semibold">{st.title}</span>
+                <span className="mt-1 block text-[0.94rem] text-ink-2">{st.body}</span>
               </span>
-              <p className="mt-4 font-display text-lg italic text-accent-text">
-                <span className="sr-only">Step </span>0{i + 1}
-              </p>
-              <p className="type-caps mt-1 text-[0.8rem] text-accent-text">{s.title}</p>
-              <p className="mt-2 text-sm text-ink-2">{s.body}</p>
             </li>
           ))}
         </ol>
-        <p className="mt-10 text-center">
-          <ButtonLink href="#apply" size="lg">
-            Start your application <ArrowRight aria-hidden className="size-4" />
-          </ButtonLink>
-        </p>
       </div>
     </section>
   );
@@ -323,17 +323,21 @@ function Faq() {
 
 function Closing() {
   return (
-    <section aria-labelledby="lm-cta-title" className="on-night bg-night text-on-night">
-      <div className="mx-auto flex max-w-4xl flex-col items-center px-4 py-16 text-center sm:px-6 md:py-20">
-        <HandHeart aria-hidden className="size-8 text-lilac" />
-        <h2 id="lm-cta-title" className="mt-4 font-display text-[2.2rem] font-light leading-tight sm:text-5xl">
-          Ready to turn your love of locs into <em className="text-lilac">a skill?</em>
-        </h2>
-        <p className="mt-4 text-on-night-2">Free to apply. We&apos;ll talk it through before you commit.</p>
-        <ButtonLink href="#apply" variant="light" size="lg" className="mt-8">
-          Apply now <ArrowRight aria-hidden className="size-4" />
-        </ButtonLink>
-      </div>
-    </section>
+    <>
+      <Wave from="bg-bg" to="text-dusk" />
+      <section aria-labelledby="lm-cta-title" className="on-night bg-dusk pb-14 pt-8 text-on-night sm:pb-22 sm:pt-14">
+        <div className={cx(wrap, "flex flex-col justify-between gap-8 md:flex-row md:items-center")}>
+          <div>
+            <h2 id="lm-cta-title" className="max-w-[720px] font-serif text-[2.25rem] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-[3.25rem]">
+              Ready to turn your love of locs into <em className="font-normal text-orange">a skill?</em>
+            </h2>
+            <p className="mt-4 text-on-night-2">Free to apply. We&apos;ll talk it through before you commit.</p>
+          </div>
+          <Link href="#apply" className={pill("pink", "lg", "self-start md:self-auto")}>
+            Apply now <ArrowRight aria-hidden className="size-4" />
+          </Link>
+        </div>
+      </section>
+    </>
   );
 }

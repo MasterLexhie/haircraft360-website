@@ -18,19 +18,19 @@ type Size = "sm" | "md" | "lg";
  */
 type Variant = "primary" | "secondary" | "ghost" | "danger" | "night" | "light";
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] border-2 font-bold uppercase tracking-[0.14em] transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:translate-y-px disabled:opacity-45 disabled:cursor-not-allowed disabled:active:translate-y-0 select-none admin:border admin:font-semibold admin:normal-case admin:tracking-normal";
+  "inline-flex items-center justify-center gap-2 rounded-[var(--radius-control)] border-2 font-bold uppercase tracking-[0.14em] transition-[background-color,border-color,color,box-shadow,transform] duration-150 active:translate-y-px disabled:opacity-45 disabled:cursor-not-allowed disabled:active:translate-y-0 select-none admin:border admin:font-semibold admin:normal-case admin:tracking-normal site:rounded-full site:normal-case site:tracking-normal";
 const variants: Record<Variant, string> = {
   primary: "border-accent bg-accent text-on-accent hover:border-accent-hover hover:bg-accent-hover admin:shadow-[inset_0_-1px_0_rgb(0_0_0/0.25)]",
   secondary: "border-accent bg-transparent text-accent-text hover:bg-accent-soft admin:border-line-strong admin:bg-surface admin:text-ink admin:hover:bg-sand",
   ghost: "border-transparent text-ink-2 hover:bg-sand hover:text-ink",
   danger: "border-danger/50 bg-surface text-danger hover:bg-danger-soft",
   night: "border-night bg-night text-on-night hover:border-ink-2 hover:bg-ink-2",
-  light: "border-on-night bg-on-night text-accent-text hover:border-lilac hover:bg-lilac",
+  light: "border-on-night bg-on-night text-accent-text hover:border-lilac hover:bg-lilac site:border-lilac site:bg-lilac site:text-ink site:hover:border-[#f3a6f3] site:hover:bg-[#f3a6f3]",
 };
 const sizes: Record<Size, string> = {
-  sm: "min-h-10 px-4 text-[0.7rem] admin:px-3.5 admin:text-[0.8125rem]",
-  md: "min-h-11 px-5 text-[0.75rem] admin:px-4 admin:text-sm",
-  lg: "min-h-12 px-7 text-[0.8rem] admin:px-5 admin:text-[0.9375rem]",
+  sm: "min-h-10 px-4 text-[0.7rem] admin:px-3.5 admin:text-[0.8125rem] site:text-[0.85rem]",
+  md: "min-h-11 px-5 text-[0.75rem] admin:px-4 admin:text-sm site:text-[0.9rem]",
+  lg: "min-h-12 px-7 text-[0.8rem] admin:px-5 admin:text-[0.9375rem] site:min-h-13 site:text-[0.95rem]",
 };
 
 export function buttonClass(variant: Variant = "primary", size: Size = "md", extra?: string) {
@@ -160,11 +160,11 @@ export function SectionHeading({
 }) {
   return (
     <div className={cx("max-w-2xl", align === "center" && "mx-auto text-center")}>
-      {eyebrow && <p className="type-caps mb-3 text-[0.72rem] text-ink-3">{eyebrow}</p>}
+      {eyebrow && <p className="type-caps mb-3 text-[0.72rem] text-ink-3 site:mb-2 site:font-groove site:text-base site:font-normal site:text-clay sm:site:text-lg">{eyebrow}</p>}
       <h2
         id={id}
         className={cx(
-          variant === "serif" ? "type-display text-[2.1rem] sm:text-[2.6rem]" : "type-caps text-xl text-accent-text sm:text-[1.65rem] sm:tracking-[0.18em]",
+          variant === "serif" ? "type-display text-[2.1rem] sm:text-[2.6rem] sm:site:text-[3rem] [&_em]:site:font-normal" : "type-caps text-xl text-accent-text sm:text-[1.65rem] sm:tracking-[0.18em]",
         )}
       >
         {title}

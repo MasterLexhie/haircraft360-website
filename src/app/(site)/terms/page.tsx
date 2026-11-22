@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { getPublicSettings } from "@/server/queries";
 import { describeDepositRule } from "@/components/booking/booking-summary";
 import { Skeleton } from "@/components/ui/primitives";
+import { PageIntro } from "@/components/site/groove";
 
 export const metadata: Metadata = { title: "Booking terms" };
 
@@ -13,13 +14,16 @@ export const metadata: Metadata = { title: "Booking terms" };
  */
 export default function TermsPage() {
   return (
-    <div className="mx-auto max-w-2xl px-4 py-14 sm:px-6 sm:py-20">
-      <p className="type-caps text-[0.72rem] text-ink-3">Before you book</p>
-      <h1 className="type-display mt-3 text-[2.4rem] sm:text-[3rem]">Booking terms</h1>
-      <Suspense fallback={<Skeleton className="mt-8 h-64" />}>
-        <Terms />
-      </Suspense>
-    </div>
+    <>
+      <PageIntro kicker="Before you book" title={<>Booking <em>terms</em></>} lead="What the deposit covers, how we hold your time and how the balance works." />
+      <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 sm:py-16">
+        <div className="rounded-[var(--radius)] border border-line bg-surface p-6 shadow-[var(--shadow-md)] sm:p-10">
+          <Suspense fallback={<Skeleton className="h-64" />}>
+            <Terms />
+          </Suspense>
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -27,7 +31,7 @@ async function Terms() {
   const settings = await getPublicSettings();
   const { holdMinutes } = settings.availability;
   return (
-    <div className="mt-8 space-y-8 text-ink-2 [&_h2]:text-lg [&_h2]:font-semibold [&_h2]:text-ink">
+    <div className="space-y-8 text-ink-2 [&_h2]:font-serif [&_h2]:text-[1.4rem] [&_h2]:font-semibold [&_h2]:text-ink">
       <section>
         <h2>Deposit</h2>
         <p className="mt-2">

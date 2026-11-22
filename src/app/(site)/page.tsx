@@ -10,6 +10,7 @@ import type { WeekdayKey } from "@/domain/settings";
 import { describeDepositRule } from "@/components/booking/booking-summary";
 import { Sticker, Wave } from "@/components/site/brand";
 import { pill } from "@/components/site/pill";
+import { Kicker, Strip, Title, wrap } from "@/components/site/groove";
 import { HERO_PHOTO, GALLERY_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
 import { Skeleton, cx } from "@/components/ui/primitives";
 import { formatNaira } from "@/lib/money";
@@ -21,7 +22,6 @@ import { formatDuration, formatHHMM, WEEKDAYS } from "@/lib/time";
  * come from Settings and the service list, never from this file.
  */
 
-const wrap = "mx-auto w-full max-w-[1240px] px-4 sm:px-6 lg:px-12";
 
 export default function HomePage() {
   return (
@@ -54,18 +54,6 @@ export default function HomePage() {
 }
 
 /* ───────────── small pieces ───────────── */
-
-function Kicker({ children, tone = "clay", className }: { children: React.ReactNode; tone?: "clay" | "orange"; className?: string }) {
-  return <p className={cx("font-groove text-base leading-tight sm:text-lg", tone === "clay" ? "text-clay" : "text-orange", className)}>{children}</p>;
-}
-
-function Title({ id, children, className }: { id: string; children: React.ReactNode; className?: string }) {
-  return (
-    <h2 id={id} className={cx("mt-2 font-serif text-[2.1rem] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-[3.25rem] [&_em]:font-normal", className)}>
-      {children}
-    </h2>
-  );
-}
 
 function whatsappHref(e164: string) {
   return `https://wa.me/${e164.replace(/\D/g, "")}`;
@@ -160,18 +148,7 @@ async function HeroFacts() {
 const CRAFTS = ["Starter locs", "Retwists", "Crochet maintenance", "Repairs", "Reinstallation", "Manicure", "Pedicure", "Nail fixing"];
 
 function CraftStrip() {
-  return (
-    <div className="overflow-hidden border-b-[5px] border-lilac bg-orange text-ink">
-      <ul aria-label="What we do" className="flex w-max gap-6 px-4 py-2.5 font-groove text-lg leading-tight sm:gap-7 sm:px-10 sm:py-4 sm:text-[1.6rem]">
-        {CRAFTS.map((c) => (
-          <li key={c} className="flex items-center gap-6 sm:gap-7">
-            {c}
-            <Sparkles aria-hidden className="size-3.5 text-accent sm:size-5" />
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+  return <Strip items={CRAFTS} label="What we do" />;
 }
 
 /* ───────────── why us ───────────── */
