@@ -22,6 +22,7 @@ import {
   type CompletionInput,
 } from "@/server/booking-service";
 import { createBalanceLink } from "@/server/payments/links";
+import { searchAdmin, type AdminSearch } from "@/server/admin-queries";
 import { balanceLinkWhatsapp, markWhatsappSent } from "@/server/whatsapp-messages";
 import { createExpense, saveExpenseCategory, softDeleteExpense, updateExpense } from "@/server/expenses";
 import { unknownPlaceholders } from "@/domain/messages";
@@ -539,4 +540,10 @@ export async function programAction(programIdRaw: string | null, _: ActionState,
   } catch (e) {
     return fail(e);
   }
+}
+
+/** Live results for the admin search (top bar dropdown and the search screen). */
+export async function searchAction(q: string, take: number): Promise<AdminSearch> {
+  await requireAdmin();
+  return searchAdmin(String(q).slice(0, 100), Math.min(Math.max(Math.trunc(take) || 5, 1), 30));
 }

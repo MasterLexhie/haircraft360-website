@@ -62,7 +62,7 @@ export function PageHeader({
             <h1 className="font-display text-[1.5rem] font-normal leading-tight [&_[data-badge]]:align-middle">{title}</h1>
             {description && <p className="mt-0.5 text-[0.8rem] text-on-night-2">{description}</p>}
           </div>
-          <Link href="/admin/bookings?search=1" className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-on-night/10 hover:bg-on-night/15">
+          <Link href="/admin/search" className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-on-night/10 hover:bg-on-night/15">
             <Search aria-hidden className="size-[18px]" />
             <span className="sr-only">Search bookings and customers</span>
           </Link>

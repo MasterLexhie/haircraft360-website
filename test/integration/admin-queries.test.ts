@@ -224,3 +224,42 @@ describe("customers", () => {
     expect(await q.getCustomerProfile("nope")).toBeNull();
   });
 });
+
+describe("bookings time window and status counts", () => {
+  it("splits upcoming, today and past, orders each the right way, and counts statuses across them", async () => {
+    const soon = await make({ name: "Soon", daysAhead: 1 });
+    const later = await make({ name: "Later", daysAhead: 3 });
+    const past = await make({ name: "Past", daysAhead: -2, status: "completed" });
+    const older = await make({ name: "Older", daysAhead: -5, status: "cancelled" });
+    const upcoming = await q.listAdminBookings({ when: "upcoming" }, undefined, 10);
+    expect(upcoming.items.map((r) => r.booking.id)).toEqual([soon.id, later.id]);
+    const gone = await q.listAdminBookings({ when: "past" }, undefined, 10);
+    expect(gone.items.map((r) => r.booking.id)).toEqual([past.id, older.id]);
+    const all = await q.listAdminBookings({ when: "all", status: "completed" }, undefined, 10);
+    expect(all.items.map((r) => r.booking.id)).toEqual([past.id]);
+    expect(all.statusCounts).toMatchObject({ confirmed: 2, completed: 1, cancelled: 1 });
+    expect((await q.listAdminBookings({}, undefined, 10)).total).toBe(4);
+  });
+});
+
+describe("admin search", () => {
+  it("finds customers and bookings by name, local phone and reference, upcoming bookings first", async () => {
+    const past = await make({ name: "Ngozi Eze", phone: "08035550021", daysAhead: -4, status: "completed" });
+    const next = await make({ name: "Ngozi Eze", phone: "08035550021", daysAhead: 2 });
+    await make({ name: "Ada Obi", phone: "08035550099", daysAhead: 1 });
+
+    const byName = await q.searchAdmin("ngozi", 5);
+    expect(byName.customers.map((c) => c.name)).toEqual(["Ngozi Eze"]);
+    expect(byName.customers[0]!.bookingCount).toBe(2);
+    expect(byName.bookings.map((b) => b.id)).toEqual([next.id, past.id]);
+    expect(byName).toMatchObject({ customerCount: 1, bookingCount: 2 });
+
+    const byPhone = await q.searchAdmin("0803 555 0099", 5);
+    expect(byPhone.customers.map((c) => c.name)).toEqual(["Ada Obi"]);
+
+    const byRef = await q.searchAdmin(next.reference.toLowerCase(), 5);
+    expect(byRef.bookings.map((b) => b.id)).toEqual([next.id]);
+
+    expect(await q.searchAdmin("n", 5)).toEqual({ customers: [], bookings: [], customerCount: 0, bookingCount: 0 });
+  });
+});

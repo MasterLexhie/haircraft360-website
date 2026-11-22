@@ -1,13 +1,14 @@
 import Image from "next/image";
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { Suspense } from "react";
+import { TopbarSearch } from "@/components/admin/search/topbar-search";
 
 export function initials(name: string): string {
   const parts = name.replace(/[^\p{L}\s]/gu, " ").trim().split(/\s+/).filter(Boolean);
   return ((parts[0]?.[0] ?? "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase() || "?";
 }
 
-/** Tablet and desktop: plum bar with the logo, a search that opens the bookings list, and the account. */
+/** Tablet and desktop: plum bar with the logo, the search with its results dropdown, and the account. */
 export function AdminTopBar({ name }: { name: string | null }) {
   return (
     <header className="on-night hidden h-14 shrink-0 items-center gap-4 bg-night px-4 text-on-night md:flex">
@@ -19,18 +20,9 @@ export function AdminTopBar({ name }: { name: string | null }) {
         </span>
       </Link>
 
-      <form action="/admin/bookings" method="get" role="search" className="mx-auto flex w-full max-w-[520px] flex-1">
-        <label className="flex h-9 w-full items-center gap-2 rounded-[10px] border border-on-night/20 bg-on-night/10 px-3 focus-within:border-lilac focus-within:bg-on-night/15">
-          <Search aria-hidden className="size-4 shrink-0 text-on-night-2" />
-          <span className="sr-only">Search bookings and customers</span>
-          <input
-            name="q"
-            type="search"
-            placeholder="Search bookings, customers, references"
-            className="min-w-0 flex-1 bg-transparent text-sm text-on-night placeholder:text-on-night-2 focus:outline-none"
-          />
-        </label>
-      </form>
+      <Suspense fallback={<div className="mx-auto h-9 w-full max-w-[560px] flex-1 rounded-[10px] border border-on-night/20 bg-on-night/10" />}>
+        <TopbarSearch />
+      </Suspense>
 
       <Link href="/admin/account" className="flex h-10 shrink-0 items-center gap-2 rounded-[10px] bg-on-night/10 pl-1 pr-2.5 text-sm hover:bg-on-night/15">
         <span aria-hidden className="grid size-[30px] place-items-center rounded-lg bg-lilac text-xs font-bold text-night">{name ? initials(name) : ""}</span>

@@ -309,3 +309,92 @@ export async function getCustomerProfile(id: string): Promise<{ customer: Custom
     .map(toPayment);
   return { customer: toCustomer(row), bookings: row.bookings.map(toBooking), payments };
 }
+
+// Search (top bar dropdown and the search screen)
+
+export interface SearchCustomer {
+  id: string;
+  name: string;
+  phone: string | null;
+  email: string | null;
+  bookingCount: number;
+}
+
+export interface SearchBooking {
+  id: string;
+  reference: string;
+  customerName: string;
+  services: string;
+  startAt: string;
+  totalKobo: number;
+  /** paymentSummaryState, for the label and colour. */
+  payment: string;
+  status: BookingStatus;
+}
+
+export interface AdminSearch {
+  customers: SearchCustomer[];
+  bookings: SearchBooking[];
+  customerCount: number;
+  bookingCount: number;
+}
+
+/** Customers and bookings matching a name, phone, email, reference or service. Bookings soonest upcoming first, then past, newest first. */
+export async function searchAdmin(q: string, take: number, nowMs = Date.now()): Promise<AdminSearch> {
+  await connection();
+  const needle = q.trim();
+  if (needle.length < 2) return { customers: [], bookings: [], customerCount: 0, bookingCount: 0 };
+  const customerWhere: Prisma.CustomerWhereInput = {
+    OR: [
+      { displayName: text(needle) },
+      { emails: { some: { value: text(needle) } } },
+      ...[needle, ...phoneNeedles(needle)].map((n) => ({ phones: { some: { e164: { contains: n } } } })),
+    ],
+  };
+  const bookingWhereQ = bookingWhere({ q: needle }, nowMs);
+  const now = new Date(nowMs);
+  const bookingSelect = {
+    id: true,
+    reference: true,
+    startAt: true,
+    status: true,
+    totalKobo: true,
+    contactName: true,
+    items: { select: { name: true, kind: true } },
+    payments: { select: { status: true, amountKobo: true } },
+    customer: { select: { displayName: true } },
+  } satisfies Prisma.BookingSelect;
+  const [customerCount, customers, bookingCount, upcoming, past] = await Promise.all([
+    db.customer.count({ where: customerWhere }),
+    db.customer.findMany({
+      where: customerWhere,
+      include: { phones: true, emails: true, _count: { select: { bookings: true } } },
+      orderBy: [{ displayName: "asc" }, { id: "asc" }],
+      take,
+    }),
+    db.booking.count({ where: bookingWhereQ }),
+    db.booking.findMany({ where: { AND: [bookingWhereQ, { startAt: { gte: now } }] }, select: bookingSelect, orderBy: [{ startAt: "asc" }, { id: "asc" }], take }),
+    db.booking.findMany({ where: { AND: [bookingWhereQ, { startAt: { lt: now } }] }, select: bookingSelect, orderBy: [{ startAt: "desc" }, { id: "asc" }], take }),
+  ]);
+  return {
+    customerCount,
+    bookingCount,
+    customers: customers.map((c) => ({
+      id: c.id,
+      name: c.displayName,
+      phone: c.phones[0]?.e164 ?? null,
+      email: c.emails[0]?.value ?? null,
+      bookingCount: c._count.bookings,
+    })),
+    bookings: [...upcoming, ...past].slice(0, take).map((b) => ({
+      id: b.id,
+      reference: b.reference,
+      customerName: b.customer?.displayName ?? b.contactName,
+      services: b.items.filter((i) => i.kind !== "extra").map((i) => i.name).join(", "),
+      startAt: b.startAt.toISOString(),
+      totalKobo: b.totalKobo,
+      payment: paymentSummaryState(b, b.payments),
+      status: b.status as BookingStatus,
+    })),
+  };
+}
