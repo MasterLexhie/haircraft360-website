@@ -11,8 +11,8 @@ export function PayButton({ reference, token, purpose, label }: { reference: str
   const router = useRouter();
   const { pay, phase, error } = usePaystackPayment((outcome) => {
     if (outcome === "cancelled" || outcome === "error") return;
-    const t = encodeURIComponent(token);
-    router.replace(`/booking/${reference}?t=${t}${outcome === "paid" ? `&paid=${purpose}` : outcome === "pending" ? "&paid=pending" : ""}`, { scroll: false });
+    // The booking cookie already opens this page, so the address stays free of the token.
+    router.replace(`/booking/${reference}${outcome === "paid" ? `?paid=${purpose}` : outcome === "pending" ? "?paid=pending" : ""}`, { scroll: false });
     router.refresh();
   });
   return (

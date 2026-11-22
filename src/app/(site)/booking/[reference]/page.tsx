@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { cookies } from "next/headers";
+import { bookingCookieName } from "@/lib/booking-cookie";
 import { Suspense } from "react";
 import { AlertTriangle, CalendarDays, CalendarPlus, CheckCircle2, Clock, Hourglass, MapPin, Phone, ReceiptText } from "lucide-react";
 import { getCustomerBooking, getSalon } from "@/server/queries";
@@ -32,8 +34,10 @@ export default function BookingPage(props: Props) {
  * for this booking: never the stored customer profile or other bookings (finding F-01).
  */
 async function BookingView({ params, searchParams }: Props) {
-  const [{ reference }, { t, paid }] = await Promise.all([params, searchParams]);
-  const [data, salon] = await Promise.all([getCustomerBooking(reference, t), getSalon()]);
+  const [{ reference }, { t, paid }, jar] = await Promise.all([params, searchParams, cookies()]);
+  // The proxy normally swaps ?t= for the cookie before this runs; ?t= stays as a fallback.
+  const token = t ?? jar.get(bookingCookieName(reference))?.value;
+  const [data, salon] = await Promise.all([getCustomerBooking(reference, token), getSalon()]);
   if (!data) {
     return (
       <div className="mx-auto max-w-xl px-4 py-20 text-center">
@@ -49,7 +53,6 @@ async function BookingView({ params, searchParams }: Props) {
   const paidTotal = paidKobo(payments);
   const due = balanceDue(booking, payments);
   const minutes = (Date.parse(booking.endAt) - Date.parse(booking.startAt)) / 60_000;
-  const token = t!;
   const calendar = upcoming ? calendarEventFor(booking, salon, { balanceKobo: due }) : null;
 
   const hero =
@@ -127,7 +130,7 @@ async function BookingView({ params, searchParams }: Props) {
         </dl>
         {calendar && (
           <div className="mt-5 flex flex-wrap gap-2">
-            <a href={`/api/bookings/${booking.reference}/calendar?t=${encodeURIComponent(token)}`} className={buttonClass("secondary", "md")}>
+            <a href={`/api/bookings/${booking.reference}/calendar`} className={buttonClass("secondary", "md")}>
               <CalendarPlus aria-hidden className="size-4" /> Add to calendar
             </a>
             <a href={googleCalendarUrl(calendar)} target="_blank" rel="noopener noreferrer" className={buttonClass("secondary", "md")}>
@@ -170,10 +173,10 @@ async function BookingView({ params, searchParams }: Props) {
         {booking.status === "pending_payment" && <PendingRefresher />}
         <div className="mt-5">
           {booking.status === "pending_payment" && (
-            <PayButton reference={booking.reference} token={token} purpose="deposit" label="Pay deposit" />
+            <PayButton reference={booking.reference} token={token!} purpose="deposit" label="Pay deposit" />
           )}
           {booking.status === "completed" && due > 0 && (
-            <PayButton reference={booking.reference} token={token} purpose="balance" label="Pay balance" />
+            <PayButton reference={booking.reference} token={token!} purpose="balance" label="Pay balance" />
           )}
           {booking.status === "expired" && <ButtonLink href="/book" size="lg">Choose a new time</ButtonLink>}
           {booking.status === "confirmed" && (
