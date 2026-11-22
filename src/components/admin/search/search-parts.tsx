@@ -91,6 +91,40 @@ export function bookingItem(b: SearchBooking): OpenedItem {
   return { href: `/admin/bookings/${b.id}`, title: b.reference, sub: `${b.customerName} · ${formatDayHeading(b.startAt)}, ${formatTime(b.startAt)}`, kind: "booking" };
 }
 
+/**
+ * The search text never goes in the address, so customer names and numbers stay out of browser
+ * history. The search screen keeps it on its own history entry instead (history.state), so Back
+ * from a result restores the results, while opening search afresh starts empty. The top bar
+ * hands its text to the search screen once, through this tab's session storage.
+ */
+const STATE_KEY = "hc360AdminSearch";
+const HANDOFF_KEY = "hc360-admin-search-handoff";
+
+export function searchFromHistory(): string | null {
+  const v = (window.history.state as Record<string, unknown> | null)?.[STATE_KEY];
+  return typeof v === "string" ? v : null;
+}
+
+export function keepSearchInHistory(q: string) {
+  window.history.replaceState({ ...(window.history.state ?? {}), [STATE_KEY]: q }, "");
+}
+
+export function handOffSearch(q: string) {
+  try {
+    sessionStorage.setItem(HANDOFF_KEY, q);
+  } catch {}
+}
+
+export function takeHandOff(): string | null {
+  try {
+    const v = sessionStorage.getItem(HANDOFF_KEY);
+    sessionStorage.removeItem(HANDOFF_KEY);
+    return v;
+  } catch {
+    return null;
+  }
+}
+
 /* ───────────── Rows ───────────── */
 
 const toneText: Record<string, string> = { success: "text-success", warning: "text-warning", danger: "text-danger", info: "text-info", neutral: "text-ink-3", accent: "text-accent-text" };

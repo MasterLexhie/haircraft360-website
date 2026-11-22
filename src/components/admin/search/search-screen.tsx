@@ -11,6 +11,9 @@ import {
   bookingItem,
   customerItem,
   recentSearches,
+  keepSearchInHistory,
+  searchFromHistory,
+  takeHandOff,
   recentlyOpened,
   rememberOpened,
   rememberSearch,
@@ -24,9 +27,9 @@ type Scope = "all" | "customers" | "bookings";
  * The search screen (/admin/search). On a phone the search box takes over the plum header;
  * the back arrow returns to the page the owner came from. Results arrive as they type.
  */
-export function SearchScreen({ initialQ }: { initialQ: string }) {
+export function SearchScreen() {
   const router = useRouter();
-  const [q, setQ] = useState(initialQ);
+  const [q, setQ] = useState("");
   const [scope, setScope] = useState<Scope>("all");
   const [recent, setRecent] = useState<string[]>([]);
   const [opened, setOpened] = useState<OpenedItem[]>([]);
@@ -34,17 +37,17 @@ export function SearchScreen({ initialQ }: { initialQ: string }) {
   const { data, loading } = useAdminSearch(q, 20);
 
   useEffect(() => {
-    // Browser-only lists, read after hydration.
+    // Browser-only lists and the tab's last search, read after hydration.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRecent(recentSearches());
     setOpened(recentlyOpened());
+    setQ(searchFromHistory() ?? takeHandOff() ?? "");
   }, []);
 
-  // Keep ?q= in the address so Back from a result returns to the same results.
-  useEffect(() => {
-    const url = q.trim() ? `/admin/search?q=${encodeURIComponent(q.trim())}` : "/admin/search";
-    window.history.replaceState(window.history.state, "", url);
-  }, [q]);
+  const change = (value: string) => {
+    setQ(value);
+    keepSearchInHistory(value);
+  };
 
   const back = () => {
     if (window.history.length > 1) router.back();
@@ -88,12 +91,12 @@ export function SearchScreen({ initialQ }: { initialQ: string }) {
             autoFocus
             autoComplete="off"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => change(e.target.value)}
             placeholder="Name, phone, email or reference"
             className="min-w-0 flex-1 bg-transparent text-[0.9375rem] text-ink placeholder:text-ink-3 focus:outline-none [&::-webkit-search-cancel-button]:hidden"
           />
           {q && (
-            <button type="button" onClick={() => { setQ(""); input.current?.focus(); }} className="grid size-8 shrink-0 place-items-center rounded-lg bg-sand-2 text-ink-2">
+            <button type="button" onClick={() => { change(""); input.current?.focus(); }} className="grid size-8 shrink-0 place-items-center rounded-lg bg-sand-2 text-ink-2">
               <X aria-hidden className="size-3.5" />
               <span className="sr-only">Clear search</span>
             </button>
@@ -108,7 +111,7 @@ export function SearchScreen({ initialQ }: { initialQ: string }) {
               <h2 id="recent-searches" className="mb-2 text-[0.68rem] font-bold uppercase tracking-[0.14em] text-ink-3">Recent searches</h2>
               <div className="flex flex-wrap gap-2">
                 {recent.map((r) => (
-                  <button key={r} type="button" onClick={() => setQ(r)} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-[0.8125rem] hover:bg-sand">
+                  <button key={r} type="button" onClick={() => change(r)} className="inline-flex min-h-9 items-center gap-1.5 rounded-full border border-line-strong bg-surface px-3 text-[0.8125rem] hover:bg-sand">
                     <Clock aria-hidden className="size-3.5 text-ink-3" /> {r}
                   </button>
                 ))}

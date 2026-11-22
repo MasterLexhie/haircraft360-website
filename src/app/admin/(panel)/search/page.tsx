@@ -6,16 +6,16 @@ import { Skeleton } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Search" };
 
-export default function SearchPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+/** The search text never goes in the address; the screen keeps it for the tab (see search-parts). */
+export default function SearchPage() {
   return (
     <Suspense fallback={<Skeleton className="h-96" />}>
-      <Search searchParams={searchParams} />
+      <Search />
     </Suspense>
   );
 }
 
-async function Search({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
+async function Search() {
   await requireAdmin();
-  const { q } = await searchParams;
-  return <SearchScreen initialQ={(q ?? "").slice(0, 100)} />;
+  return <SearchScreen />;
 }

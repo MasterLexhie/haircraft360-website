@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { cx } from "@/components/ui/primitives";
-import { BookingRow, CustomerRow, bookingItem, customerItem, rememberOpened, rememberSearch, useAdminSearch, type OpenedItem } from "./search-parts";
+import { BookingRow, CustomerRow, bookingItem, customerItem, handOffSearch, rememberOpened, rememberSearch, useAdminSearch, type OpenedItem } from "./search-parts";
 
 /**
  * Tablet and desktop: the top bar search. Results drop down as the owner types; arrow keys
@@ -39,7 +39,7 @@ export function TopbarSearch() {
 
   const items: { item: OpenedItem }[] = [...(data?.customers.map((c) => ({ item: customerItem(c) })) ?? []), ...(data?.bookings.map((b) => ({ item: bookingItem(b) })) ?? [])];
   const showPanel = open && needle.length >= 2;
-  const allHref = `/admin/search?q=${encodeURIComponent(needle)}`;
+  const allHref = "/admin/search";
 
   /** A result link was clicked: the link itself navigates. */
   const remember = (item: OpenedItem) => {
@@ -51,6 +51,7 @@ export function TopbarSearch() {
   const go = (item: OpenedItem | null) => {
     rememberSearch(needle);
     if (item) rememberOpened(item);
+    else handOffSearch(needle);
     setOpen(false);
     input.current?.blur();
     router.push(item ? item.href : allHref);
@@ -130,7 +131,7 @@ export function TopbarSearch() {
               </>
             )}
             {data && data.customerCount + data.bookingCount > 0 && (
-              <Link href={allHref} onClick={() => { rememberSearch(needle); setOpen(false); }} className="mt-1.5 flex items-center justify-between border-t border-line bg-sand/50 px-4 py-3 text-[0.8125rem] font-semibold text-accent-text hover:bg-sand">
+              <Link href={allHref} onClick={() => { rememberSearch(needle); handOffSearch(needle); setOpen(false); }} className="mt-1.5 flex items-center justify-between border-t border-line bg-sand/50 px-4 py-3 text-[0.8125rem] font-semibold text-accent-text hover:bg-sand">
                 See all results for “{needle}”
                 <span className="font-medium text-ink-3">
                   {data.customerCount} customer{data.customerCount === 1 ? "" : "s"} · {data.bookingCount} booking{data.bookingCount === 1 ? "" : "s"}
