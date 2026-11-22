@@ -11,7 +11,7 @@ type Item = { href: string; label: string; shortLabel?: string; icon: typeof Lay
 
 /** Sidebar and icon rail: every section. */
 const SIDEBAR: Item[] = [
-  { href: "/admin", label: "Home", icon: LayoutDashboard, exact: true },
+  { href: "/admin", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
   { href: "/admin/reminders", label: "Reminders due", shortLabel: "Reminders", icon: MessageCircle, count: "reminders" },
   { href: "/admin/customers", label: "Customers", icon: Users },
