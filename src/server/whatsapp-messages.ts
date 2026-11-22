@@ -36,16 +36,26 @@ export interface ManualMessage {
   telUrl: string;
 }
 
-export async function manualMessagesDue(nowMs = Date.now()): Promise<ManualMessage[]> {
+/** WhatsApp messages the owner still has to send today: the Reminders due list. */
+function manualDueWhere(nowMs: number): Prisma.NotificationWhereInput {
   const endOfToday = new Date(lagosToUtcMs(addDays(lagosDateKey(nowMs), 1), 0));
+  return {
+    status: "pending",
+    channel: "whatsapp_manual",
+    type: { in: ["confirmation", "reminder"] },
+    dueAt: { lt: endOfToday },
+    booking: { status: "confirmed", startAt: { gt: new Date(nowMs) } },
+  };
+}
+
+/** Just the number, for the admin menu badge. */
+export async function countManualMessagesDue(nowMs = Date.now()): Promise<number> {
+  return db.notification.count({ where: manualDueWhere(nowMs) });
+}
+
+export async function manualMessagesDue(nowMs = Date.now()): Promise<ManualMessage[]> {
   const rows = await db.notification.findMany({
-    where: {
-      status: "pending",
-      channel: "whatsapp_manual",
-      type: { in: ["confirmation", "reminder"] },
-      dueAt: { lt: endOfToday },
-      booking: { status: "confirmed", startAt: { gt: new Date(nowMs) } },
-    },
+    where: manualDueWhere(nowMs),
     orderBy: [{ booking: { startAt: "asc" } }, { type: "asc" }],
     include: { booking: { include: { items: true, payments: true } } },
   });

@@ -21,7 +21,7 @@ async function Account() {
   const summary = await accountSummary(admin);
   return (
     <>
-      <PageHeader title="Your account" description={admin.email} />
+      <PageHeader phoneBack={{ href: "/admin/more", label: "More" }} title="Your account" description={admin.email} />
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <Panel title="Change password">
           <ChangePasswordForm />

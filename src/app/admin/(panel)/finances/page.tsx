@@ -39,6 +39,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
   return (
     <>
       <PageHeader
+        phoneBack={{ href: "/admin/more", label: "More" }}
         title="Finances"
         description="Revenue is money received from customers. Expenses are money paid out. Net is what's left."
         actions={
@@ -63,7 +64,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
       </dl>
 
       {/* Desktop table */}
-      <div className="hidden overflow-x-auto rounded-[var(--radius)] border border-line bg-surface md:block">
+      <div className="hidden overflow-x-auto rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] md:block">
         <table className="w-full text-left text-sm">
           <caption className="sr-only">Money in and out by day</caption>
           <thead className="border-b border-line bg-sand/50 text-xs uppercase tracking-[0.08em] text-ink-3">
@@ -103,7 +104,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
       </div>
 
       {/* Phone list */}
-      <ul className="divide-y divide-line rounded-[var(--radius)] border border-line bg-surface md:hidden">
+      <ul className="divide-y divide-line rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] md:hidden">
         {paged.items.map((d) => (
           <li key={d.dateKey}>
             <Link href={`/admin/finances/day/${d.dateKey}`} className={cx("flex items-center gap-3 px-4 py-3", d.revenueKobo === 0 && d.expensesKobo === 0 && "text-ink-3")}>
@@ -132,7 +133,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
 
 function Card({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
-    <div className="rounded-[var(--radius)] border border-line bg-surface p-4">
+    <div className="rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4">
       <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">{label}</dt>
       <dd className={cx("mt-1 font-display text-3xl tabular", tone)}>{value}</dd>
     </div>

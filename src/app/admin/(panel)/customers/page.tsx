@@ -44,7 +44,7 @@ async function Customers({ searchParams }: { searchParams: Promise<{ q?: string;
       {rows.length === 0 ? (
         <EmptyState title="No customers found" action={<Link href="/admin/customers" className="font-semibold underline">Show all</Link>} />
       ) : (
-        <ul className="divide-y divide-line overflow-hidden rounded-[var(--radius)] border border-line bg-surface">
+        <ul className="divide-y divide-line overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
           {rows.map(({ c, count, paid, outstanding, last }) => (
             <li key={c.id}>
               <Link

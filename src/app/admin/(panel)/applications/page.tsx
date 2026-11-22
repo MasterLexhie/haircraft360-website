@@ -45,6 +45,7 @@ async function Applications({ searchParams }: { searchParams: Promise<Search> })
   return (
     <>
       <PageHeader
+        phoneBack={{ href: "/admin/more", label: "More" }}
         title="Locs Mastery"
         description="Applications to the training programs. Contact each new applicant, then record what you decide."
         actions={
@@ -76,7 +77,7 @@ async function Applications({ searchParams }: { searchParams: Promise<Search> })
         </ul>
       </nav>
 
-      <form action="/admin/applications" className="mb-6 grid gap-3 rounded-[var(--radius)] border border-line bg-surface p-4 sm:grid-cols-[1fr_14rem_auto] sm:items-end">
+      <form action="/admin/applications" className="mb-6 grid gap-3 rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4 sm:grid-cols-[1fr_14rem_auto] sm:items-end">
         {status && <input type="hidden" name="status" value={status} />}
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-ink-2">Search</span>
@@ -104,7 +105,7 @@ async function Applications({ searchParams }: { searchParams: Promise<Search> })
           {total === 0 ? "Applications sent from the Locs Mastery page appear here." : "Try another status, program or search."}
         </EmptyState>
       ) : (
-        <ul className="divide-y divide-line rounded-[var(--radius)] border border-line bg-surface">
+        <ul className="divide-y divide-line rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
           {paged.items.map((a) => {
             const s = applicationStatusLabel[a.status];
             return (

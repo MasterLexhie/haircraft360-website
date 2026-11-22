@@ -43,7 +43,7 @@ export function MessageTemplatesForm({ templates, defaults, sample }: { template
         Words in curly brackets are filled in for each booking: {MESSAGE_PLACEHOLDERS.map((p) => `{${p}}`).join(", ")}.
       </p>
       {TEMPLATE_INFO.map((t) => (
-        <div key={t.key} className="space-y-2 rounded-[var(--radius)] border border-line bg-surface p-4">
+        <div key={t.key} className="space-y-2 rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4">
           <Field id={`tpl-${t.key}`} label={t.label} hint={t.help} error={fe[t.key]}>
             <textarea
               id={`tpl-${t.key}`}
@@ -126,7 +126,7 @@ export function ExpenseCategoriesManager({ categories }: { categories: ExpenseCa
     <div className="space-y-5">
       <p className="text-sm text-ink-2">The choices in the Add expense form. A hidden category stays on the expenses already filed under it.</p>
       <NewCategory />
-      <ul className="divide-y divide-line rounded-[var(--radius)] border border-line bg-surface">
+      <ul className="divide-y divide-line rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
         {categories.map((c) => (
           <li key={c.id} className="p-4">
             <CategoryRow category={c} />

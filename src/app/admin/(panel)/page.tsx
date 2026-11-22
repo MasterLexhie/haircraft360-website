@@ -76,7 +76,7 @@ async function Dashboard() {
             const up = m.now > m.before;
             const good = change && change !== "same" ? up === m.goodWhenUp : null;
             return (
-              <li key={m.label} className={i === 2 ? "on-night rounded-[var(--radius)] bg-accent p-4 text-on-accent" : "rounded-[var(--radius)] border border-line bg-surface p-4"}>
+              <li key={m.label} className={i === 2 ? "on-night rounded-[var(--radius)] bg-accent p-4 text-on-accent" : "rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4"}>
                 <span className={cx("block text-xs font-semibold uppercase tracking-[0.1em]", i === 2 ? "text-on-night-2" : "text-ink-3")}>{m.label}</span>
                 <span className={cx("mt-2 block tabular font-display text-3xl", i === 2 ? "text-on-accent" : "text-accent-text")}>{formatNaira(m.now)}</span>
                 <span className={cx("mt-1 block text-xs", i === 2 ? "text-on-night-2" : "text-ink-2")}>
@@ -97,7 +97,7 @@ async function Dashboard() {
       <ul className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {stats.map((s) => (
           <li key={s.label}>
-            <Link href={s.href} className="flex h-full flex-col rounded-[var(--radius)] border border-line bg-surface p-4 transition-colors hover:border-ink">
+            <Link href={s.href} className="flex h-full flex-col rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4 transition-colors hover:border-ink">
               <span className="flex items-center justify-between text-xs font-semibold uppercase tracking-[0.1em] text-ink-3">
                 {s.label} <s.icon aria-hidden className="size-4" />
               </span>

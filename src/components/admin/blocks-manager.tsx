@@ -41,7 +41,7 @@ export function BlocksManager({ blocks, today }: { blocks: BlockRow[]; today: st
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      <section aria-labelledby="add-block" className="rounded-[var(--radius)] border border-line bg-surface p-5">
+      <section aria-labelledby="add-block" className="rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-5">
         <h2 id="add-block" className="text-base font-semibold">Add a closure</h2>
         <p className="mt-1 text-sm text-ink-3">For holidays, training or a stylist away. Those times stop being offered online straight away.</p>
         <form key={formKey} onSubmit={submit} className="mt-5 space-y-4">
@@ -93,7 +93,7 @@ export function BlocksManager({ blocks, today }: { blocks: BlockRow[]; today: st
         </form>
       </section>
 
-      <section aria-labelledby="upcoming-blocks" className="rounded-[var(--radius)] border border-line bg-surface">
+      <section aria-labelledby="upcoming-blocks" className="rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
         <h2 id="upcoming-blocks" className="border-b border-line px-5 py-4 text-base font-semibold">Upcoming closures</h2>
         <ActionFeedback state={removeState} className="border-b border-line px-5 py-3" />
         {blocks.length ? (

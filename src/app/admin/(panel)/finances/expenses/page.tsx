@@ -82,7 +82,7 @@ async function Expenses({ searchParams }: { searchParams: Promise<Search> }) {
       {rows.length === 0 ? (
         <EmptyState icon={<Receipt aria-hidden className="size-6" />} title="No expenses in this period" />
       ) : (
-        <ul className="divide-y divide-line rounded-[var(--radius)] border border-line bg-surface">
+        <ul className="divide-y divide-line rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
           {paged.items.map((e) => (
             <li key={e.id}>
               <Link href={`/admin/finances/expenses/${e.id}`} className="flex items-start justify-between gap-4 p-4 hover:bg-sand/40">

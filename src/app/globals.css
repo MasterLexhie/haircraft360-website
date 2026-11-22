@@ -48,6 +48,20 @@
   --shadow-md: 0 14px 34px -18px rgb(62 40 61 / 0.28), 0 2px 6px rgb(62 40 61 / 0.05);
 }
 
+/*
+ * Admin look (inside [data-admin], set by the admin layout): the same Plum Lounge colours
+ * in a Shopify-style workspace. Rounder corners, cards lifted by a soft shadow instead of
+ * a border, sentence-case buttons. The public site never gets these.
+ * Use the `admin:` variant for admin-only utilities.
+ */
+@custom-variant admin (&:where([data-admin], [data-admin] *));
+
+[data-admin] {
+  --radius: 12px;
+  --radius-control: 8px;
+  --shadow-admin-card: 0 1px 2px rgb(62 40 61 / 0.08), inset 0 -1px 0 rgb(62 40 61 / 0.06);
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);

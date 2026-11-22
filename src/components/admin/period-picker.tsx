@@ -9,7 +9,7 @@ import { Alert, buttonClass, cx, inputClass } from "@/components/ui/primitives";
 export function PeriodPicker({ action, period, children }: { action: string; period: Period; children?: ReactNode }) {
   return (
     <div className="mb-6 space-y-3">
-      <form action={action} className="grid gap-3 rounded-[var(--radius)] border border-line bg-surface p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto_auto] lg:items-end">
+      <form action={action} className="grid gap-3 rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto_auto] lg:items-end">
         <label className="block">
           <span className="mb-1 block text-xs font-semibold text-ink-2">Period</span>
           <select name="period" defaultValue={period.preset} className={cx(inputClass, "text-sm")}>

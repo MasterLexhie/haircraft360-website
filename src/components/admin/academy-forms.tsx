@@ -101,7 +101,7 @@ export function ProgramsManager({ programs }: { programs: ProgramRow[] }) {
       {programs.length === 0 && editing !== "new" ? (
         <p className="rounded-[var(--radius)] border border-dashed border-line-strong p-6 text-center text-sm text-ink-2">No programs yet. Add one to show it on the page.</p>
       ) : (
-        <ul className="divide-y divide-line rounded-[var(--radius)] border border-line bg-surface">
+        <ul className="divide-y divide-line rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
           {programs.map((p) => (
             <li key={p.id} className="p-4">
               {editing === p.id ? (

@@ -16,7 +16,7 @@ import { Badge, cx } from "@/components/ui/primitives";
 export function AttentionBox({ attention: a }: { attention: Attention }) {
   const count = attentionCount(a);
   return (
-    <section aria-labelledby="attention-title" className="mb-6 rounded-[var(--radius)] border border-line bg-surface">
+    <section aria-labelledby="attention-title" className="mb-6 rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
         <h2 id="attention-title" className="text-sm font-semibold text-ink">Needs your attention</h2>
         {count > 0 && <Badge tone="warning">{count}</Badge>}

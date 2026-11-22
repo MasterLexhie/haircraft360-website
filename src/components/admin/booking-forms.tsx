@@ -176,7 +176,7 @@ export function MoveTimes({ bookingId, startTimes }: { bookingId: string; startT
         <legend className="text-sm font-semibold">Free times</legend>
         <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-4">
           {startTimes.map((t) => (
-            <label key={t} className="flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius)] border border-line bg-surface text-sm font-medium tabular has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-ink">
+            <label key={t} className="flex min-h-11 cursor-pointer items-center justify-center rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] text-sm font-medium tabular has-[:checked]:border-accent has-[:checked]:bg-accent-soft has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-ink">
               <input type="radio" name="startAt" value={t} required className="sr-only" />
               {formatTime(t)}
             </label>
