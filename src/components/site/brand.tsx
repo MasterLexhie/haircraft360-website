@@ -5,18 +5,48 @@ import { cx } from "@/components/ui/primitives";
 import type { StockPhoto as StockPhotoData } from "@/config/stock-photos";
 
 /**
- * Header lock-up: the supplied pink/black badge (unaltered) + a typeset
- * wordmark — tracked caps "HAIRCRAFT" with an italic serif "360".
+ * Lock-up for the dark header and footer: the supplied pink/black badge (unaltered)
+ * and the wordmark in the Groove accent face, in the logo's pink.
  */
-export function LogoLockup({ className, href = "/", tone = "light" }: { className?: string; href?: string; tone?: "light" | "dark" }) {
+export function LogoLockup({ className, href = "/" }: { className?: string; href?: string }) {
   return (
     <Link href={href} className={cx("group inline-flex items-center gap-3 rounded-[var(--radius)]", className)} aria-label="Haircraft360 home">
-      <Image src="/brand/logo-pink-full.webp" alt="" width={569} height={571} priority className="size-11 shrink-0" />
-      <span className={cx("flex items-baseline gap-1 leading-none", tone === "light" ? "text-accent-text" : "text-on-night")}>
-        <span className="text-[0.95rem] font-semibold uppercase tracking-[0.24em] sm:text-base">Haircraft</span>
-        <span className={cx("font-display text-xl italic", tone === "dark" && "text-lilac")}>360</span>
-      </span>
+      <Image src="/brand/logo-pink-full.webp" alt="" width={569} height={571} priority className="size-10 shrink-0 rounded-full sm:size-12" />
+      <span className="font-groove text-[1.2rem] leading-none text-lilac sm:text-[1.4rem]">Haircraft360</span>
     </Link>
+  );
+}
+
+/**
+ * Round badge with words running around its edge, like the logo's sticker rim.
+ * Decorative only. `id` keeps the text path unique when two are on one page.
+ */
+export function Sticker({ id, ring, center, className, fill = "var(--color-orange)", ink = "var(--ink)" }: { id: string; ring: string; center: string; className?: string; fill?: string; ink?: string }) {
+  return (
+    <svg aria-hidden viewBox="0 0 150 150" className={className}>
+      <defs>
+        <path id={id} d="M75 75m-52,0a52,52 0 1,1 104,0a52,52 0 1,1 -104,0" />
+      </defs>
+      <circle cx="75" cy="75" r="72" fill={fill} />
+      <circle cx="75" cy="75" r="38" fill="none" stroke={ink} strokeWidth="1.5" strokeDasharray="2 5" />
+      <text fill={ink} fontFamily="var(--font-sans)" fontSize="12.5" fontWeight="700" letterSpacing="3">
+        <textPath href={`#${id}`}>{ring}</textPath>
+      </text>
+      <text x="75" y="84" textAnchor="middle" fill={ink} fontFamily="var(--font-groove)" fontSize="24">
+        {center}
+      </text>
+    </svg>
+  );
+}
+
+/** Soft wave between a light and a dark band. `flip` turns it upside down for the way back. */
+export function Wave({ from, to, flip = false }: { from: string; to: string; flip?: boolean }) {
+  return (
+    <div aria-hidden className={cx("leading-[0]", from)}>
+      <svg viewBox="0 0 1440 80" preserveAspectRatio="none" className={cx("block h-8 w-full sm:h-14", flip && "-scale-y-100", to)}>
+        <path d="M0 40 C 180 0, 360 80, 540 40 S 900 0, 1080 40 S 1260 80, 1440 40 L1440 80 L0 80 Z" fill="currentColor" />
+      </svg>
+    </div>
   );
 }
 

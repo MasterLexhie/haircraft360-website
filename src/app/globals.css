@@ -91,6 +91,16 @@
   --color-info-soft: var(--info-soft);
   --font-sans: var(--font-montserrat), ui-sans-serif, system-ui, sans-serif;
   --font-display: var(--font-playfair), ui-serif, Georgia, serif;
+  /* Public site, Studio Groove: rounded serif headings and the playful accent face. */
+  --font-serif: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-groove: var(--font-shrikhand), var(--font-fraunces), ui-serif, serif;
+  --color-cream: #fbf1e4;      /* page ground; ink 14.5:1 */
+  --color-cream-2: #f4e3cf;    /* soft section; ink-2 8.4:1 */
+  --color-cream-line: #e6d2bd;
+  --color-orange: #f4a11d;     /* fills only; ink on it 8.1:1 */
+  --color-clay: #a8481f;       /* orange-family text on cream, 5.3:1 */
+  --color-dusk: #2e1d2d;       /* header, hero, services; cream on it 15:1, orange 7.6:1 */
+  --color-dusk-deep: #241623;  /* footer */
   --shadow-card: var(--shadow-md);
   --radius-card: var(--radius);
 }
