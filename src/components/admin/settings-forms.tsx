@@ -154,7 +154,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
   const duration = (s: Service) => formatDuration(s.durationMinutes);
 
   return (
-    <section aria-labelledby="services-title" className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface">
+    <section aria-labelledby="services-title" className="overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-4">
         <div>
           <h2 id="services-title" className="flex items-center gap-2 text-base font-semibold text-ink">
@@ -232,7 +232,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
               </div>
               {open && (
                 <div id={`edit-${s.id}`} className="px-5 pb-5">
-                  <div className="rounded-[var(--radius)] border border-line bg-surface p-4 sm:p-5">
+                  <div className="rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4 sm:p-5">
                     <ServiceForm service={s} services={services} onDone={done} />
                   </div>
                 </div>
@@ -310,10 +310,10 @@ export function AvailabilityForm({ settings }: { settings: Settings }) {
         const data = new FormData(e.currentTarget);
         startTransition(() => action(data));
       }}
-      className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface"
+      className="overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]"
     >
       <div className="lg:grid lg:grid-cols-[15rem_minmax(0,1fr)]">
-        <div className="border-b border-line bg-sand/40 lg:border-b-0 lg:border-r">
+        <div className="border-b border-line lg:border-b-0 lg:border-r lg:bg-sand/40">
           <div className="hidden items-center gap-2 px-5 pb-2 pt-5 lg:flex">
             <span className="type-caps text-[0.66rem] text-ink-3">Sections</span>
           </div>
@@ -322,7 +322,7 @@ export function AvailabilityForm({ settings }: { settings: Settings }) {
             aria-label="Availability and deposit sections"
             aria-orientation="vertical"
             onKeyDown={onKeyDown}
-            className="grid grid-cols-3 gap-1 p-2 lg:flex lg:flex-col lg:p-3 lg:pt-1"
+            className="m-3 grid grid-cols-3 gap-1 rounded-xl bg-sand-2 p-1 lg:m-0 lg:flex lg:flex-col lg:rounded-none lg:bg-transparent lg:p-3 lg:pt-1"
           >
             {SECTIONS.map((s) => {
               const active = s.id === section;
@@ -338,20 +338,20 @@ export function AvailabilityForm({ settings }: { settings: Settings }) {
                   tabIndex={active ? 0 : -1}
                   onClick={() => setSection(s.id)}
                   className={cx(
-                    "group relative flex flex-col items-center gap-1.5 rounded-[var(--radius)] px-1.5 py-2 text-center transition-colors lg:flex-row lg:gap-3 lg:px-3 lg:py-2.5 lg:text-left",
-                    active ? "bg-surface shadow-[var(--shadow-sm)] ring-1 ring-line" : "hover:bg-surface/70",
+                    "group relative flex min-h-10 items-center justify-center rounded-[9px] px-1.5 text-center transition-colors lg:justify-start lg:gap-3 lg:rounded-[var(--radius)] lg:px-3 lg:py-2.5 lg:text-left",
+                    active ? "bg-surface shadow-[0_1px_2px_rgb(62_40_61/0.18)] lg:shadow-[var(--shadow-sm)] lg:ring-1 lg:ring-line" : "hover:bg-surface/70",
                   )}
                 >
                   <span
                     className={cx(
-                      "grid size-8 shrink-0 place-items-center rounded-full transition-colors",
+                      "hidden size-8 shrink-0 place-items-center rounded-full transition-colors lg:grid",
                       active ? "bg-accent text-on-accent" : "bg-surface text-ink-3 ring-1 ring-line group-hover:text-ink",
                     )}
                   >
                     <s.icon aria-hidden className="size-4" />
                   </span>
                   <span className="min-w-0">
-                    <span className={cx("block text-xs font-semibold leading-tight lg:whitespace-nowrap lg:text-sm", active ? "text-accent-text" : "text-ink-2")}>{s.label}</span>
+                    <span className={cx("block whitespace-nowrap text-[0.72rem] font-semibold leading-tight lg:text-sm", active ? "text-night lg:text-accent-text" : "text-ink-2")}>{s.label}</span>
                     <span className="hidden text-xs leading-snug text-ink-3 lg:block">{summary[s.id]}</span>
                   </span>
                   {hasError && (

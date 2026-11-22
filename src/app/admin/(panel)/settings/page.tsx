@@ -21,16 +21,17 @@ import { Skeleton, cx } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Settings" };
 
-const TABS = [
+/** `short`: the phone label, where the tabs scroll sideways. */
+const TABS: { id: string; label: string; short?: string; icon: typeof Scissors }[] = [
   { id: "services", label: "Services", icon: Scissors },
-  { id: "availability", label: "Availability & deposit", icon: Clock },
+  { id: "availability", label: "Availability & deposit", short: "Availability", icon: Clock },
   { id: "closures", label: "Closures", icon: CalendarOff },
-  { id: "programs", label: "Locs Mastery programs", icon: GraduationCap },
+  { id: "programs", label: "Locs Mastery programs", short: "Programs", icon: GraduationCap },
   { id: "messages", label: "Messages", icon: MessageSquareText },
   { id: "salon", label: "Salon details", icon: Store },
-  { id: "categories", label: "Expense categories", icon: Receipt },
-] as const;
-type TabId = (typeof TABS)[number]["id"];
+  { id: "categories", label: "Expense categories", short: "Expense types", icon: Receipt },
+];
+type TabId = "services" | "availability" | "closures" | "programs" | "messages" | "salon" | "categories";
 
 export default function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
   return (
@@ -47,31 +48,35 @@ async function SettingsView({ searchParams }: { searchParams: Promise<{ tab?: st
   const programs = tab === "programs" ? await listPrograms() : [];
   return (
     <>
-      <PageHeader title="Settings" description="Services, opening hours, closures, the deposit rule, your messages and salon details. Changes apply to new bookings only." />
+      <PageHeader phoneBack={{ href: "/admin/more", label: "More" }} title="Settings" description="Changes apply to new bookings only." />
 
-      <nav aria-label="Settings sections" className="-mx-4 mb-6 overflow-x-auto border-b border-line px-4 sm:mx-0 sm:px-0">
-        <ul className="flex min-w-max gap-1">
-          {TABS.map((t) => {
-            const active = t.id === tab;
-            return (
-              <li key={t.id}>
-                <Link
-                  href={t.id === "services" ? "/admin/settings" : `/admin/settings?tab=${t.id}`}
-                  aria-current={active ? "page" : undefined}
-                  scroll={false}
-                  className={cx(
-                    "-mb-px flex min-h-12 items-center gap-2 border-b-2 px-4 text-sm font-semibold transition-colors",
-                    active ? "border-accent text-accent-text" : "border-transparent text-ink-3 hover:border-line-strong hover:text-ink",
-                  )}
-                >
-                  <t.icon aria-hidden className="size-4" />
-                  {t.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <div className="relative -mx-4 -mt-4 mb-6 border-b border-line bg-surface md:mx-0 md:mt-0 md:rounded-[var(--radius)] md:shadow-[var(--shadow-admin-card)]">
+        <nav aria-label="Settings sections" className="overflow-x-auto px-3">
+          <ul className="flex min-w-max gap-1 pr-8">
+            {TABS.map((t) => {
+              const active = t.id === tab;
+              return (
+                <li key={t.id}>
+                  <Link
+                    href={t.id === "services" ? "/admin/settings" : `/admin/settings?tab=${t.id}`}
+                    aria-current={active ? "page" : undefined}
+                    scroll={false}
+                    className={cx(
+                      "-mb-px flex min-h-12 items-center gap-2 whitespace-nowrap border-b-[3px] px-2.5 text-[0.8125rem] font-semibold transition-colors",
+                      active ? "border-accent text-accent-text" : "border-transparent text-ink-3 hover:text-ink",
+                    )}
+                  >
+                    <t.icon aria-hidden className="size-4" />
+                    <span className="md:hidden">{t.short ?? t.label}</span>
+                    <span className="max-md:hidden">{t.label}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+        <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-r from-transparent to-surface md:rounded-r-[var(--radius)]" />
+      </div>
 
       {tab === "services" && <ServicesManager services={db.services} />}
 
