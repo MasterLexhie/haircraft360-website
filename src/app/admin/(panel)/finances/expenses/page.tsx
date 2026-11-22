@@ -55,8 +55,8 @@ async function Expenses({ searchParams }: { searchParams: Promise<Search> }) {
 
       {params.added === "1" && <Alert tone="success" role="status" className="mb-6" title="Expense added" />}
 
-      <PeriodPicker action="/admin/finances/expenses" period={period}>
-        <label className="block">
+      <PeriodPicker action="/admin/finances/expenses" period={period} keep={{ category: categoryId }}>
+        <label className="block min-w-0 flex-1 sm:max-w-[260px]">
           <span className="mb-1 block text-xs font-semibold text-ink-2">Category</span>
           <select name="category" defaultValue={categoryId ?? ""} className={cx(inputClass, "text-sm")}>
             <option value="">All categories</option>

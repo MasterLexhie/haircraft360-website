@@ -56,7 +56,7 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
 
       <PeriodPicker action="/admin/finances" period={period} />
 
-      <h2 className="mb-3 text-sm font-semibold">{period.label}</h2>
+      <h2 className="sr-only">{period.label}</h2>
       <dl className="mb-8 grid gap-3 sm:grid-cols-3">
         <Card label="Revenue" value={formatNaira(t.revenueKobo)} />
         <Card label="Expenses" value={formatNaira(t.expensesKobo)} />
