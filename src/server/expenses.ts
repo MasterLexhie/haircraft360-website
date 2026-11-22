@@ -192,3 +192,14 @@ export async function getExpense(id: string): Promise<ExpenseRow | null> {
   const e = await db.expense.findUnique({ where: { id }, include });
   return e ? toRow(e) : null;
 }
+
+/** How many expenses fall in a period (for the Expenses tab count and the Overview link). */
+export async function countExpenses(fromKey: string, toKey: string): Promise<number> {
+  return db.expense.count({ where: { deletedAt: null, date: { gte: toDate(fromKey), lte: toDate(toKey) } } });
+}
+
+/** How the last expense was paid, so the add form can start there. */
+export async function lastExpenseMethod(): Promise<PaymentMethod | null> {
+  const e = await db.expense.findFirst({ where: { deletedAt: null }, orderBy: { createdAt: "desc" }, select: { method: true } });
+  return e?.method ?? null;
+}

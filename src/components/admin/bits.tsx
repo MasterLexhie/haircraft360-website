@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ChevronLeft, Search } from "lucide-react";
+import { ChevronLeft, Search, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type { Booking, Payment } from "@/domain/types";
 import { bookingStatusLabel, paymentSummaryLabel } from "@/domain/labels";
@@ -36,6 +36,7 @@ export function PageHeader({
   back,
   phoneBack,
   phoneActions = true,
+  closeIcon = false,
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -44,6 +45,8 @@ export function PageHeader({
   phoneBack?: { href: string; label: string };
   /** Set false when the page shows its actions somewhere else on a phone. */
   phoneActions?: boolean;
+  /** A full-screen task (like adding an expense): the phone header shows × instead of a back arrow. */
+  closeIcon?: boolean;
 }) {
   const up = back ?? phoneBack;
   return (
@@ -52,8 +55,8 @@ export function PageHeader({
         <div className="flex items-start gap-2.5">
           {up ? (
             <Link href={up.href} className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-on-night/10 hover:bg-on-night/15">
-              <ChevronLeft aria-hidden className="size-[18px]" />
-              <span className="sr-only">Back to {up.label}</span>
+              {closeIcon ? <X aria-hidden className="size-[18px]" /> : <ChevronLeft aria-hidden className="size-[18px]" />}
+              <span className="sr-only">{closeIcon ? `Close, back to ${up.label}` : `Back to ${up.label}`}</span>
             </Link>
           ) : (
             <Image src="/brand/logo-pink-full.webp" alt="" width={569} height={571} className="mt-1 size-8 shrink-0" />

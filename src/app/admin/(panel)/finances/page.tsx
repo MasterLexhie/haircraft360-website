@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Suspense } from "react";
-import { ChevronRight, Plus, Receipt } from "lucide-react";
+import { Suspense, type ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { requireAdmin } from "@/server/auth";
 import { requestNow } from "@/server/queries";
 import { dailyTotals } from "@/server/finances";
+import { countExpenses } from "@/server/expenses";
+import { EXPENSES_PATH, FINANCES_PATH, financeHref } from "@/domain/finance-nav";
 import { resolvePeriod } from "@/domain/periods";
 import { formatNaira } from "@/lib/money";
 import { formatDateKey, lagosDateKey } from "@/lib/time";
 import { PageHeader } from "@/components/admin/bits";
 import { PeriodPicker } from "@/components/admin/period-picker";
+import { AddExpenseButton, FinanceActionBar, FinanceTabs } from "@/components/admin/finance-tabs";
 import { Pagination } from "@/components/admin/pagination";
 import { pageHref, paginate } from "@/domain/paginate";
-import { Skeleton, buttonClass, cx } from "@/components/ui/primitives";
+import { Skeleton, cx } from "@/components/ui/primitives";
 
 export const metadata: Metadata = { title: "Finances" };
 
@@ -32,35 +35,39 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
   await requireAdmin();
   const [params, nowMs] = await Promise.all([searchParams, requestNow()]);
   const period = resolvePeriod(lagosDateKey(nowMs), params);
-  const t = await dailyTotals(period.fromKey, period.toKey);
+  const [t, expenseCount] = await Promise.all([dailyTotals(period.fromKey, period.toKey), countExpenses(period.fromKey, period.toKey)]);
   const paged = paginate(t.days, params.page, DAYS_PER_PAGE);
-  const hrefFor = (n: number) => pageHref("/admin/finances", { period: params.period, from: params.from, to: params.to }, n);
+  const periodParams = { period: params.period, from: params.from, to: params.to };
+  const hrefFor = (n: number) => pageHref(FINANCES_PATH, periodParams, n);
+  const here = financeHref(FINANCES_PATH, periodParams);
 
   return (
     <>
       <PageHeader
         phoneBack={{ href: "/admin/more", label: "More" }}
         title="Finances"
-        description="Revenue is money received from customers. Expenses are money paid out. Net is what's left."
-        actions={
-          <>
-            <Link href="/admin/finances/expenses/new" className={buttonClass("night", "md")}>
-              <Plus aria-hidden className="size-4" /> Add expense
-            </Link>
-            <Link href="/admin/finances/expenses" className={buttonClass("secondary", "md")}>
-              <Receipt aria-hidden className="size-4" /> Expenses
-            </Link>
-          </>
-        }
+        description="Money in, money out, and what's left."
+        actions={<AddExpenseButton back={here} />}
+        phoneActions={false}
       />
+      <FinanceTabs active="overview" period={periodParams} expenseCount={expenseCount} />
 
-      <PeriodPicker action="/admin/finances" period={period} />
+      <PeriodPicker action={FINANCES_PATH} period={period} />
 
       <h2 className="sr-only">{period.label}</h2>
       <dl className="mb-8 grid gap-3 sm:grid-cols-3">
-        <Card label="Revenue" value={formatNaira(t.revenueKobo)} />
-        <Card label="Expenses" value={formatNaira(t.expensesKobo)} />
-        <Card label="Net" value={formatNaira(t.netKobo)} tone={t.netKobo < 0 ? "text-danger" : "text-success"} />
+        <Card label="Revenue" value={formatNaira(t.revenueKobo)} hint="Money received from customers" />
+        <Card
+          label="Expenses"
+          value={formatNaira(t.expensesKobo)}
+          hint={
+            <Link href={financeHref(EXPENSES_PATH, periodParams)} className="inline-flex min-h-8 items-center gap-1 font-semibold text-accent-text underline-offset-4 hover:underline">
+              {expenseCount === 0 ? "None yet, see Expenses" : `See ${expenseCount} ${expenseCount === 1 ? "item" : "items"}`}
+              <ChevronRight aria-hidden className="size-3.5" />
+            </Link>
+          }
+        />
+        <Card label="Net" value={formatNaira(t.netKobo)} hint="Revenue minus expenses" night negative={t.netKobo < 0} />
       </dl>
 
       {/* Desktop table */}
@@ -127,15 +134,17 @@ async function Finances({ searchParams }: { searchParams: Promise<Search> }) {
       </ul>
 
       <Pagination label="Finance days pages" noun="days" {...paged} hrefFor={hrefFor} />
+      <FinanceActionBar back={here} />
     </>
   );
 }
 
-function Card({ label, value, tone }: { label: string; value: string; tone?: string }) {
+function Card({ label, value, hint, night, negative }: { label: string; value: string; hint?: ReactNode; night?: boolean; negative?: boolean }) {
   return (
-    <div className="rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)] p-4">
-      <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-ink-3">{label}</dt>
-      <dd className={cx("mt-1 font-display text-3xl tabular", tone)}>{value}</dd>
+    <div className={cx("rounded-[var(--radius)] p-4", night ? "on-night bg-night text-on-night" : "bg-surface shadow-[var(--shadow-admin-card)]")}>
+      <dt className={cx("text-xs font-semibold uppercase tracking-[0.12em]", night ? "text-on-night-2" : "text-ink-3")}>{label}</dt>
+      <dd className={cx("mt-1 font-display text-3xl tabular", negative && (night ? "text-[#ffb4b4]" : "text-danger"))}>{value}</dd>
+      {hint && <dd className={cx("mt-1 text-xs", night ? "text-on-night-2" : "text-ink-3")}>{hint}</dd>}
     </div>
   );
 }

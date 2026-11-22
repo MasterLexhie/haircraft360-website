@@ -11,6 +11,7 @@ import { logoutAction } from "../auth-actions";
  * - Phone: each page's own plum header (PageHeader) and a bottom bar with More.
  * - Tablet: plum top bar and an icon rail.
  * - Desktop: plum top bar and the full sidebar on the grey workspace.
+ * A full-screen task (<FocusScreen />) hides the phone bottom bar.
  * `data-admin` switches the shared components to the admin look (see globals.css).
  */
 export default function AdminPanelLayout({ children }: { children: React.ReactNode }) {
@@ -30,7 +31,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
             <main className="mx-auto max-w-6xl px-4 pb-8 md:px-6 md:py-8">{children}</main>
           </div>
 
-          <div className="shrink-0 border-t border-line bg-surface px-1 pt-1.5 md:hidden" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
+          <div className="shrink-0 border-t border-line bg-surface px-1 pt-1.5 in-data-[focus-screen]:hidden md:hidden" style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}>
             <Suspense fallback={<AdminNavList variant="bottom" counts={NO_COUNTS} pathname={null} />}>
               <BottomBar />
             </Suspense>

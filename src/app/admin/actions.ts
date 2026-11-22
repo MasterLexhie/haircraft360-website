@@ -36,7 +36,7 @@ import { z } from "zod";
 import type { PaymentMethod } from "@/domain/types";
 import { capacityByWeekdaySchema, parseSalonDetailsInput, parseTemplatesInput, weeklyHoursSchema, type CapacityByWeekday, type WeekdayKey, type WeeklyHours } from "@/domain/settings";
 
-export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string; whatsappUrl?: string; sendVia?: "whatsapp" | "sms" } | null;
+export type ActionState = { ok?: boolean; message?: string; error?: string; fieldErrors?: Record<string, string>; link?: string; id?: string; whatsappUrl?: string; sendVia?: "whatsapp" | "sms" } | null;
 
 function fail(err: unknown): ActionState {
   if (err instanceof BookingError) return { error: err.message, fieldErrors: err.fieldErrors };
@@ -260,10 +260,14 @@ export async function expenseSaveAction(expenseIdRaw: string | null, _: ActionSt
     note: String(formData.get("note") ?? ""),
   };
   try {
-    if (expenseId) await updateExpense(expenseId, input, actor);
-    else await createExpense(input, actor);
+    if (expenseId) {
+      await updateExpense(expenseId, input, actor);
+      refresh();
+      return { ok: true, message: "Expense saved." };
+    }
+    const id = await createExpense(input, actor);
     refresh();
-    return { ok: true, message: expenseId ? "Expense saved." : "Expense added." };
+    return { ok: true, message: "Expense added.", id };
   } catch (e) {
     return fail(e);
   }

@@ -5,6 +5,7 @@ import { requireAdmin } from "@/server/auth";
 import { requestNow } from "@/server/queries";
 import { activeExpenseCategories, getExpense } from "@/server/expenses";
 import { recordId } from "@/domain/schemas";
+import { EXPENSES_PATH } from "@/domain/finance-nav";
 import { lagosDateKey } from "@/lib/time";
 import { PageHeader, Panel } from "@/components/admin/bits";
 import { DeleteExpense, ExpenseForm } from "@/components/admin/expense-forms";
@@ -32,7 +33,7 @@ async function EditExpense({ params }: { params: Promise<{ id: string }> }) {
 
   return (
     <>
-      <PageHeader back={{ href: "/admin/finances/expenses", label: "Expenses" }} title="Edit expense" />
+      <PageHeader back={{ href: EXPENSES_PATH, label: "Expenses" }} title="Edit expense" />
       {expense.deletedAt ? (
         <Alert tone="warning" title="This expense was deleted">
           It no longer counts in the totals. The activity log keeps its record.
@@ -40,7 +41,7 @@ async function EditExpense({ params }: { params: Promise<{ id: string }> }) {
       ) : (
         <div className="space-y-6">
           <Panel>
-            <ExpenseForm expense={expense} categories={categories} todayKey={lagosDateKey(nowMs)} />
+            <ExpenseForm expense={expense} categories={categories} todayKey={lagosDateKey(nowMs)} back={EXPENSES_PATH} />
           </Panel>
           <Panel>
             <DeleteExpense id={expense.id} />
