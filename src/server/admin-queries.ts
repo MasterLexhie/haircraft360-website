@@ -7,7 +7,7 @@ import { balanceDue, paidKobo, paymentSummaryState } from "@/domain/pricing";
 import { paginate, type PageOf } from "@/domain/paginate";
 import { bookingStatusLabel } from "@/domain/labels";
 import { isValidDateKey } from "@/lib/time";
-import { addDays, lagosToUtcMs } from "@/lib/time";
+import { addDays, lagosDateKey, lagosToUtcMs } from "@/lib/time";
 import { db } from "./db";
 import { toAuditEvent, toBooking, toCustomer, toPayment, toService } from "./mappers";
 import { loadSettings } from "./settings";
@@ -99,26 +99,42 @@ export async function getAdminSettings(): Promise<{ services: Service[]; setting
 
 // Bookings list
 
+export type BookingWhen = "upcoming" | "today" | "past" | "all";
+export const BOOKING_WHEN: BookingWhen[] = ["upcoming", "today", "past", "all"];
+
 export interface BookingFilters {
   q?: string;
   status?: string;
   payment?: string;
   from?: string;
   to?: string;
+  /** Time window. Upcoming and Today list soonest first; Past and All list newest first. Missing means all. */
+  when?: string;
 }
 
 export interface BookingList extends PageOf<AdminBookingRow> {
   /** Every booking in the system, for "X of Y". */
   allCount: number;
+  /** Matches for each status under the other filters, for the status tabs. */
+  statusCounts: Record<BookingStatus, number>;
   /** Over every match, not just this page. */
   totalPaidKobo: number;
   /** Only completed appointments owe a balance; confirmed ones pay theirs on the day. */
   totalBalanceKobo: number;
 }
 
-function bookingWhere(f: BookingFilters): Prisma.BookingWhereInput {
+function whenOf(f: BookingFilters): BookingWhen {
+  return BOOKING_WHEN.includes(f.when as BookingWhen) ? (f.when as BookingWhen) : "all";
+}
+
+/** Everything except the status, which the status tabs count across. */
+function bookingWhere(f: BookingFilters, nowMs: number): Prisma.BookingWhereInput {
   const and: Prisma.BookingWhereInput[] = [];
-  if (f.status) and.push(f.status in bookingStatusLabel ? { status: f.status as BookingStatus } : { id: { in: [] } });
+  const when = whenOf(f);
+  const today = lagosDateKey(nowMs);
+  if (when === "upcoming") and.push({ startAt: { gte: new Date(nowMs) } });
+  if (when === "past") and.push({ startAt: { lt: new Date(nowMs) } });
+  if (when === "today") and.push({ startAt: lagosDayRange(today, today) });
   const from = f.from && isValidDateKey(f.from) ? f.from : undefined;
   const to = f.to && isValidDateKey(f.to) ? f.to : undefined;
   if (from) and.push({ startAt: { gte: lagosDayRange(from, from).gte } });
@@ -139,19 +155,22 @@ function bookingWhere(f: BookingFilters): Prisma.BookingWhereInput {
   return { AND: and };
 }
 
-export async function listAdminBookings(f: BookingFilters, pageParam: string | undefined, pageSize: number): Promise<BookingList> {
+export async function listAdminBookings(f: BookingFilters, pageParam: string | undefined, pageSize: number, nowMs = Date.now()): Promise<BookingList> {
   await connection();
-  const where = bookingWhere(f);
-  // A light pass over every match: enough for the payment filter, the totals and the page count.
+  const soonestFirst = whenOf(f) === "upcoming" || whenOf(f) === "today";
+  // A light pass over every match: enough for the status tabs, the payment filter, the totals and the page count.
   const [light, allCount] = await Promise.all([
     db.booking.findMany({
-      where,
+      where: bookingWhere(f, nowMs),
       select: { id: true, status: true, totalKobo: true, payments: { select: { status: true, amountKobo: true } } },
-      orderBy: [{ startAt: "desc" }, { id: "asc" }],
+      orderBy: [{ startAt: soonestFirst ? "asc" : "desc" }, { id: "asc" }],
     }),
     db.booking.count(),
   ]);
-  const matching = f.payment ? light.filter((b) => paymentSummaryState(b, b.payments) === f.payment) : light;
+  const byPayment = f.payment ? light.filter((b) => paymentSummaryState(b, b.payments) === f.payment) : light;
+  const statusCounts = Object.fromEntries(Object.keys(bookingStatusLabel).map((k) => [k, 0])) as Record<BookingStatus, number>;
+  for (const b of byPayment) statusCounts[b.status as BookingStatus] += 1;
+  const matching = f.status ? byPayment.filter((b) => b.status === f.status) : byPayment;
   const totalPaidKobo = matching.reduce((s, b) => s + paidKobo(b.payments), 0);
   const totalBalanceKobo = matching.filter((b) => b.status === "completed").reduce((s, b) => s + balanceDue(b, b.payments), 0);
 
@@ -159,7 +178,7 @@ export async function listAdminBookings(f: BookingFilters, pageParam: string | u
   const ids = page.items.map((b) => b.id);
   const rows = ids.length ? await adminRows({ id: { in: ids } }) : [];
   const byId = new Map(rows.map((r) => [r.booking.id, r]));
-  return { ...page, items: ids.map((id) => byId.get(id)!), allCount, totalPaidKobo, totalBalanceKobo };
+  return { ...page, items: ids.map((id) => byId.get(id)!), allCount, statusCounts, totalPaidKobo, totalBalanceKobo };
 }
 
 // Dashboard

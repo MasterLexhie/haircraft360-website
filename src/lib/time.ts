@@ -79,6 +79,16 @@ export function formatLongDate(at: string | number | Date): string {
 export function formatShortDate(at: string | number | Date): string {
   return shortDateFmt.format(new Date(at));
 }
+const dayHeadingFmt = new Intl.DateTimeFormat("en-NG", {
+  timeZone: SALON_TZ,
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+/** "Mon 23 Nov": day headings in admin lists. */
+export function formatDayHeading(at: string | number | Date): string {
+  return dayHeadingFmt.format(new Date(at)).replace(",", "");
+}
 export function formatTime(at: string | number | Date): string {
   return timeFmt.format(new Date(at)).replace(/\s?([ap])\.?m\.?/i, (_, p) => ` ${p.toLowerCase()}m`);
 }
