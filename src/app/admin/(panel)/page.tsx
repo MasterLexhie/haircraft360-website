@@ -63,8 +63,6 @@ async function Dashboard() {
     <>
       <PageHeader title="Dashboard" description={`${formatDateTime(nowMs)} (Ibadan time)`} />
 
-      <AttentionBox attention={attention} />
-
       <section aria-labelledby="month-title" className="mb-6">
         <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
           <h2 id="month-title" className="type-caps text-[0.78rem] text-accent-text">{monthName} so far</h2>
@@ -137,6 +135,8 @@ async function Dashboard() {
               </ul>
             )}
           </Panel>
+
+          <AttentionBox attention={attention} />
 
           <Panel title={`Popular services, ${monthName}`}>
             {popular.length === 0 ? (

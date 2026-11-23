@@ -13,10 +13,10 @@ import { Badge, cx } from "@/components/ui/primitives";
  * plain words and offers the one thing the owner can do about it. Nothing to do: "All messages
  * delivered".
  */
-export function AttentionBox({ attention: a }: { attention: Attention }) {
+export function AttentionBox({ attention: a, className }: { attention: Attention; className?: string }) {
   const count = attentionCount(a);
   return (
-    <section aria-labelledby="attention-title" className="mb-6 rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]">
+    <section aria-labelledby="attention-title" className={cx("@container rounded-[var(--radius)] bg-surface shadow-[var(--shadow-admin-card)]", className)}>
       <div className="flex items-center justify-between gap-3 border-b border-line px-4 py-3 sm:px-5">
         <h2 id="attention-title" className="text-sm font-semibold text-ink">Needs your attention</h2>
         {count > 0 && <Badge tone="warning">{count}</Badge>}
@@ -50,7 +50,7 @@ export function AttentionBox({ attention: a }: { attention: Attention }) {
               icon={<MailX />}
               title="Couldn't reach this customer by email"
               action={
-                <div className="flex flex-col gap-2 sm:items-end">
+                <div className="flex flex-col gap-2 @xl:items-end">
                   <WhatsappSend message={m} />
                   <Link href={`/admin/bookings/${m.bookingId}#messages`} className="inline-flex min-h-10 items-center text-sm font-semibold underline">
                     Fix the email
@@ -66,7 +66,7 @@ export function AttentionBox({ attention: a }: { attention: Attention }) {
               The daily email limit was reached. These go out by email after it resets, or send them on WhatsApp now.
               <ul className="mt-3 space-y-3">
                 {a.delayed.map((m) => (
-                  <li key={m.id} className="flex flex-col gap-2 rounded-[var(--radius)] border border-line p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <li key={m.id} className="flex flex-col gap-2 rounded-[var(--radius)] border border-line p-3 @lg:flex-row @lg:items-center @lg:justify-between">
                     <span className="text-sm text-ink"><MessageLine message={m} /></span>
                     <WhatsappSend message={m} />
                   </li>
@@ -135,7 +135,7 @@ const toneIcon = { danger: "text-danger", warning: "text-warning", info: "text-i
 
 function Row({ tone, icon, title, action, children }: { tone: keyof typeof toneIcon; icon: ReactNode; title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <li className="flex flex-col gap-3 px-4 py-4 sm:px-5 lg:flex-row lg:items-start lg:justify-between">
+    <li className="flex flex-col gap-3 px-4 py-4 sm:px-5 @xl:flex-row @xl:items-start @xl:justify-between">
       <div className="flex min-w-0 gap-3">
         <span aria-hidden className={cx("mt-0.5 shrink-0 [&>svg]:size-5", toneIcon[tone])}>{icon}</span>
         <div className="min-w-0 text-sm text-ink-2">
@@ -143,7 +143,7 @@ function Row({ tone, icon, title, action, children }: { tone: keyof typeof toneI
           <div className="mt-0.5">{children}</div>
         </div>
       </div>
-      {action && <div className="shrink-0 pl-8 lg:pl-0">{action}</div>}
+      {action && <div className="shrink-0 pl-8 @xl:pl-0">{action}</div>}
     </li>
   );
 }
