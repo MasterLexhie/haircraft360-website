@@ -7,7 +7,7 @@ import { formatNaira } from "@/lib/money";
 import { lagosDateKey } from "@/lib/time";
 import { listPublicPrograms, type ProgramRow } from "@/server/academy";
 import { requestNow } from "@/server/queries";
-import { StockPhoto, Sticker, Wave } from "@/components/site/brand";
+import { StockPhoto, Sticker } from "@/components/site/brand";
 import { IconTile, Kicker, PageIntro, Strip, Title, wrap } from "@/components/site/groove";
 import { pill } from "@/components/site/pill";
 import { MobileBarReveal } from "@/components/site/mobile-bar-reveal";
@@ -359,8 +359,7 @@ function ApplyBar() {
 function Closing() {
   return (
     <>
-      <Wave from="bg-bg" to="text-dusk" />
-      <section aria-labelledby="lm-cta-title" className="on-night bg-dusk pb-14 pt-8 text-on-night sm:pb-22 sm:pt-14">
+      <section aria-labelledby="lm-cta-title" className="on-night bg-dusk py-14 text-on-night sm:py-22">
         <div className={cx(wrap, "flex flex-col justify-between gap-8 md:flex-row md:items-center")}>
           <div>
             <h2 id="lm-cta-title" className="max-w-[720px] font-serif text-[2.25rem] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-[3.25rem]">
