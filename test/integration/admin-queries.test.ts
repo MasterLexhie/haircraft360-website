@@ -172,16 +172,17 @@ describe("dashboard", () => {
     const nowMs = Date.now();
     const today = lagosDateKey(nowMs);
     const later = await make({ at: new Date(nowMs + 60_000).toISOString() });
-    await make({ daysAhead: 3 });
-    await make({ daysAhead: 9 });
+    const inThree = await make({ daysAhead: 3 });
+    const inNine = await make({ daysAhead: 9 });
     await make({ daysAhead: 2, status: "pending" });
     await make({ daysAhead: 1, status: "cancelled" });
     const d = await q.getDashboard(nowMs, today);
     expect(d.upcomingCount).toBe(2);
     expect(d.awaitingCount).toBe(1);
-    expect(d.nextUp.map((r) => r.booking.status)).toEqual(["confirmed", "confirmed", "confirmed"]);
-    expect(d.nextUp[0]!.booking.id).toBe(later.id);
-    expect(d.todays.map((r) => r.booking.id)).toEqual(lagosDateKey(later.startAt) === today ? [later.id] : []);
+    // Coming up starts tomorrow, so it never repeats today's appointments.
+    const laterIsToday = lagosDateKey(later.startAt) === today;
+    expect(d.nextUp.map((r) => r.booking.id)).toEqual(laterIsToday ? [inThree.id, inNine.id] : [later.id, inThree.id, inNine.id]);
+    expect(d.todays.map((r) => r.booking.id)).toEqual(laterIsToday ? [later.id] : []);
   });
 
   it("gives this month's appointments with new or returning", async () => {

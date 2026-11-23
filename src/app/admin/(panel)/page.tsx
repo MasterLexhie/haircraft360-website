@@ -111,8 +111,8 @@ async function Dashboard() {
           <Panel title="Today's schedule">
             {todays.length === 0 ? <EmptyState title="No appointments today">Upcoming confirmed bookings are listed below.</EmptyState> : <ScheduleList rows={todays} />}
           </Panel>
-          <Panel title="Coming up" action={<Link href="/admin/bookings?status=confirmed" className="text-sm font-semibold underline">All</Link>}>
-            {nextUp.length === 0 ? <EmptyState title="Nothing upcoming yet">New online bookings appear here once their deposit is paid.</EmptyState> : <ScheduleList rows={nextUp} showDate />}
+          <Panel title="Coming up, from tomorrow" action={<Link href="/admin/bookings?status=confirmed" className="text-sm font-semibold underline">All</Link>}>
+            {nextUp.length === 0 ? <EmptyState title="Nothing booked from tomorrow yet">New online bookings appear here once their deposit is paid.</EmptyState> : <ScheduleList rows={nextUp} showDate />}
           </Panel>
         </div>
 

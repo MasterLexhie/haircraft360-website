@@ -226,7 +226,8 @@ export async function getDashboard(nowMs: number, today: string): Promise<Dashbo
 
   const [todays, nextUp, upcomingCount, awaitingCount, unpaidIds, monthRows] = await Promise.all([
     adminRows({ status: { in: ["confirmed", "completed"] }, startAt: todayRange }),
-    adminRows({ status: "confirmed", startAt: { gt: now } }, 5),
+    // From tomorrow, so it never repeats Today's schedule.
+    adminRows({ status: "confirmed", startAt: { gte: lagosDayRange(addDays(today, 1), addDays(today, 1)).gte } }, 5),
     db.booking.count({ where: { status: "confirmed", startAt: { gt: now, lt: weekRange.lt } } }),
     db.booking.count({ where: { status: "pending_payment", holdExpiresAt: { gt: now } } }),
     unpaidCompletedIds(),

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { AlertCircle, ArrowRight, CalendarClock, CheckCircle2, Clock, GraduationCap, MailX, MessageCircle, Wrench } from "lucide-react";
+import { AlertCircle, ArrowRight, ChevronDown, CalendarClock, CheckCircle2, Clock, GraduationCap, MailX, MessageCircle, Wrench } from "lucide-react";
 import type { Attention, AttentionBooking } from "@/server/attention";
 import type { ManualMessage } from "@/server/whatsapp-messages";
 import { formatDateTime, formatShortDate, formatTime } from "@/lib/time";
@@ -50,7 +50,7 @@ export function AttentionBox({ attention: a, className }: { attention: Attention
               icon={<MailX />}
               title="Couldn't reach this customer by email"
               action={
-                <div className="flex flex-col gap-2 @xl:items-end">
+                <div className="flex flex-col items-start gap-2">
                   <WhatsappSend message={m} />
                   <Link href={`/admin/bookings/${m.bookingId}#messages`} className="inline-flex min-h-10 items-center text-sm font-semibold underline">
                     Fix the email
@@ -133,17 +133,24 @@ export function AttentionBox({ attention: a, className }: { attention: Attention
 
 const toneIcon = { danger: "text-danger", warning: "text-warning", info: "text-info" } as const;
 
+/**
+ * One item, folded like an FAQ: the title shows, and opening it gives the detail and the action.
+ * A native <details>, so it works without JavaScript and with the keyboard.
+ */
 function Row({ tone, icon, title, action, children }: { tone: keyof typeof toneIcon; icon: ReactNode; title: string; action?: ReactNode; children: ReactNode }) {
   return (
-    <li className="flex flex-col gap-3 px-4 py-4 sm:px-5 @xl:flex-row @xl:items-start @xl:justify-between">
-      <div className="flex min-w-0 gap-3">
-        <span aria-hidden className={cx("mt-0.5 shrink-0 [&>svg]:size-5", toneIcon[tone])}>{icon}</span>
-        <div className="min-w-0 text-sm text-ink-2">
-          <p className="font-semibold text-ink">{title}</p>
-          <div className="mt-0.5">{children}</div>
+    <li>
+      <details className="group">
+        <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 hover:bg-sand/50 sm:px-5 [&::-webkit-details-marker]:hidden">
+          <span aria-hidden className={cx("shrink-0 [&>svg]:size-5", toneIcon[tone])}>{icon}</span>
+          <span className="min-w-0 flex-1 text-sm font-semibold text-ink">{title}</span>
+          <ChevronDown aria-hidden className="size-4 shrink-0 text-ink-3 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="space-y-3 px-4 pb-4 pl-12 text-sm text-ink-2 sm:px-5 sm:pl-[3.25rem]">
+          <div>{children}</div>
+          {action && <div>{action}</div>}
         </div>
-      </div>
-      {action && <div className="shrink-0 pl-8 @xl:pl-0">{action}</div>}
+      </details>
     </li>
   );
 }
