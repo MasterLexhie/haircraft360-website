@@ -283,9 +283,11 @@ select:not([multiple]):not([size]) {
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
 }
+/* A plain rectangle wipe: the photo's own rounded frame does the shaping, so the arch's curve
+   and border show in full on every screen size once it ends. */
 @keyframes arch-in {
-  from { clip-path: inset(100% 0 0 0 round 280px 280px 24px 24px); }
-  to { clip-path: inset(0 0 0 0 round 280px 280px 24px 24px); }
+  from { clip-path: inset(100% 0 0 0); }
+  to { clip-path: inset(0 0 0 0); }
 }
 @keyframes pop-in {
   from { opacity: 0; transform: scale(0.6) rotate(-40deg); }
