@@ -44,12 +44,15 @@ export function BookingWizard({
   services,
   settings,
   initialServiceId,
+  initialAddOnIds = [],
   customerPaysFees,
   salonPhone,
 }: {
   services: Service[];
   settings: Pick<Settings, "availability" | "deposit">;
   initialServiceId: string | null;
+  /** Extras chosen before arriving (from "An example visit" on the home page). Kept only if the service offers them. */
+  initialAddOnIds?: string[];
   /** Paystack adds its fee to the charge, so the review step shows it. */
   customerPaysFees: boolean;
   /** From Settings; null when the owner hasn't added one. */
@@ -60,7 +63,10 @@ export function BookingWizard({
   const byId = useMemo(() => new Map(services.map((s) => [s.id, s])), [services]);
   const [step, setStep] = useState(0);
   const [mainId, setMainId] = useState<string | null>(initialServiceId && mains.some((s) => s.id === initialServiceId) ? initialServiceId : null);
-  const [addOnIds, setAddOnIds] = useState<string[]>([]);
+  const [addOnIds, setAddOnIds] = useState<string[]>(() => {
+    const first = initialServiceId ? services.find((s) => s.id === initialServiceId && s.bookableAlone) : undefined;
+    return first ? [...new Set(initialAddOnIds)].filter((id) => first.addOnIds.includes(id) && services.some((s) => s.id === id && s.availableAsAddOn)) : [];
+  });
   const [dateKey, setDateKey] = useState<string | null>(null);
   const [startAt, setStartAt] = useState<string | null>(null);
   const [contact, setContact] = useState<Contact>(EMPTY_CONTACT);

@@ -276,3 +276,28 @@ select:not([multiple]):not([size]) {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ── Home hero entrance ─────────────────────────────────────── */
+/* Short, once, transform and fade only. The headline never animates, so the page's main text
+   paints at once. The global reduced-motion rule above cuts these to nothing. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+}
+@keyframes arch-in {
+  from { clip-path: inset(100% 0 0 0 round 280px 280px 24px 24px); }
+  to { clip-path: inset(0 0 0 0 round 280px 280px 24px 24px); }
+}
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.6) rotate(-40deg); }
+}
+.rise {
+  animation: rise 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: var(--rise-delay, 0ms);
+}
+.arch-in {
+  animation: arch-in 760ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.pop-in {
+  animation: pop-in 520ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
+  animation-delay: var(--rise-delay, 0ms);
+}

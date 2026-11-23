@@ -8,7 +8,7 @@ import { customerPaysFees } from "@/server/payments/paystack";
 
 export const metadata: Metadata = { title: "Book an appointment" };
 
-export default function BookPage({ searchParams }: { searchParams: Promise<{ service?: string }> }) {
+export default function BookPage({ searchParams }: { searchParams: Promise<{ service?: string; addons?: string }> }) {
   return (
     <Suspense fallback={<WizardSkeleton />}>
       <Wizard searchParams={searchParams} />
@@ -16,7 +16,7 @@ export default function BookPage({ searchParams }: { searchParams: Promise<{ ser
   );
 }
 
-async function Wizard({ searchParams }: { searchParams: Promise<{ service?: string }> }) {
+async function Wizard({ searchParams }: { searchParams: Promise<{ service?: string; addons?: string }> }) {
   const [{ services, settings }, params, salon] = await Promise.all([getBookingConfig(), searchParams, getSalon()]);
   if (!services.some((s) => s.bookableAlone)) {
     return (
@@ -29,7 +29,7 @@ async function Wizard({ searchParams }: { searchParams: Promise<{ service?: stri
       </div>
     );
   }
-  return <BookingWizard services={services} settings={{ availability: settings.availability, deposit: settings.deposit }} initialServiceId={params.service ?? null} customerPaysFees={customerPaysFees()} salonPhone={salon.phone} />;
+  return <BookingWizard services={services} settings={{ availability: settings.availability, deposit: settings.deposit }} initialServiceId={params.service ?? null} initialAddOnIds={params.addons?.split(",").slice(0, 10) ?? []} customerPaysFees={customerPaysFees()} salonPhone={salon.phone} />;
 }
 
 function WizardSkeleton() {

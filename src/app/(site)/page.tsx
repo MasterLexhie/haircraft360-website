@@ -4,7 +4,6 @@ import { Suspense } from "react";
 import { ArrowRight, Camera, Check, Clock, GraduationCap, MapPin, MessageCircle, Navigation, Scissors, ShieldCheck, Sparkles } from "lucide-react";
 import { getActiveServices, getPublicSettings, getSalon } from "@/server/queries";
 import { hoursSummary } from "@/domain/salon";
-import { addOnTerms } from "@/domain/pricing";
 import type { Service } from "@/domain/types";
 import type { WeekdayKey } from "@/domain/settings";
 import { describeDepositRule } from "@/components/booking/booking-summary";
@@ -12,6 +11,8 @@ import { Sticker, Wave } from "@/components/site/brand";
 import { pill } from "@/components/site/pill";
 import { Kicker, Strip, Title, wrap } from "@/components/site/groove";
 import { ServicePhoto } from "@/components/site/service-photo";
+import { VisitCard } from "@/components/site/visit-card";
+import { MobileBarReveal } from "@/components/site/mobile-bar-reveal";
 import { HERO_PHOTO, GALLERY_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
 import { Skeleton, cx } from "@/components/ui/primitives";
 import { formatNaira } from "@/lib/money";
@@ -78,16 +79,16 @@ function Hero() {
       <div aria-hidden className="absolute -right-28 top-4 size-[300px] rounded-full bg-accent md:-right-36 md:-top-24 md:size-[640px]" />
       <div className={cx(wrap, "relative grid items-center gap-8 pb-10 pt-2 md:grid-cols-[1.05fr_1fr] md:gap-14 md:pb-20 md:pt-12")}>
         <div className="order-2 md:order-1">
-          <p className="inline-flex items-center gap-2.5 rounded-full bg-lilac/15 px-4 py-2 text-sm font-semibold text-lilac">
+          <p className="rise inline-flex items-center gap-2.5 rounded-full bg-lilac/15 px-4 py-2 text-sm font-semibold text-lilac">
             <Sparkles aria-hidden className="size-4" /> Locs and nails, under one roof
           </p>
           <h1 id="hero-title" className="mt-5 font-serif text-[2.6rem] font-semibold leading-[1.02] tracking-[-0.03em] sm:text-[3.6rem] lg:text-[4.75rem]">
             Healthy locs and neat nails, done with <em className="font-normal text-orange">care.</em>
           </h1>
-          <p className="mt-5 max-w-[500px] text-base text-on-night-2 sm:text-lg">
+          <p className="rise mt-5 max-w-[500px] text-base text-on-night-2 [--rise-delay:120ms] sm:text-lg">
             From your first starter locs to a fresh pedicure, every client gets our full, unhurried attention and work you will be proud to show off.
           </p>
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+          <div id="hero-actions" className="rise mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 [--rise-delay:220ms]">
             <Link href="#services" className={pill("pink")}>
               See our services <ArrowRight aria-hidden className="size-4" />
             </Link>
@@ -101,6 +102,7 @@ function Hero() {
         </div>
 
         <div className="relative order-1 pl-6 md:order-2 md:pl-10">
+          <div className="arch-in">
           <Photo
             photo={HERO_PHOTO}
             sizes="(min-width: 768px) 45vw, 90vw"
@@ -109,8 +111,9 @@ function Hero() {
             imgClassName="object-[center_20%]"
             labelClassName="bottom-3 left-3 md:bottom-4 md:left-auto md:right-4"
           />
-          <Sticker id="hero-sticker" ring="LOCS · NAILS · LOCS · NAILS · " center="360" className="absolute left-0 top-3 size-[88px] -rotate-[14deg] md:top-8 md:size-[132px]" />
-          <div className="absolute bottom-3 right-3 flex items-center gap-3 rounded-2xl bg-cream py-2 pl-2 pr-4 text-ink shadow-[0_24px_48px_-24px_rgb(0_0_0/0.6)] md:bottom-10 md:left-0 md:right-auto md:py-3 md:pl-3">
+          </div>
+          <Sticker id="hero-sticker" ring="LOCS · NAILS · LOCS · NAILS · " center="360" className="pop-in absolute left-0 top-3 size-[88px] -rotate-[14deg] [--rise-delay:450ms] md:top-8 md:size-[132px]" />
+          <div className="rise absolute bottom-3 right-3 flex items-center gap-3 rounded-2xl bg-cream [--rise-delay:380ms] py-2 pl-2 pr-4 text-ink shadow-[0_24px_48px_-24px_rgb(0_0_0/0.6)] md:bottom-10 md:left-0 md:right-auto md:py-3 md:pl-3">
             <span className="grid size-10 place-items-center rounded-xl bg-orange md:size-12">
               <Scissors aria-hidden className="size-5" />
             </span>
@@ -327,7 +330,7 @@ function ServiceRow({ s, withPhoto }: { s: Service; withPhoto: boolean }) {
       <Link
         href={`/book?service=${s.id}`}
         className={cx(
-          "group grid gap-x-4 gap-y-1 py-4 text-on-night sm:py-5",
+          "group -mx-3 grid gap-x-4 gap-y-1 rounded-2xl px-3 py-4 text-on-night transition-[background-color,transform] duration-200 hover:bg-on-night/[0.05] active:scale-[0.99] active:bg-on-night/[0.08] sm:py-5",
           withPhoto ? "grid-cols-[4rem_minmax(0,1fr)_auto] sm:grid-cols-[5rem_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
         )}
       >
@@ -345,7 +348,14 @@ function ServiceRow({ s, withPhoto }: { s: Service; withPhoto: boolean }) {
         <span className="text-base font-semibold group-hover:text-lilac sm:text-[1.06rem]">{s.name}</span>
         <span className="tabular font-serif text-xl font-semibold text-orange">{formatNaira(s.priceKobo)}</span>
         <span className="text-sm text-on-night-2">{s.description}</span>
-        <span className="whitespace-nowrap text-right text-[0.8rem] text-on-night-2">About {formatDuration(s.durationMinutes)}</span>
+        <span className="relative whitespace-nowrap text-right text-[0.8rem] text-on-night-2">
+          <span className="block transition-[opacity,transform] duration-200 group-hover:-translate-y-1 group-hover:opacity-0 group-focus-visible:-translate-y-1 group-focus-visible:opacity-0">
+            About {formatDuration(s.durationMinutes)}
+          </span>
+          <span aria-hidden className="absolute inset-0 flex translate-y-1 items-center justify-end gap-1 font-semibold text-lilac opacity-0 transition-[opacity,transform] duration-200 group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100">
+            Book <ArrowRight className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
+          </span>
+        </span>
       </Link>
     </li>
   );
@@ -392,54 +402,6 @@ async function MakeADayOfIt() {
         {pairing && <VisitCard main={pairing.main} addOns={pairing.addOns.slice(0, 3)} />}
       </div>
     </section>
-  );
-}
-
-/** An example visit: one main service with its add-ons, the first two ticked, and the total. */
-function VisitCard({ main, addOns }: { main: Service; addOns: Service[] }) {
-  const ticked = addOns.slice(0, 2);
-  const total = main.priceKobo + ticked.reduce((sum, a) => sum + addOnTerms(a).priceKobo, 0);
-  return (
-    <figure className="relative rounded-3xl border border-cream-line bg-surface p-5 shadow-[0_30px_60px_-34px_rgb(46_29_45/0.45)] sm:p-8">
-      <Sticker id="day-sticker" ring="HEAD TO TOE · HEAD TO TOE · " center="+1" fill="var(--lilac)" className="absolute -right-1 -top-10 size-20 rotate-[10deg] sm:-right-8 sm:-top-12 sm:size-28" />
-      {main.photo && (
-        <ServicePhoto photo={main.photo} name={main.name} className="mb-5 aspect-[16/9] w-full rounded-2xl" />
-      )}
-      <figcaption className="text-xs font-bold uppercase tracking-[0.14em] text-ink-3">An example visit</figcaption>
-      <p className="mt-3 flex items-baseline justify-between gap-4 border-b-2 border-dashed border-cream-line pb-3.5">
-        <span className="font-serif text-[1.4rem] font-semibold sm:text-[1.6rem]">{main.name}</span>
-        <strong className="tabular">{formatNaira(main.priceKobo)}</strong>
-      </p>
-      <p className="mb-2.5 mt-4 text-sm font-bold text-ink-2">Add to it</p>
-      <ul className="grid gap-2">
-        {addOns.map((a) => {
-          const on = ticked.includes(a);
-          const terms = addOnTerms(a);
-          return (
-            <li key={a.id} className={cx("flex items-center gap-3 rounded-[14px] px-3.5 py-3", on ? "bg-cream" : "border border-cream-line")}>
-              <span aria-hidden className={cx("grid size-6 shrink-0 place-items-center rounded-[7px]", on ? "bg-accent text-on-accent" : "border-2 border-cream-line")}>
-                {on && <Check className="size-4" strokeWidth={3} />}
-              </span>
-              <span className="flex-1 text-[0.94rem]">
-                <strong>{a.name}</strong>
-                <span className="sr-only">{on ? " (added)" : " (not added)"}</span>
-                <span className="block text-[0.8rem] text-ink-3">About {formatDuration(terms.durationMinutes)}</span>
-              </span>
-              <strong className="tabular text-[0.94rem]">+{formatNaira(terms.priceKobo)}</strong>
-            </li>
-          );
-        })}
-      </ul>
-      <div className="mt-5 flex flex-wrap items-center justify-between gap-4 border-t-[1.5px] border-ink pt-4">
-        <span>
-          <span className="block text-sm text-ink-3">{[main, ...ticked].map((s) => s.name).join(", ")}</span>
-          <span className="tabular font-serif text-[1.75rem] font-semibold sm:text-[2rem]">{formatNaira(total)}</span>
-        </span>
-        <Link href={`/book?service=${main.id}`} className={pill("plum", "md")}>
-          Book this visit
-        </Link>
-      </div>
-    </figure>
   );
 }
 
@@ -654,8 +616,9 @@ function ClosingCta() {
 async function MobileBar() {
   const salon = await getSalon();
   return (
+    <MobileBarReveal watch="hero-actions" className="fixed inset-x-0 bottom-0 z-30 md:hidden">
     <div
-      className="fixed inset-x-0 bottom-0 z-30 flex gap-2.5 border-t border-cream-line bg-surface/95 px-4 pt-2.5 shadow-[0_-10px_24px_-16px_rgb(46_29_45/0.45)] backdrop-blur md:hidden"
+      className="flex gap-2.5 border-t border-cream-line bg-surface/95 px-4 pt-2.5 shadow-[0_-10px_24px_-16px_rgb(46_29_45/0.45)] backdrop-blur"
       style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
     >
       {salon.whatsapp && (
@@ -668,5 +631,6 @@ async function MobileBar() {
         Book a visit
       </Link>
     </div>
+    </MobileBarReveal>
   );
 }
