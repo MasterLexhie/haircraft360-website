@@ -65,8 +65,8 @@ export function Strip({ items, label }: { items: string[]; label: string }) {
   return (
     <div className="overflow-hidden border-b-[5px] border-lilac bg-orange text-ink">
       <ul aria-label={label} className="flex w-max gap-6 px-4 py-2.5 font-groove text-lg leading-tight sm:gap-7 sm:px-10 sm:py-4 sm:text-[1.6rem]">
-        {items.map((c) => (
-          <li key={c} className="flex items-center gap-6 sm:gap-7">
+        {items.map((c, i) => (
+          <li key={`${i}-${c}`} className="flex items-center gap-6 sm:gap-7">
             {c}
             <Sparkles aria-hidden className="size-3.5 text-accent sm:size-5" />
           </li>
@@ -76,15 +76,33 @@ export function Strip({ items, label }: { items: string[]; label: string }) {
   );
 }
 
-/** White tile with a round icon, as in "Why Haircraft360" on the home page. */
-export function IconTile({ icon: Icon, title, children, tone = "orange" }: { icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>; title: string; children?: React.ReactNode; tone?: "orange" | "lilac" }) {
+/**
+ * White tile with a round icon, as in "Why Haircraft360" on the home page.
+ * `layout="row"` puts the icon beside the text from the `lg` size up, for a single column of tiles.
+ */
+export function IconTile({
+  icon: Icon,
+  title,
+  children,
+  tone = "orange",
+  layout = "stack",
+}: {
+  icon: React.ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  title: string;
+  children?: React.ReactNode;
+  tone?: "orange" | "lilac";
+  layout?: "stack" | "row";
+}) {
+  const row = layout === "row";
   return (
-    <div className="h-full rounded-[20px] border border-line bg-surface p-5 shadow-[0_18px_36px_-28px_rgb(46_29_45/0.4)] sm:p-6">
-      <span className={cx("grid size-12 place-items-center rounded-full text-ink", tone === "orange" ? "bg-orange" : "bg-lilac")}>
+    <div className={cx("h-full rounded-[20px] border border-line bg-surface p-5 shadow-[0_18px_36px_-28px_rgb(46_29_45/0.4)] sm:p-6", row && "lg:flex lg:items-start lg:gap-5")}>
+      <span className={cx("grid size-12 shrink-0 place-items-center rounded-full text-ink", tone === "orange" ? "bg-orange" : "bg-lilac")}>
         <Icon aria-hidden className="size-[22px]" />
       </span>
-      <h3 className="mt-4 font-serif text-xl font-semibold leading-tight sm:text-[1.4rem]">{title}</h3>
-      {children && <div className="mt-2 text-[0.94rem] text-ink-2">{children}</div>}
+      <div className={cx("mt-4", row && "lg:mt-0")}>
+        <h3 className="font-serif text-xl font-semibold leading-tight sm:text-[1.4rem]">{title}</h3>
+        {children && <div className="mt-2 text-[0.94rem] text-ink-2">{children}</div>}
+      </div>
     </div>
   );
 }

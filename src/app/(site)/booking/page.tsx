@@ -15,9 +15,10 @@ export default function FindBookingPage() {
         kicker="Your appointment"
         title={<>Find your <em>booking</em></>}
         lead="Enter your booking reference and the phone number or email you booked with. No account or password needed."
+        className="lg:pb-24"
       />
       <div className={cx(wrap, "grid gap-10 py-12 sm:py-16 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-start lg:gap-16")}>
-        <section aria-labelledby="lookup-title" className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface shadow-[var(--shadow-md)] lg:-mt-24">
+        <section aria-labelledby="lookup-title" className="relative z-10 overflow-hidden rounded-[var(--radius)] border border-line bg-surface shadow-[var(--shadow-md)] lg:-mt-32">
           <h2 id="lookup-title" className="border-b border-line px-6 pb-4 pt-6 font-serif text-2xl font-semibold">
             Look up a booking
           </h2>
@@ -44,14 +45,14 @@ export default function FindBookingPage() {
 
         <div>
           <Kicker>What you can do</Kicker>
-          <ul className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          <ul className="mt-5 grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
             {[
               { icon: CalendarCheck, title: "Check your appointment", body: "Date, time and whether it’s confirmed." },
               { icon: Receipt, title: "See what you owe", body: "Any balance still due after your deposit." },
               { icon: MapPin, title: "Get directions", body: "The salon’s address and phone number in one place." },
             ].map((f, i) => (
               <li key={f.title}>
-                <IconTile icon={f.icon} title={f.title} tone={i % 2 ? "lilac" : "orange"}>
+                <IconTile icon={f.icon} title={f.title} tone={i % 2 ? "lilac" : "orange"} layout="row">
                   {f.body}
                 </IconTile>
               </li>
