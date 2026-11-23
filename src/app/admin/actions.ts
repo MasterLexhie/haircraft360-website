@@ -20,6 +20,7 @@ import {
   upsertService,
   type Actor,
   type CompletionInput,
+  type ServiceInput,
 } from "@/server/booking-service";
 import { createBalanceLink } from "@/server/payments/links";
 import { searchAdmin, type AdminSearch } from "@/server/admin-queries";
@@ -30,6 +31,7 @@ import { validateProgram } from "@/domain/academy";
 import { saveProgram, setApplicationStatus, updateApplicationNote } from "@/server/academy";
 import { normalizePhone } from "@/domain/phone";
 import { parseNairaToKobo } from "@/lib/money";
+import { MAX_PHOTO_BYTES, readPhoto } from "@/domain/photo";
 import { addDays, isValidDateKey, lagosToUtcMs, parseHHMM } from "@/lib/time";
 import { recordId } from "@/domain/schemas";
 import { z } from "zod";
@@ -311,6 +313,23 @@ export async function serviceAction(_: ActionState, formData: FormData): Promise
   if (availableAsAddOn && addOnPriceRaw !== "" && addOnPrice === null) fieldErrors.addOnPrice = "Enter a price, or leave blank to use the main price.";
   if (availableAsAddOn && addOnDuration !== null && !minutesInRange(addOnDuration, 0)) fieldErrors.addOnDuration = "Use minutes in steps of 15, from 0 to 600, or leave blank.";
   if (addOnIds.length > 50 || addOnIds.some((id) => id === null)) return INVALID;
+
+  // Photo: "keep", "remove", or "set" with the file the browser already shrank.
+  const photoAction = String(formData.get("photoAction") ?? "keep");
+  let photo: ServiceInput["photo"] = { action: "keep" };
+  if (photoAction === "remove") photo = { action: "remove" };
+  else if (photoAction === "set") {
+    const file = formData.get("photo");
+    if (!(file instanceof File) || file.size === 0) fieldErrors.photo = "Choose a photo, or cancel the change.";
+    else if (file.size > MAX_PHOTO_BYTES) fieldErrors.photo = "That photo is still too large. Try a smaller one.";
+    else {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const info = readPhoto(data);
+      if (!info) fieldErrors.photo = "That file isn't a photo we can use. Try a JPEG or PNG.";
+      else photo = { action: "set", data, ...info };
+    }
+  } else if (photoAction !== "keep") return INVALID;
+
   if (Object.keys(fieldErrors).length) return { error: "Please fix the highlighted fields.", fieldErrors };
   try {
     await upsertService(
@@ -326,6 +345,8 @@ export async function serviceAction(_: ActionState, formData: FormData): Promise
         addOnPriceKobo: addOnPrice,
         addOnDurationMinutes: addOnDuration,
         addOnIds: addOnIds as string[],
+        photo,
+        photoAlt: String(formData.get("photoAlt") ?? "").trim().slice(0, 160),
       },
       actor,
     );

@@ -12,6 +12,7 @@ import { formatNaira } from "@/lib/money";
 import { formatDateKey, formatDuration, formatTime } from "@/lib/time";
 import { Alert, Button, Field, cx, describedBy, inputClass } from "@/components/ui/primitives";
 import { ServiceMeta } from "./service-bits";
+import { ServicePhoto } from "@/components/site/service-photo";
 import { BookingSummaryPanel, MoneyRows, describeDepositRule, type SummaryLine } from "./booking-summary";
 import { DateTimeStep } from "./date-time-step";
 import { PaymentProgress } from "./payment-progress";
@@ -327,6 +328,9 @@ export function BookingWizard({
                                 <ServiceMeta service={s} />
                               </span>
                             </span>
+                            {s.photo && (
+                              <ServicePhoto photo={s.photo} name={s.name} decorative className="size-20 shrink-0 self-start rounded-[var(--radius-control)] sm:h-24 sm:w-32" />
+                            )}
                           </label>
                         </li>
                       );

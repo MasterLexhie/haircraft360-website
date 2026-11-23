@@ -32,6 +32,15 @@ export interface Service {
   sortOrder: number;
   /** Add-ons this service offers (when it is a main service). */
   addOnIds: string[];
+  /** The service's photo, or null when it has none. `alt` is blank when the owner gave no description. */
+  photo: ServicePhotoRef | null;
+}
+
+export interface ServicePhotoRef {
+  url: string;
+  alt: string;
+  width: number;
+  height: number;
 }
 
 /** One line of a booking. Price and duration are copied at the time, so later price changes never alter it. */

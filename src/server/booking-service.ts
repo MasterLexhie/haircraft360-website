@@ -653,6 +653,10 @@ export interface ServiceInput {
   addOnDurationMinutes: number | null;
   /** For a main service: the extras it offers. */
   addOnIds: string[];
+  /** Photo change: leave out (or "keep") to keep the current one. Bytes must have passed readPhoto. */
+  photo?: { action: "keep" } | { action: "remove" } | { action: "set"; data: Uint8Array; contentType: string; width: number; height: number };
+  /** Description of the photo for screen readers. Left out keeps the current one. */
+  photoAlt?: string;
 }
 
 export async function upsertService(input: ServiceInput, actor: Actor) {
@@ -670,12 +674,31 @@ export async function upsertService(input: ServiceInput, actor: Actor) {
       availableAsAddOn: input.availableAsAddOn,
       addOnPriceKobo: input.availableAsAddOn ? input.addOnPriceKobo : null,
       addOnDurationMinutes: input.availableAsAddOn ? input.addOnDurationMinutes : null,
+      ...(input.photoAlt !== undefined ? { photoAlt: input.photoAlt } : {}),
     };
     const existing = input.id ? await tx.service.findUnique({ where: { id: input.id } }) : null;
     if (input.id && !existing) throw new BookingError("NOT_FOUND", "That service no longer exists. Reload the page.");
     const saved = existing
       ? await tx.service.update({ where: { id: existing.id }, data })
       : await tx.service.create({ data: { ...data, sortOrder: ((await tx.service.aggregate({ _max: { sortOrder: true } }))._max.sortOrder ?? 0) + 1 } });
+
+    // Photo: the bytes go in their own table; the service keeps a new key so the address changes.
+    const photo = input.photo ?? { action: "keep" };
+    if (photo.action === "set") {
+      const bytes = Uint8Array.from(photo.data);
+      await tx.servicePhoto.upsert({
+        where: { serviceId: saved.id },
+        create: { serviceId: saved.id, data: bytes, contentType: photo.contentType },
+        update: { data: bytes, contentType: photo.contentType, createdAt: new Date() },
+      });
+      await tx.service.update({
+        where: { id: saved.id },
+        data: { photoKey: crypto.randomUUID().replaceAll("-", "").slice(0, 16), photoWidth: photo.width, photoHeight: photo.height },
+      });
+    } else if (photo.action === "remove") {
+      await tx.servicePhoto.deleteMany({ where: { serviceId: saved.id } });
+      await tx.service.update({ where: { id: saved.id }, data: { photoKey: null, photoWidth: null, photoHeight: null, photoAlt: "" } });
+    }
 
     // Extras offered with this service. Only services marked as extras qualify, never itself.
     const wanted = input.bookableAlone ? [...new Set(input.addOnIds)].filter((id) => id !== saved.id) : [];
@@ -692,7 +715,9 @@ export async function upsertService(input: ServiceInput, actor: Actor) {
       actorId: actor.id,
       entityType: "Service",
       entityId: saved.id,
-      summary: existing ? `Service “${saved.name}” updated (existing bookings keep their prices)` : `Service “${saved.name}” added`,
+      summary:
+        (existing ? `Service “${saved.name}” updated (existing bookings keep their prices)` : `Service “${saved.name}” added`) +
+        (photo.action === "set" ? ", new photo" : photo.action === "remove" ? ", photo removed" : ""),
     });
   });
 }

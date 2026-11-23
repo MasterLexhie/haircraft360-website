@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState, useCallback, useEffect, useState, useTransition } from "react";
-import { Clock, CopyCheck, Pencil, Plus, SlidersHorizontal, Wallet } from "lucide-react";
+import { useActionState, useCallback, useEffect, useRef, useState, useTransition } from "react";
+import { Clock, CopyCheck, ImageIcon, Pencil, Plus, SlidersHorizontal, Wallet } from "lucide-react";
 import type { Service, Settings } from "@/domain/types";
 import type { WeekdayKey, WeeklyHours, CapacityByWeekday } from "@/domain/settings";
 import { depositDue, type DepositRule } from "@/domain/deposit";
@@ -9,6 +9,7 @@ import { serviceAction, settingsAction, type ActionState } from "@/app/admin/act
 import { formatNaira, koboToInput } from "@/lib/money";
 import { WEEKDAYS, formatDuration, parseHHMM } from "@/lib/time";
 import { ActionFeedback } from "@/components/admin/action-feedback";
+import { ServicePhotoField, type PhotoChange } from "@/components/admin/service-photo-field";
 import { Badge, Button, Field, cx, inputClass } from "@/components/ui/primitives";
 
 const Feedback = ActionFeedback;
@@ -22,6 +23,7 @@ function ServiceForm({ service, services, onDone }: { service?: Service; service
   const [isMain, setIsMain] = useState(service?.bookableAlone ?? true);
   const [isExtra, setIsExtra] = useState(service?.availableAsAddOn ?? false);
   const extras = services.filter((x) => x.availableAsAddOn && x.id !== service?.id);
+  const photoChange = useRef<PhotoChange>({ action: "keep" });
 
   // Close the editor once a save succeeds; the list shows the confirmation.
   useEffect(() => {
@@ -33,6 +35,9 @@ function ServiceForm({ service, services, onDone }: { service?: Service; service
       onSubmit={(e) => {
         e.preventDefault();
         const data = new FormData(e.currentTarget);
+        const photo = photoChange.current;
+        data.set("photoAction", photo.action);
+        if (photo.action === "set") data.set("photo", photo.blob, photo.blob.type === "image/webp" ? "photo.webp" : "photo.jpg");
         startTransition(() => action(data));
       }}
       className="space-y-4"
@@ -57,6 +62,14 @@ function ServiceForm({ service, services, onDone }: { service?: Service; service
       <Field id={`${pre}-description`} label="Short description">
         <textarea id={`${pre}-description`} name="description" rows={2} defaultValue={service?.description} className={cx(inputClass, "min-h-16 text-sm")} />
       </Field>
+
+      <ServicePhotoField
+        idPrefix={pre}
+        current={service?.photo ?? null}
+        serviceName={service?.name}
+        error={fe.photo}
+        onChange={(c) => { photoChange.current = c; }}
+      />
 
       <fieldset className="rounded-[var(--radius)] border border-line p-4" aria-describedby={fe.offeredAs ? `${pre}-offered-error` : undefined}>
         <legend className="px-1 text-sm font-semibold text-ink">Offered as</legend>
@@ -192,7 +205,16 @@ export function ServicesManager({ services }: { services: Service[] }) {
           return (
             <div key={s.id} role="rowgroup" className={cx("border-b border-line last:border-b-0", open && "bg-sand/40")}>
               <div role="row" className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-5 py-3.5 md:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1fr)_5.5rem]">
-                <div role="cell" className="min-w-0">
+                <div role="cell" className="flex min-w-0 items-start gap-3">
+                  <span className="mt-0.5 grid size-10 shrink-0 place-items-center overflow-hidden rounded-[var(--radius-control)] bg-sand">
+                    {s.photo ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- our own already-resized photo
+                      <img src={s.photo.url} alt="" width={40} height={40} loading="lazy" className="size-full object-cover" />
+                    ) : (
+                      <ImageIcon aria-hidden className="size-4 text-ink-3" />
+                    )}
+                  </span>
+                  <div className="min-w-0">
                   <p className="flex flex-wrap items-center gap-2 font-semibold text-ink">
                     {s.name} {!s.bookableAlone && <Badge tone="neutral">Extra only</Badge>}
                     {s.bookableAlone && s.availableAsAddOn && <Badge tone="neutral">Also an extra</Badge>}
@@ -207,6 +229,7 @@ export function ServicesManager({ services }: { services: Service[] }) {
                     {price(s)} · {duration(s)} ·{" "}
                     <span className={s.active ? "font-semibold text-success" : "text-ink-3"}>{s.active ? "Bookable" : "Hidden"}</span>
                   </p>
+                  </div>
                 </div>
                 <div role="cell" className="hidden text-right tabular font-medium md:block">{price(s)}</div>
                 <div role="cell" className="hidden tabular md:block">{duration(s)}</div>

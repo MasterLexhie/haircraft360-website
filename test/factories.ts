@@ -58,3 +58,16 @@ export function bookingInput(overrides: Partial<Record<string, unknown>> = {}) {
     ...overrides,
   };
 }
+
+/** A WebP header in the extended (VP8X) form, as browsers write it, with the given size. */
+export function webpBytes(width: number, height: number): Uint8Array {
+  const b = new Uint8Array(40);
+  const put = (at: number, text: string) => [...text].forEach((c, i) => (b[at + i] = c.charCodeAt(0)));
+  put(0, "RIFF");
+  put(8, "WEBP");
+  put(12, "VP8X");
+  const w = width - 1, h = height - 1;
+  b.set([w & 0xff, (w >> 8) & 0xff, (w >> 16) & 0xff], 24);
+  b.set([h & 0xff, (h >> 8) & 0xff, (h >> 16) & 0xff], 27);
+  return b;
+}

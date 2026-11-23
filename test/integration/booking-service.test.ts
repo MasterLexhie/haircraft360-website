@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db, resetDatabase } from "../db";
-import { bookingInput, createServices, createSettings, slot } from "../factories";
+import { bookingInput, createServices, createSettings, slot, webpBytes } from "../factories";
 import { BookingError, createBlock, createPendingBooking, deleteBlock, moveBooking, recordManualPayment, recordOnlinePayment, setBookingStatus, setMarketingConsent, updateCustomerTags, upsertService, type ServiceInput } from "@/server/booking-service";
 import { findBookingSummary, getCustomerBooking } from "@/server/queries";
 
@@ -282,6 +282,32 @@ describe("services, extras and closures (admin)", () => {
   it("removes a service from every main service's extras when it stops being an extra", async () => {
     await upsertService(service({ id: "svc_wash", name: "Wash", priceKobo: 300_000, durationMinutes: 30, bookableAlone: true, availableAsAddOn: false }), actor);
     expect(await db.serviceAddOn.count({ where: { addOnServiceId: "svc_wash" } })).toBe(0);
+  });
+
+  it("stores a service photo under a fresh key, replaces it with a new key, and removes it", async () => {
+    const { GET } = await import("@/app/media/services/[id]/[key]/route");
+    const get = (id: string, key: string) => GET(new Request("http://localhost/"), { params: Promise.resolve({ id, key }) });
+
+    await upsertService(service({ id: "svc_main", name: "Retwist", photo: { action: "set", data: webpBytes(800, 600), contentType: "image/webp", width: 800, height: 600 }, photoAlt: "Fresh retwist" }), actor);
+    const first = await db.service.findUniqueOrThrow({ where: { id: "svc_main" } });
+    expect(first).toMatchObject({ photoAlt: "Fresh retwist", photoWidth: 800, photoHeight: 600 });
+    const res = await get("svc_main", first.photoKey!);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/webp");
+    expect(res.headers.get("cache-control")).toContain("immutable");
+
+    // Saving without a photo change keeps it; a new photo changes the key and retires the old address.
+    await upsertService(service({ id: "svc_main", name: "Retwist", photoAlt: "Fresh retwist" }), actor);
+    expect((await db.service.findUniqueOrThrow({ where: { id: "svc_main" } })).photoKey).toBe(first.photoKey);
+    await upsertService(service({ id: "svc_main", name: "Retwist", photo: { action: "set", data: webpBytes(400, 400), contentType: "image/webp", width: 400, height: 400 } }), actor);
+    const second = await db.service.findUniqueOrThrow({ where: { id: "svc_main" } });
+    expect(second.photoKey).not.toBe(first.photoKey);
+    expect((await get("svc_main", first.photoKey!)).status).toBe(404);
+
+    await upsertService(service({ id: "svc_main", name: "Retwist", photo: { action: "remove" } }), actor);
+    expect(await db.service.findUniqueOrThrow({ where: { id: "svc_main" } })).toMatchObject({ photoKey: null, photoAlt: "" });
+    expect(await db.servicePhoto.count()).toBe(0);
+    expect((await get("svc_main", second.photoKey!)).status).toBe(404);
   });
 
   it("a closure stops new bookings, reports bookings already in it, and removing it frees the time", async () => {

@@ -1,6 +1,7 @@
 import "server-only";
 import type * as P from "@/generated/prisma/client";
 import type { AuditEvent, Booking, BookingItem, Customer, Payment, Service, Settings } from "@/domain/types";
+import { servicePhotoUrl } from "@/domain/photo";
 import { capacityByWeekdaySchema, messageTemplatesSchema, salonDetailsSchema, weeklyHoursSchema } from "@/domain/settings";
 
 /**
@@ -25,6 +26,10 @@ export function toService(row: P.Service & { addOns?: { addOnServiceId: string }
     active: row.active,
     sortOrder: row.sortOrder,
     addOnIds: row.addOns?.map((a) => a.addOnServiceId) ?? [],
+    photo:
+      row.photoKey && row.photoWidth && row.photoHeight
+        ? { url: servicePhotoUrl(row.id, row.photoKey), alt: row.photoAlt, width: row.photoWidth, height: row.photoHeight }
+        : null,
   };
 }
 

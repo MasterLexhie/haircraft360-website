@@ -11,6 +11,7 @@ import { describeDepositRule } from "@/components/booking/booking-summary";
 import { Sticker, Wave } from "@/components/site/brand";
 import { pill } from "@/components/site/pill";
 import { Kicker, Strip, Title, wrap } from "@/components/site/groove";
+import { ServicePhoto } from "@/components/site/service-photo";
 import { HERO_PHOTO, GALLERY_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
 import { Skeleton, cx } from "@/components/ui/primitives";
 import { formatNaira } from "@/lib/money";
@@ -269,6 +270,8 @@ async function Services() {
   const [services, salon] = await Promise.all([getActiveServices(), getSalon()]);
   const main = services.filter((s) => s.bookableAlone);
   const half = Math.ceil(main.length / 2);
+  // Once any service has a photo, every row keeps a photo spot so the list stays lined up.
+  const withPhotos = main.some((s) => s.photo);
   return (
     <>
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
@@ -290,7 +293,7 @@ async function Services() {
           {[main.slice(0, half), main.slice(half)].map((col, i) => (
             <ul key={i} className={cx(i === 1 && "border-t border-on-night/15 md:border-t-0")}>
               {col.map((s) => (
-                <ServiceRow key={s.id} s={s} />
+                <ServiceRow key={s.id} s={s} withPhoto={withPhotos} />
               ))}
             </ul>
           ))}
@@ -318,10 +321,27 @@ async function Services() {
   );
 }
 
-function ServiceRow({ s }: { s: Service }) {
+function ServiceRow({ s, withPhoto }: { s: Service; withPhoto: boolean }) {
   return (
     <li className="border-t border-on-night/15 first:border-t-0 md:first:border-t">
-      <Link href={`/book?service=${s.id}`} className="group grid grid-cols-[minmax(0,1fr)_auto] gap-x-4 gap-y-1 py-4 text-on-night sm:py-5">
+      <Link
+        href={`/book?service=${s.id}`}
+        className={cx(
+          "group grid gap-x-4 gap-y-1 py-4 text-on-night sm:py-5",
+          withPhoto ? "grid-cols-[4rem_minmax(0,1fr)_auto] sm:grid-cols-[5rem_minmax(0,1fr)_auto]" : "grid-cols-[minmax(0,1fr)_auto]",
+        )}
+      >
+        {withPhoto && (
+          <span className="row-span-2 size-16 self-start overflow-hidden rounded-2xl bg-accent sm:size-20">
+            {s.photo ? (
+              <ServicePhoto photo={s.photo} name={s.name} decorative className="size-full transition-transform duration-300 group-hover:scale-105" />
+            ) : (
+              <span aria-hidden className="grid size-full place-items-center text-lilac">
+                <Sparkles className="size-5" />
+              </span>
+            )}
+          </span>
+        )}
         <span className="text-base font-semibold group-hover:text-lilac sm:text-[1.06rem]">{s.name}</span>
         <span className="tabular font-serif text-xl font-semibold text-orange">{formatNaira(s.priceKobo)}</span>
         <span className="text-sm text-on-night-2">{s.description}</span>
@@ -382,6 +402,9 @@ function VisitCard({ main, addOns }: { main: Service; addOns: Service[] }) {
   return (
     <figure className="relative rounded-3xl border border-cream-line bg-surface p-5 shadow-[0_30px_60px_-34px_rgb(46_29_45/0.45)] sm:p-8">
       <Sticker id="day-sticker" ring="HEAD TO TOE · HEAD TO TOE · " center="+1" fill="var(--lilac)" className="absolute -right-1 -top-10 size-20 rotate-[10deg] sm:-right-8 sm:-top-12 sm:size-28" />
+      {main.photo && (
+        <ServicePhoto photo={main.photo} name={main.name} className="mb-5 aspect-[16/9] w-full rounded-2xl" />
+      )}
       <figcaption className="text-xs font-bold uppercase tracking-[0.14em] text-ink-3">An example visit</figcaption>
       <p className="mt-3 flex items-baseline justify-between gap-4 border-b-2 border-dashed border-cream-line pb-3.5">
         <span className="font-serif text-[1.4rem] font-semibold sm:text-[1.6rem]">{main.name}</span>

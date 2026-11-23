@@ -214,14 +214,35 @@ model Service {
   addOnDurationMinutes Int?     @map("add_on_duration_minutes")
   active               Boolean  @default(true)
   sortOrder            Int      @default(0) @map("sort_order")
+  /// Changes with every new photo, so the photo's address changes and caches never show an old one.
+  /// Null when the service has no photo. The bytes live in service_photos.
+  photoKey             String?  @map("photo_key")
+  /// Short description of the photo for screen readers. Blank uses the service name.
+  photoAlt             String   @default("") @map("photo_alt")
+  photoWidth           Int?     @map("photo_width")
+  photoHeight          Int?     @map("photo_height")
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  photo        ServicePhoto?
   addOns       ServiceAddOn[] @relation("MainService")
   addOnFor     ServiceAddOn[] @relation("AddOnService")
   bookingItems BookingItem[]
 
   @@map("services")
+}
+
+/// The photo for a service, already shrunk in the browser (WebP or JPEG, under 1 MB).
+/// Kept apart from services so listing services never loads the image bytes.
+model ServicePhoto {
+  serviceId   String   @id @map("service_id")
+  data        Bytes
+  contentType String   @map("content_type")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@map("service_photos")
 }
 
 /// Which add-ons each main service offers.
