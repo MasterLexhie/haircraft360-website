@@ -117,6 +117,8 @@ async function Dashboard() {
         </div>
 
         <div className="space-y-6">
+          <AttentionBox attention={attention} />
+
           <Panel title="Balances to collect">
             {unpaid.length === 0 ? (
               <p className="text-sm text-ink-3">Every completed appointment is paid in full.</p>
@@ -135,8 +137,6 @@ async function Dashboard() {
               </ul>
             )}
           </Panel>
-
-          <AttentionBox attention={attention} />
 
           <Panel title={`Popular services, ${monthName}`}>
             {popular.length === 0 ? (
