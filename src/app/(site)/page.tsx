@@ -33,6 +33,7 @@ export default function HomePage() {
       <CraftStrip />
       <WhyUs />
       <OurWork />
+      <BeforeAndAfter />
       <Wave from="bg-cream" to="text-dusk" />
       <section id="services" aria-labelledby="services-title" className="on-night scroll-mt-20 bg-dusk pb-16 pt-10 text-on-night sm:pb-24 sm:pt-16">
         <div className={wrap}>
@@ -214,7 +215,6 @@ function Caption({ children, big }: { children: React.ReactNode; big?: boolean }
 
 function OurWork() {
   const [first, ...rest] = WORK;
-  const realPair = GALLERY_PAIRS.find((p) => p.sameClient);
   return (
     <section id="work" aria-labelledby="work-title" className="scroll-mt-20 py-14 sm:py-24">
       <div className={wrap}>
@@ -231,12 +231,8 @@ function OurWork() {
         </div>
         <ul className="reveal mt-8 flex snap-x gap-3 overflow-x-auto pb-2 md:mt-10 md:grid md:grid-cols-4 md:grid-rows-[300px_300px] md:gap-4 md:overflow-visible md:pb-0">
           <li className="relative w-[78%] shrink-0 snap-start md:col-span-2 md:row-span-2 md:w-auto">
-            {realPair ? (
-              <BeforeAfter before={realPair.before} after={realPair.after} label={realPair.label} sizes="(min-width: 768px) 50vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
-            ) : (
-              <Photo photo={first!.photo} sizes="(min-width: 768px) 50vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
-            )}
-            <Caption big>{realPair ? realPair.label : first!.caption}</Caption>
+            <Photo photo={first!.photo} sizes="(min-width: 768px) 50vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
+            <Caption big>{first!.caption}</Caption>
           </li>
           {rest.slice(0, 2).map((w) => (
             <li key={w.caption} className="relative w-[78%] shrink-0 snap-start md:w-auto">
@@ -271,6 +267,43 @@ async function InstagramLink() {
       <Camera aria-hidden className="size-[18px]" /> More on Instagram
       <span className="sr-only"> (opens in a new tab)</span>
     </a>
+  );
+}
+
+/* ───────────── before and after ───────────── */
+
+/**
+ * Before and after of real clients, one slider per pair. Shows only once the owner has added a
+ * pair of the same client (`sameClient: true` in config/stock-photos.ts); until then the page
+ * goes straight from Our work to the services.
+ */
+function BeforeAndAfter() {
+  const pairs = GALLERY_PAIRS.filter((p) => p.sameClient);
+  if (pairs.length === 0) return null;
+  return (
+    <section aria-labelledby="results-title" className="pb-14 sm:pb-24">
+      <div className={wrap}>
+        <div className="reveal flex flex-col justify-between gap-3 md:flex-row md:items-end">
+          <div>
+            <Kicker>Before and after</Kicker>
+            <Title id="results-title">
+              See the <em>difference</em>
+            </Title>
+          </div>
+          <p className="max-w-[400px] text-ink-2">Real clients, before and after their visit. Drag across a photo to compare.</p>
+        </div>
+        <ul className={cx("mt-8 grid gap-6 sm:mt-10", pairs.length === 1 ? "max-w-xl" : pairs.length === 2 ? "md:grid-cols-2" : "md:grid-cols-2 lg:grid-cols-3")}>
+          {pairs.map((p) => (
+            <li key={p.label} className="reveal">
+              <figure>
+                <BeforeAfter before={p.before} after={p.after} label={p.label} sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" className="aspect-[4/5] rounded-[20px]" />
+                <figcaption className="mt-3 font-serif text-xl font-semibold">{p.label}</figcaption>
+              </figure>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
   );
 }
 
