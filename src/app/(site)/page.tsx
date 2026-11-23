@@ -515,10 +515,16 @@ function Visit() {
     <section id="visit" aria-labelledby="visit-title" className="scroll-mt-20 border-t border-cream-line bg-surface py-14 sm:py-24">
       <div className={cx(wrap, "grid gap-10 md:grid-cols-[1fr_1.1fr] md:gap-14")}>
         <div className="reveal order-2 rounded-3xl bg-cream-2 p-6 sm:p-9 md:order-1">
-          <h3 className="flex items-center gap-2 font-serif text-xl font-semibold">
-            <Clock aria-hidden className="size-5 text-clay" /> Opening hours
-          </h3>
-          <Suspense fallback={<Skeleton className="mt-6 h-56" />}>
+          <Suspense
+            fallback={
+              <>
+                <h3 className="flex items-center gap-2 font-serif text-xl font-semibold">
+                  <Clock aria-hidden className="size-5 text-clay" /> Opening hours
+                </h3>
+                <Skeleton className="mt-6 h-56" />
+              </>
+            }
+          >
             <HoursTable />
           </Suspense>
         </div>
@@ -537,8 +543,7 @@ function Visit() {
 }
 
 async function VisitDetails() {
-  const [salon, { availability }, nowMs] = await Promise.all([getSalon(), getPublicSettings(), requestNow()]);
-  const status = openStatus(availability.weeklyHours, dayOfWeek(lagosDateKey(nowMs)), lagosMinutes(nowMs));
+  const salon = await getSalon();
   const ig = salon.social.find((s) => s.platform === "instagram");
   const item = "flex gap-3.5";
   const icon = "mt-0.5 size-5 shrink-0 text-clay";
@@ -554,10 +559,6 @@ async function VisitDetails() {
             </span>
           </li>
         )}
-        <li className={item}>
-          <Clock aria-hidden className={icon} />
-          <OpenNow status={status} />
-        </li>
         {salon.whatsapp && (
           <li className={item}>
             <MessageCircle aria-hidden className={icon} />
@@ -596,54 +597,59 @@ async function VisitDetails() {
   );
 }
 
-/** "Open now, closes at 7:00 pm" or "Closed now, opens tomorrow at 9:00 am", in salon time. The full week is in the table beside it. */
-function OpenNow({ status }: { status: OpenStatus }) {
-  if (status.open) {
-    return (
-      <span>
-        <strong className="flex items-center gap-2 text-success">
-          <span aria-hidden className="relative flex size-2.5">
-            <span className="absolute inline-flex size-full rounded-full bg-success opacity-60 motion-safe:animate-ping" />
-            <span className="relative inline-flex size-2.5 rounded-full bg-success" />
-          </span>
-          Open now
-        </strong>
-        <span className="block text-ink-3">Closes at {formatHHMM(status.closesAt)}</span>
-      </span>
-    );
-  }
+/**
+ * Opening hours the way map apps show them: a status line under the heading ("Open · Closes at
+ * 7:00 pm"), then the week with today's row marked. One place for hours, in salon time.
+ */
+async function HoursTable() {
+  const [{ availability }, nowMs] = await Promise.all([getPublicSettings(), requestNow()]);
+  const todayKey = String(dayOfWeek(lagosDateKey(nowMs))) as WeekdayKey;
+  const status = openStatus(availability.weeklyHours, Number(todayKey), lagosMinutes(nowMs));
+  const order: WeekdayKey[] = ["1", "2", "3", "4", "5", "6", "0"];
   return (
-    <span>
-      <strong>Closed now</strong>
-      <span className="block text-ink-3">
-        {status.opensAt === null
-          ? "See the opening hours"
-          : `Opens ${status.opensOn === "today" || status.opensOn === "tomorrow" ? status.opensOn : `on ${status.opensOn}`} at ${formatHHMM(status.opensAt)}`}
-      </span>
-    </span>
+    <>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h3 className="flex items-center gap-2 font-serif text-xl font-semibold">
+          <Clock aria-hidden className="size-5 text-clay" /> Opening hours
+        </h3>
+        <StatusLine status={status} />
+      </div>
+      <table className="mt-5 w-full text-left text-[0.94rem]">
+        <caption className="sr-only">Opening hours by day</caption>
+        <tbody>
+          {order.map((d) => {
+            const h = availability.weeklyHours[d];
+            const today = d === todayKey;
+            return (
+              <tr key={d} aria-current={today ? "date" : undefined} className={cx("border-b border-cream-line last:border-0", today && "bg-surface")}>
+                <th scope="row" className={cx("py-3 pl-3 font-semibold", today && "rounded-l-xl")}>
+                  {WEEKDAYS[Number(d)]}
+                  {today && <span className="ml-2 text-xs font-semibold text-clay">Today</span>}
+                </th>
+                <td className={cx("py-3 pr-3 text-right", today && "rounded-r-xl", h ? cx("tabular", today ? "font-semibold text-ink" : "text-ink-2") : "font-serif italic text-ink-3")}>
+                  {h ? `${formatHHMM(h.open)} to ${formatHHMM(h.close)}` : "Closed"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </>
   );
 }
 
-async function HoursTable() {
-  const { availability } = await getPublicSettings();
-  const order: WeekdayKey[] = ["1", "2", "3", "4", "5", "6", "0"];
+/** "Open · Closes at 7:00 pm" or "Closed · Opens tomorrow at 9:00 am": a quiet line, colour on the first word only. */
+function StatusLine({ status }: { status: OpenStatus }) {
+  const next = status.open
+    ? `Closes at ${formatHHMM(status.closesAt)}`
+    : status.opensAt === null
+      ? null
+      : `Opens ${status.opensOn === "today" || status.opensOn === "tomorrow" ? status.opensOn : `on ${status.opensOn}`} at ${formatHHMM(status.opensAt)}`;
   return (
-    <table className="mt-5 w-full text-left text-[0.94rem]">
-      <caption className="sr-only">Opening hours by day</caption>
-      <tbody>
-        {order.map((d) => {
-          const h = availability.weeklyHours[d];
-          return (
-            <tr key={d} className="border-b border-cream-line last:border-0">
-              <th scope="row" className="py-3 font-semibold">{WEEKDAYS[Number(d)]}</th>
-              <td className={cx("py-3 text-right", h ? "tabular text-ink-2" : "font-serif italic text-ink-3")}>
-                {h ? `${formatHHMM(h.open)} to ${formatHHMM(h.close)}` : "Closed"}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <p className="text-sm">
+      <span className={cx("font-semibold", status.open ? "text-success" : "text-danger")}>{status.open ? "Open" : "Closed"}</span>
+      {next && <span className="text-ink-2"> · {next}</span>}
+    </p>
   );
 }
 
