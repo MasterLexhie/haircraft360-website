@@ -46,7 +46,7 @@ export function salonFrom(d: SalonDetails): Salon {
 }
 
 const SHORT_DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const LONG_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const LONG_DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"] as const;
 
 /**
  * Opening hours in a line or two, Monday first: "Mon–Sat, 9:00 am–7:00 pm" and "Sunday closed".
@@ -68,4 +68,27 @@ export function hoursSummary(hours: WeeklyHours, formatTime: (hhmm: string) => s
     open: runs.map((r) => `${r.from === r.to ? SHORT_DAYS[r.from] : `${SHORT_DAYS[r.from]}–${SHORT_DAYS[r.to]}`}, ${r.text}`),
     closed: closedDays.length === 0 ? "Open every day" : closedDays.length === 7 ? "Closed" : `${closedDays.map((d) => LONG_DAYS[d]).join(" and ")} closed`,
   };
+}
+
+export type OpenStatus =
+  | { open: true; closesAt: string }
+  | { open: false; opensAt: string; opensOn: "today" | "tomorrow" | (typeof LONG_DAYS)[number] }
+  | { open: false; opensAt: null; opensOn: null };
+
+/**
+ * Whether the salon is open at a moment, from the weekly hours. `weekday` (0 is Sunday) and
+ * `minutes` (since midnight) are salon time. Open means from opening time up to, not including,
+ * closing time. When closed, says when it next opens within the coming week (null if never).
+ */
+export function openStatus(hours: WeeklyHours, weekday: number, minutes: number): OpenStatus {
+  const toMin = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+  const today = hours[String(weekday) as keyof WeeklyHours];
+  if (today && minutes >= toMin(today.open) && minutes < toMin(today.close)) return { open: true, closesAt: today.close };
+  if (today && minutes < toMin(today.open)) return { open: false, opensAt: today.open, opensOn: "today" };
+  for (let ahead = 1; ahead <= 7; ahead++) {
+    const day = (weekday + ahead) % 7;
+    const h = hours[String(day) as keyof WeeklyHours];
+    if (h) return { open: false, opensAt: h.open, opensOn: ahead === 1 ? "tomorrow" : LONG_DAYS[day]! };
+  }
+  return { open: false, opensAt: null, opensOn: null };
 }

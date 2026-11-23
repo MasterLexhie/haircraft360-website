@@ -2,8 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { ArrowRight, Camera, Check, Clock, GraduationCap, MapPin, MessageCircle, Navigation, Phone, Scissors, ShieldCheck, Sparkles } from "lucide-react";
-import { getActiveServices, getPublicSettings, getSalon } from "@/server/queries";
-import { hoursSummary } from "@/domain/salon";
+import { getActiveServices, getPublicSettings, getSalon, requestNow } from "@/server/queries";
+import { hoursSummary, openStatus, type OpenStatus } from "@/domain/salon";
 import type { Service } from "@/domain/types";
 import type { WeekdayKey } from "@/domain/settings";
 import { describeDepositRule } from "@/components/booking/booking-summary";
@@ -17,7 +17,7 @@ import { MobileBarReveal } from "@/components/site/mobile-bar-reveal";
 import { HERO_PHOTO, GALLERY_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
 import { Skeleton, cx } from "@/components/ui/primitives";
 import { formatNaira } from "@/lib/money";
-import { formatDuration, formatHHMM, WEEKDAYS } from "@/lib/time";
+import { dayOfWeek, formatDuration, formatHHMM, lagosDateKey, lagosMinutes, WEEKDAYS } from "@/lib/time";
 
 /*
  * Home page, Studio Groove (canvas variation D): Warm Studio's calm layout with Groove's colours,
@@ -537,8 +537,8 @@ function Visit() {
 }
 
 async function VisitDetails() {
-  const [salon, { availability }] = await Promise.all([getSalon(), getPublicSettings()]);
-  const hours = hoursSummary(availability.weeklyHours, formatHHMM);
+  const [salon, { availability }, nowMs] = await Promise.all([getSalon(), getPublicSettings(), requestNow()]);
+  const status = openStatus(availability.weeklyHours, dayOfWeek(lagosDateKey(nowMs)), lagosMinutes(nowMs));
   const ig = salon.social.find((s) => s.platform === "instagram");
   const item = "flex gap-3.5";
   const icon = "mt-0.5 size-5 shrink-0 text-clay";
@@ -556,10 +556,7 @@ async function VisitDetails() {
         )}
         <li className={item}>
           <Clock aria-hidden className={icon} />
-          <span>
-            <strong>{hours.open.join(" · ") || "See opening hours"}</strong>
-            <span className="block text-ink-3">{hours.closed}</span>
-          </span>
+          <OpenNow status={status} />
         </li>
         {salon.whatsapp && (
           <li className={item}>
@@ -596,6 +593,34 @@ async function VisitDetails() {
         )}
       </div>
     </>
+  );
+}
+
+/** "Open now, closes at 7:00 pm" or "Closed now, opens tomorrow at 9:00 am", in salon time. The full week is in the table beside it. */
+function OpenNow({ status }: { status: OpenStatus }) {
+  if (status.open) {
+    return (
+      <span>
+        <strong className="flex items-center gap-2 text-success">
+          <span aria-hidden className="relative flex size-2.5">
+            <span className="absolute inline-flex size-full rounded-full bg-success opacity-60 motion-safe:animate-ping" />
+            <span className="relative inline-flex size-2.5 rounded-full bg-success" />
+          </span>
+          Open now
+        </strong>
+        <span className="block text-ink-3">Closes at {formatHHMM(status.closesAt)}</span>
+      </span>
+    );
+  }
+  return (
+    <span>
+      <strong>Closed now</strong>
+      <span className="block text-ink-3">
+        {status.opensAt === null
+          ? "See the opening hours"
+          : `Opens ${status.opensOn === "today" || status.opensOn === "tomorrow" ? status.opensOn : `on ${status.opensOn}`} at ${formatHHMM(status.opensAt)}`}
+      </span>
+    </span>
   );
 }
 
