@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
-import { ArrowRight, Camera, Check, Clock, GraduationCap, MapPin, MessageCircle, Navigation, Scissors, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowRight, Camera, Check, Clock, GraduationCap, MapPin, MessageCircle, Navigation, Phone, Scissors, ShieldCheck, Sparkles } from "lucide-react";
 import { getActiveServices, getPublicSettings, getSalon } from "@/server/queries";
 import { hoursSummary } from "@/domain/salon";
 import type { Service } from "@/domain/types";
@@ -57,8 +57,9 @@ export default function HomePage() {
 
 /* ───────────── small pieces ───────────── */
 
-function whatsappHref(e164: string) {
-  return `https://wa.me/${e164.replace(/\D/g, "")}`;
+/** A WhatsApp chat with the salon, optionally with a first message typed in for the customer. */
+function whatsappHref(e164: string, text?: string) {
+  return `https://wa.me/${e164.replace(/\D/g, "")}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
 }
 
 /** Stock photo with a small honest label, so it is never taken for the salon's own work. */
@@ -306,15 +307,26 @@ async function Services() {
       <div className="mt-8 flex flex-col justify-between gap-4 rounded-[18px] border border-on-night/15 bg-on-night/[0.06] p-5 md:flex-row md:items-center md:px-7">
         <p>
           <strong>Not sure what your locs need?</strong>{" "}
-          <span className="text-on-night-2">Send us a photo and we will tell you honestly.</span>
+          <span className="text-on-night-2">
+            {salon.whatsapp ? "Send us a photo on WhatsApp and we will tell you honestly." : "Ask us and we will tell you honestly."}
+          </span>
         </p>
         <div className="flex flex-wrap gap-3">
-          {salon.whatsapp && (
-            <a href={whatsappHref(salon.whatsapp.e164)} target="_blank" rel="noopener noreferrer" className={pill("pink", "md")}>
-              <MessageCircle aria-hidden className="size-4" /> Chat on WhatsApp
+          {salon.whatsapp ? (
+            <a
+              href={whatsappHref(salon.whatsapp.e164, "Hi Haircraft360, I'd like to ask about my locs or nails.")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={pill("pink", "md")}
+            >
+              <MessageCircle aria-hidden className="size-4" /> Ask on WhatsApp
               <span className="sr-only"> (opens in a new tab)</span>
             </a>
-          )}
+          ) : salon.phone ? (
+            <a href={`tel:${salon.phone.e164}`} className={pill("pink", "md")}>
+              <Phone aria-hidden className="size-4" /> Call to ask
+            </a>
+          ) : null}
           <Link href="/book" className={pill("ghost-dark", "md")}>
             Book a visit
           </Link>
