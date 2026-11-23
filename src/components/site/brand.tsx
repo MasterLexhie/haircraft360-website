@@ -44,7 +44,9 @@ export function Sticker({ id, ring, center, className, fill = "var(--color-orang
 /** Soft wave between a light and a dark band. `flip` turns it upside down for the way back. */
 export function Wave({ from, to, flip = false }: { from: string; to: string; flip?: boolean }) {
   return (
-    <div aria-hidden className={cx("leading-[0]", from)}>
+    // Tucked 1px into the next band (and drawn over it), so no hairline seam shows where the wave
+    // lands on a fractional pixel, as phone browsers otherwise can.
+    <div aria-hidden className={cx("relative z-[1] -mb-px leading-[0]", from)}>
       <svg viewBox="0 0 1440 80" preserveAspectRatio="none" className={cx("block h-8 w-full sm:h-14", flip && "-scale-y-100", to)}>
         <path d="M0 40 C 180 0, 360 80, 540 40 S 900 0, 1080 40 S 1260 80, 1440 40 L1440 80 L0 80 Z" fill="currentColor" />
       </svg>
