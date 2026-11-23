@@ -48,7 +48,6 @@ export default function HomePage() {
       <GoodToKnow />
       <Visit />
       <Mastery />
-      <Wave from="bg-surface" to="text-dusk" />
       <ClosingCta />
       <Suspense fallback={null}>
         <MobileBar />
@@ -680,7 +679,7 @@ function Mastery() {
 
 function ClosingCta() {
   return (
-    <section aria-labelledby="cta-title" className="on-night bg-dusk pb-14 pt-8 text-on-night sm:pb-22 sm:pt-14">
+    <section aria-labelledby="cta-title" className="on-night bg-dusk py-14 text-on-night sm:py-22">
       <div className={cx(wrap, "flex flex-col justify-between gap-8 md:flex-row md:items-center")}>
         <h2 id="cta-title" className="max-w-[720px] font-serif text-[2.25rem] font-semibold leading-[1.05] tracking-[-0.02em] sm:text-[3.5rem]">
           Come and see what <em className="font-normal text-orange">careful hands</em> can do.
