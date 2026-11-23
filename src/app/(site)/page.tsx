@@ -82,10 +82,7 @@ function Hero() {
       <div aria-hidden className="absolute -right-28 top-4 size-[300px] rounded-full bg-accent md:-right-36 md:-top-24 md:size-[640px]" />
       <div className={cx(wrap, "relative grid items-center gap-8 pb-10 pt-2 md:grid-cols-[1.05fr_1fr] md:gap-14 md:pb-20 md:pt-12")}>
         <div className="order-2 md:order-1">
-          <p className="rise inline-flex items-center gap-2.5 rounded-full bg-lilac/15 px-4 py-2 text-sm font-semibold text-lilac">
-            <Sparkles aria-hidden className="size-4" /> Locs and nails, under one roof
-          </p>
-          <h1 id="hero-title" className="mt-5 font-serif text-[2.6rem] font-semibold leading-[1.02] tracking-[-0.03em] sm:text-[3.6rem] lg:text-[4.75rem]">
+          <h1 id="hero-title" className="font-serif text-[2.6rem] font-semibold leading-[1.02] tracking-[-0.03em] sm:text-[3.6rem] lg:text-[4.75rem]">
             Healthy locs and neat nails, done with <em className="font-normal text-orange">care.</em>
           </h1>
           <p className="rise mt-5 max-w-[500px] text-base text-on-night-2 [--rise-delay:120ms] sm:text-lg">
