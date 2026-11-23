@@ -34,10 +34,17 @@ export function ApplyForm({ programs, initialProgramId, maxBirthDate }: { progra
   }, [state]);
 
   // "Apply for this program" links on the page change the address; follow them.
+  // The chosen program pulses once, so the applicant sees their pick from the card is set.
   const [lastInitial, setLastInitial] = useState(initialProgramId);
+  const [flashId, setFlashId] = useState<string | null>(programs.some((p) => p.id === initialProgramId) ? initialProgramId : null);
+  const [flashRound, setFlashRound] = useState(0);
   if (initialProgramId !== lastInitial) {
     setLastInitial(initialProgramId);
-    if (initialProgramId && programs.some((p) => p.id === initialProgramId)) setProgramId(initialProgramId);
+    if (initialProgramId && programs.some((p) => p.id === initialProgramId)) {
+      setProgramId(initialProgramId);
+      setFlashId(initialProgramId);
+      setFlashRound((n) => n + 1);
+    }
   }
 
   function onSubmit(e: FormEvent<HTMLFormElement>) {
@@ -49,10 +56,10 @@ export function ApplyForm({ programs, initialProgramId, maxBirthDate }: { progra
   if (state?.ok) {
     return (
       <div ref={doneRef} tabIndex={-1} role="status" className="rounded-[var(--radius)] bg-surface p-6 text-center shadow-[var(--shadow-md)] focus:outline-none sm:p-10">
-        <span className="mx-auto flex size-14 items-center justify-center rounded-full bg-success-soft">
+        <span className="tick-pop mx-auto flex size-14 items-center justify-center rounded-full bg-success-soft">
           <CheckCircle2 aria-hidden className="size-7 text-success" />
         </span>
-        <h3 className="type-display mt-5 text-[1.9rem]">Application sent</h3>
+        <h3 className="rise type-display mt-5 text-[1.9rem] [--rise-delay:200ms]">Application sent</h3>
         <p className="mt-3 text-ink-2">
           Thank you. Your application for <strong className="text-ink">{state.programName}</strong> is in.
         </p>
@@ -102,9 +109,11 @@ export function ApplyForm({ programs, initialProgramId, maxBirthDate }: { progra
             const on = programId === p.id;
             return (
               <label
-                key={p.id}
+                key={flashId === p.id ? `${p.id}-${flashRound}` : p.id}
+                onAnimationEnd={() => setFlashId(null)}
                 className={cx(
-                  "flex cursor-pointer items-center gap-4 rounded-[var(--radius)] border bg-surface p-4 has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink",
+                  flashId === p.id && "pick-flash",
+                  "flex cursor-pointer items-center gap-4 rounded-[var(--radius)] border bg-surface p-4 transition-colors has-[:focus-visible]:outline has-[:focus-visible]:outline-3 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-ink",
                   on ? "border-accent bg-accent-soft/40" : "border-line hover:border-line-strong",
                 )}
               >

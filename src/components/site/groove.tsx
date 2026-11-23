@@ -34,7 +34,10 @@ export function PageIntro({
   children,
   aside,
   className,
+  entrance = false,
 }: {
+  /** Plays the home page's short entrance: label, line, buttons and picture rise in; the title stays still. */
+  entrance?: boolean;
   kicker: React.ReactNode;
   title: React.ReactNode;
   lead?: React.ReactNode;
@@ -47,14 +50,14 @@ export function PageIntro({
       <div aria-hidden className="absolute -right-32 -top-24 size-[300px] rounded-full bg-accent sm:size-[460px]" />
       <div className={cx(wrap, "relative grid items-center gap-8 py-10 sm:py-16", aside ? "md:grid-cols-[1.1fr_1fr] md:gap-14" : null)}>
         <div>
-          <Kicker tone="orange">{kicker}</Kicker>
+          <Kicker tone="orange" className={entrance ? "rise" : undefined}>{kicker}</Kicker>
           <h1 className="mt-3 font-serif text-[2.4rem] font-semibold leading-[1.03] tracking-[-0.03em] sm:text-[3.5rem] lg:text-[4rem] [&_em]:font-normal [&_em]:text-orange">
             {title}
           </h1>
-          {lead && <p className="mt-4 max-w-[540px] text-base text-on-night-2 sm:text-lg">{lead}</p>}
-          {children}
+          {lead && <p className={cx("mt-4 max-w-[540px] text-base text-on-night-2 sm:text-lg", entrance && "rise [--rise-delay:120ms]")}>{lead}</p>}
+          {entrance ? <div className="rise [--rise-delay:220ms]">{children}</div> : children}
         </div>
-        {aside}
+        {entrance && aside ? <div className="frame-in">{aside}</div> : aside}
       </div>
     </section>
   );

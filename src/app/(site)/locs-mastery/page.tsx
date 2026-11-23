@@ -10,6 +10,7 @@ import { requestNow } from "@/server/queries";
 import { StockPhoto, Sticker, Wave } from "@/components/site/brand";
 import { IconTile, Kicker, PageIntro, Strip, Title, wrap } from "@/components/site/groove";
 import { pill } from "@/components/site/pill";
+import { MobileBarReveal } from "@/components/site/mobile-bar-reveal";
 import { ACADEMY_PHOTOS } from "@/config/stock-photos";
 import { Badge, ButtonLink, SectionHeading, Skeleton, cx } from "@/components/ui/primitives";
 import { ApplyForm } from "./apply-form";
@@ -29,9 +30,11 @@ export default function LocsMasteryPage({ searchParams }: Props) {
       <Learn />
       <section id="programs" aria-labelledby="programs-title" className="scroll-mt-24 bg-sand py-16 sm:py-24">
         <div className={wrap}>
+          <div className="reveal">
           <SectionHeading id="programs-title" eyebrow="The programs" title={<>Find the program that <em>fits</em> you</>}>
             Each program is taught hands on. Dates and what to bring are talked through with you after you apply.
           </SectionHeading>
+          </div>
           <Suspense fallback={<ProgramsSkeleton />}>
             <Programs />
           </Suspense>
@@ -54,6 +57,7 @@ export default function LocsMasteryPage({ searchParams }: Props) {
       </section>
       <Faq />
       <Closing />
+      <ApplyBar />
     </>
   );
 }
@@ -61,6 +65,7 @@ export default function LocsMasteryPage({ searchParams }: Props) {
 function Hero() {
   return (
     <PageIntro
+      entrance
       kicker={<span className="inline-flex items-center gap-2"><GraduationCap aria-hidden className="size-5" /> Locs Mastery</span>}
       title={<>Learn the craft of <em>locs,</em> hands on.</>}
       lead={
@@ -79,13 +84,13 @@ function Hero() {
             priority
             className="rounded-[28px] border-4 border-orange md:border-[6px]"
           />
-          <Sticker id="lm-sticker" ring="LEARN · PRACTISE · GROW · " center="360" className="absolute -top-6 left-0 size-[88px] -rotate-[14deg] md:size-[120px]" />
+          <Sticker id="lm-sticker" ring="LEARN · PRACTISE · GROW · " center="360" className="pop-in absolute -top-6 left-0 size-[88px] -rotate-[14deg] [--rise-delay:450ms] md:size-[120px]" />
         </div>
       }
     >
-      <div className="mt-8 flex flex-wrap items-center gap-3">
-        <Link href="#apply" className={pill("pink")}>
-          Apply now <ArrowRight aria-hidden className="size-4" />
+      <div id="lm-hero-actions" className="mt-8 flex flex-wrap items-center gap-3">
+        <Link href="#apply" className={pill("pink", "lg", "group")}>
+          Apply now <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
         </Link>
         <Link href="#programs" className={pill("ghost-dark")}>
           See the programs
@@ -112,7 +117,7 @@ function Learn() {
   return (
     <section aria-labelledby="learn-title" className="py-14 sm:py-24">
       <div className={wrap}>
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div className="reveal flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <Kicker>What you could learn</Kicker>
             <Title id="learn-title">
@@ -123,7 +128,7 @@ function Learn() {
         </div>
         <ul className="mt-8 grid gap-4 sm:mt-10 sm:grid-cols-2 sm:gap-5 lg:grid-cols-3">
           {SKILLS.map((sk, i) => (
-            <li key={sk.title}>
+            <li key={sk.title} className="reveal">
               <IconTile icon={sk.icon} title={sk.title} tone={i % 2 ? "lilac" : "orange"}>
                 {sk.body}
               </IconTile>
@@ -148,7 +153,7 @@ async function Programs() {
   return (
     <ul className="mt-12 grid gap-6 md:grid-cols-2 lg:grid-cols-3">
       {programs.map((p, i) => (
-        <li key={p.id}>
+        <li key={p.id} className="reveal">
           <ProgramCard program={p} photoIndex={i} />
         </li>
       ))}
@@ -159,8 +164,13 @@ async function Programs() {
 function ProgramCard({ program: p, photoIndex }: { program: ProgramRow; photoIndex: number }) {
   const photo = ACADEMY_PHOTOS.programs[photoIndex % ACADEMY_PHOTOS.programs.length]!;
   return (
-    <article aria-labelledby={`prog-${p.id}`} className="flex h-full flex-col overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-sm)]">
-      <StockPhoto photo={photo} ratio="16/9" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" className="rounded-none" />
+    <article
+      aria-labelledby={`prog-${p.id}`}
+      className="group flex h-full flex-col overflow-hidden rounded-[var(--radius)] bg-surface shadow-[var(--shadow-sm)] transition-[transform,box-shadow] duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-md)] motion-reduce:hover:translate-y-0"
+    >
+      <div className="overflow-hidden">
+        <StockPhoto photo={photo} ratio="16/9" sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw" className="rounded-none transition-transform duration-500 group-hover:scale-[1.03]" />
+      </div>
       <div className="flex flex-1 flex-col p-6">
         <div className="flex flex-wrap gap-2">
           {p.level && <Badge tone="accent">{p.level}</Badge>}
@@ -228,19 +238,20 @@ function HowToApply() {
     <section aria-labelledby="how-title" className="relative overflow-hidden py-14 sm:py-24">
       <div aria-hidden className="absolute -right-36 top-10 size-[420px] rounded-[48%_52%_60%_40%/50%_40%_60%_50%] bg-lilac/30" />
       <div className={cx(wrap, "relative grid items-center gap-10 md:grid-cols-2 md:gap-20")}>
-        <div>
+        <div className="reveal">
           <Kicker>How to apply</Kicker>
           <Title id="how-title">
             Three steps to your <em>place</em>
           </Title>
           <p className="mt-5 max-w-[460px] text-ink-2 sm:text-lg">No commitment until you&apos;ve spoken to us, and nothing to pay to apply.</p>
-          <Link href="#apply" className={pill("plum", "lg", "mt-8")}>
-            Start your application <ArrowRight aria-hidden className="size-4" />
+          <Link href="#apply" className={pill("plum", "lg", "group mt-8")}>
+            Start your application <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>
-        <ol className="grid gap-4">
+        <ol className="relative grid gap-5">
+          <span aria-hidden className="step-line absolute bottom-10 left-[2.05rem] top-10 w-[3px] rounded-full bg-clay/60 sm:left-[2.3rem]" />
           {steps.map((st, i) => (
-            <li key={st.title} className="flex gap-5 rounded-[20px] border border-line bg-surface p-5 shadow-[0_18px_36px_-28px_rgb(46_29_45/0.4)] sm:p-6">
+            <li key={st.title} style={{ "--step": i } as React.CSSProperties} className="reveal-step relative flex gap-5 rounded-[20px] border border-line bg-surface p-5 shadow-[0_18px_36px_-28px_rgb(46_29_45/0.4)] sm:p-6">
               <span aria-hidden className="w-8 shrink-0 font-groove text-[1.8rem] leading-none text-clay">{i + 1}</span>
               <span>
                 <span className="sr-only">Step {i + 1}: </span>
@@ -298,13 +309,15 @@ function Faq() {
   return (
     <section aria-labelledby="faq-title" className="bg-bg py-16 sm:py-24">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
-        <SectionHeading id="faq-title" align="center" eyebrow="Questions" title={<>Good to <em>know</em></>} />
-        <div className="mt-10 divide-y divide-line rounded-[var(--radius)] border border-line bg-surface">
+        <div className="reveal">
+          <SectionHeading id="faq-title" align="center" eyebrow="Questions" title={<>Good to <em>know</em></>} />
+        </div>
+        <div className="reveal mt-10 divide-y divide-line rounded-[var(--radius)] border border-line bg-surface">
           {FAQ.map((f) => (
-            <details key={f.q} className="group">
+            <details key={f.q} className="smooth-details group">
               <summary className="flex min-h-14 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-medium text-ink [&::-webkit-details-marker]:hidden">
                 {f.q}
-                <span aria-hidden className="text-xl leading-none text-accent-text transition-transform group-open:rotate-45">+</span>
+                <span aria-hidden className="text-xl leading-none text-accent-text transition-transform duration-300 group-open:rotate-45">+</span>
               </summary>
               <p className="px-5 pb-5 text-sm text-ink-2">{f.a}</p>
             </details>
@@ -321,6 +334,28 @@ function Faq() {
   );
 }
 
+/**
+ * Phone only: "Apply now" slides up once the hero's buttons scroll away, and slides back down while
+ * the application form itself is on screen, so there is always one way to apply and never two.
+ */
+function ApplyBar() {
+  return (
+    <MobileBarReveal watch="lm-hero-actions" hideWhileVisible="apply" className="fixed inset-x-0 bottom-0 z-30 md:hidden">
+      <div
+        className="flex gap-2.5 border-t border-cream-line bg-surface/95 px-4 pt-2.5 shadow-[0_-10px_24px_-16px_rgb(46_29_45/0.45)] backdrop-blur"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
+        <Link href="#programs" className={pill("ghost", "lg", "flex-1 px-3")}>
+          Programs
+        </Link>
+        <Link href="#apply" className={pill("pink", "lg", "flex-[1.4] px-3")}>
+          Apply free <ArrowRight aria-hidden className="size-4" />
+        </Link>
+      </div>
+    </MobileBarReveal>
+  );
+}
+
 function Closing() {
   return (
     <>
@@ -333,8 +368,8 @@ function Closing() {
             </h2>
             <p className="mt-4 text-on-night-2">Free to apply. We&apos;ll talk it through before you commit.</p>
           </div>
-          <Link href="#apply" className={pill("pink", "lg", "self-start md:self-auto")}>
-            Apply now <ArrowRight aria-hidden className="size-4" />
+          <Link href="#apply" className={pill("pink", "lg", "group self-start md:self-auto")}>
+            Apply now <ArrowRight aria-hidden className="size-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>
       </section>
