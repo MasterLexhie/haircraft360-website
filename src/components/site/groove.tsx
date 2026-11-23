@@ -60,18 +60,28 @@ export function PageIntro({
   );
 }
 
-/** The orange strip under a dark intro: a run of short phrases in the Groove face. */
+/**
+ * The orange strip under a dark intro: a run of short phrases in the Groove face, drifting slowly
+ * sideways (paused on hover, still when motion is reduced). The run is drawn twice so the loop is
+ * seamless; screen readers get the first copy only.
+ */
 export function Strip({ items, label }: { items: string[]; label: string }) {
+  const run = (hidden: boolean) => (
+    <ul aria-label={hidden ? undefined : label} aria-hidden={hidden || undefined} className="flex shrink-0 gap-6 pr-6 sm:gap-7 sm:pr-7">
+      {items.map((c, i) => (
+        <li key={`${i}-${c}`} className="flex items-center gap-6 sm:gap-7">
+          {c}
+          <Sparkles aria-hidden className="size-3.5 text-accent sm:size-5" />
+        </li>
+      ))}
+    </ul>
+  );
   return (
-    <div className="overflow-hidden border-b-[5px] border-lilac bg-orange text-ink">
-      <ul aria-label={label} className="flex w-max gap-6 px-4 py-2.5 font-groove text-lg leading-tight sm:gap-7 sm:px-10 sm:py-4 sm:text-[1.6rem]">
-        {items.map((c, i) => (
-          <li key={`${i}-${c}`} className="flex items-center gap-6 sm:gap-7">
-            {c}
-            <Sparkles aria-hidden className="size-3.5 text-accent sm:size-5" />
-          </li>
-        ))}
-      </ul>
+    <div className="marquee overflow-hidden border-b-[5px] border-lilac bg-orange text-ink">
+      <div className="marquee-track flex w-max py-2.5 font-groove text-lg leading-tight sm:py-4 sm:text-[1.6rem]">
+        {run(false)}
+        {run(true)}
+      </div>
     </div>
   );
 }

@@ -63,7 +63,17 @@ export const SERVICE_PHOTOS: Record<string, StockPhoto> = {
   },
 };
 
-export type GalleryPair = { label: string; before: StockPhoto; after: StockPhoto };
+export type GalleryPair = {
+  label: string;
+  before: StockPhoto;
+  after: StockPhoto;
+  /**
+   * True only when both photos are the same real client, before and after the salon's work.
+   * Only those pairs get the before and after slider on the home page; the stock pairs below
+   * show different people, so comparing them would mislead.
+   */
+  sameClient?: boolean;
+};
 
 export const GALLERY_PAIRS: GalleryPair[] = [
   {

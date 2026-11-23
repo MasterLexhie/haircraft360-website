@@ -29,9 +29,11 @@ export function Sticker({ id, ring, center, className, fill = "var(--color-orang
       </defs>
       <circle cx="75" cy="75" r="72" fill={fill} />
       <circle cx="75" cy="75" r="38" fill="none" stroke={ink} strokeWidth="1.5" strokeDasharray="2 5" />
-      <text fill={ink} fontFamily="var(--font-sans)" fontSize="12.5" fontWeight="700" letterSpacing="3">
-        <textPath href={`#${id}`}>{ring}</textPath>
-      </text>
+      <g className="sticker-ring">
+        <text fill={ink} fontFamily="var(--font-sans)" fontSize="12.5" fontWeight="700" letterSpacing="3">
+          <textPath href={`#${id}`}>{ring}</textPath>
+        </text>
+      </g>
       <text x="75" y="84" textAnchor="middle" fill={ink} fontFamily="var(--font-groove)" fontSize="24">
         {center}
       </text>

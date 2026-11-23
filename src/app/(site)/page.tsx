@@ -12,6 +12,7 @@ import { pill } from "@/components/site/pill";
 import { Kicker, Strip, Title, wrap } from "@/components/site/groove";
 import { ServicePhoto } from "@/components/site/service-photo";
 import { VisitCard } from "@/components/site/visit-card";
+import { BeforeAfter } from "@/components/site/before-after";
 import { MobileBarReveal } from "@/components/site/mobile-bar-reveal";
 import { HERO_PHOTO, GALLERY_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
 import { Skeleton, cx } from "@/components/ui/primitives";
@@ -169,7 +170,7 @@ function WhyUs() {
   return (
     <section aria-labelledby="why-title" className="pb-4 pt-14 sm:pt-24">
       <div className={wrap}>
-        <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+        <div className="reveal flex flex-col justify-between gap-4 md:flex-row md:items-end">
           <div>
             <Kicker>Why Haircraft360</Kicker>
             <Title id="why-title">
@@ -180,7 +181,7 @@ function WhyUs() {
         </div>
         <ul className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-4">
           {PROMISES.map((p) => (
-            <li key={p.title} className="rounded-[20px] border border-cream-line bg-surface p-4 shadow-[0_18px_36px_-28px_rgb(46_29_45/0.4)] sm:p-6">
+            <li key={p.title} className="reveal rounded-[20px] border border-cream-line bg-surface p-4 shadow-[0_18px_36px_-28px_rgb(46_29_45/0.4)] sm:p-6">
               <span className={cx("grid size-10 place-items-center rounded-full text-ink sm:size-13", p.tone)}>
                 <p.icon aria-hidden className="size-[18px] sm:size-[22px]" />
               </span>
@@ -213,10 +214,11 @@ function Caption({ children, big }: { children: React.ReactNode; big?: boolean }
 
 function OurWork() {
   const [first, ...rest] = WORK;
+  const realPair = GALLERY_PAIRS.find((p) => p.sameClient);
   return (
     <section id="work" aria-labelledby="work-title" className="scroll-mt-20 py-14 sm:py-24">
       <div className={wrap}>
-        <div className="flex flex-col justify-between gap-3 md:flex-row md:items-end">
+        <div className="reveal flex flex-col justify-between gap-3 md:flex-row md:items-end">
           <div>
             <Kicker>Our work</Kicker>
             <Title id="work-title">
@@ -227,10 +229,14 @@ function OurWork() {
             <InstagramLink />
           </Suspense>
         </div>
-        <ul className="mt-8 flex snap-x gap-3 overflow-x-auto pb-2 md:mt-10 md:grid md:grid-cols-4 md:grid-rows-[300px_300px] md:gap-4 md:overflow-visible md:pb-0">
+        <ul className="reveal mt-8 flex snap-x gap-3 overflow-x-auto pb-2 md:mt-10 md:grid md:grid-cols-4 md:grid-rows-[300px_300px] md:gap-4 md:overflow-visible md:pb-0">
           <li className="relative w-[78%] shrink-0 snap-start md:col-span-2 md:row-span-2 md:w-auto">
-            <Photo photo={first!.photo} sizes="(min-width: 768px) 50vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
-            <Caption big>{first!.caption}</Caption>
+            {realPair ? (
+              <BeforeAfter before={realPair.before} after={realPair.after} label={realPair.label} sizes="(min-width: 768px) 50vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
+            ) : (
+              <Photo photo={first!.photo} sizes="(min-width: 768px) 50vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
+            )}
+            <Caption big>{realPair ? realPair.label : first!.caption}</Caption>
           </li>
           {rest.slice(0, 2).map((w) => (
             <li key={w.caption} className="relative w-[78%] shrink-0 snap-start md:w-auto">
@@ -278,7 +284,7 @@ async function Services() {
   const withPhotos = main.some((s) => s.photo);
   return (
     <>
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end">
+      <div className="reveal flex flex-col justify-between gap-4 md:flex-row md:items-end">
         <div>
           <Kicker tone="orange">What we do</Kicker>
           <Title id="services-title">
@@ -394,7 +400,7 @@ async function MakeADayOfIt() {
     <section aria-labelledby="day-title" className="relative overflow-hidden py-14 sm:py-24">
       <div aria-hidden className="absolute -right-36 top-16 size-[460px] rounded-[48%_52%_60%_40%/50%_40%_60%_50%] bg-lilac/30" />
       <div className={cx(wrap, "relative grid items-center gap-10 md:grid-cols-2 md:gap-20")}>
-        <div>
+        <div className="reveal">
           <Kicker>Make a day of it</Kicker>
           <Title id="day-title">
             Come for your locs, leave with <em>fresh nails</em> too.
@@ -411,7 +417,11 @@ async function MakeADayOfIt() {
             ))}
           </ol>
         </div>
-        {pairing && <VisitCard main={pairing.main} addOns={pairing.addOns.slice(0, 3)} />}
+        {pairing && (
+          <div className="reveal">
+            <VisitCard main={pairing.main} addOns={pairing.addOns.slice(0, 3)} />
+          </div>
+        )}
       </div>
     </section>
   );
@@ -423,7 +433,7 @@ function GoodToKnow() {
   return (
     <section aria-labelledby="know-title" className="bg-cream-2 py-14 sm:py-24">
       <div className={cx(wrap, "grid items-start gap-8 md:grid-cols-2 md:gap-18")}>
-        <div>
+        <div className="reveal">
           <Kicker>Good to know</Kicker>
           <Title id="know-title">
             Your visit, without <em>surprises</em>
@@ -432,7 +442,7 @@ function GoodToKnow() {
             We agree the service and the price before we start, and we tell you how to look after your locs or nails when we finish.
           </p>
         </div>
-        <div className="rounded-3xl border border-cream-line bg-surface p-6 sm:p-8">
+        <div className="reveal rounded-3xl border border-cream-line bg-surface p-6 sm:p-8">
           <Suspense fallback={<Skeleton className="h-48" />}>
             <VisitTerms />
           </Suspense>
@@ -471,7 +481,7 @@ function Visit() {
   return (
     <section id="visit" aria-labelledby="visit-title" className="scroll-mt-20 border-t border-cream-line bg-surface py-14 sm:py-24">
       <div className={cx(wrap, "grid gap-10 md:grid-cols-[1fr_1.1fr] md:gap-14")}>
-        <div className="order-2 rounded-3xl bg-cream-2 p-6 sm:p-9 md:order-1">
+        <div className="reveal order-2 rounded-3xl bg-cream-2 p-6 sm:p-9 md:order-1">
           <h3 className="flex items-center gap-2 font-serif text-xl font-semibold">
             <Clock aria-hidden className="size-5 text-clay" /> Opening hours
           </h3>
@@ -479,7 +489,7 @@ function Visit() {
             <HoursTable />
           </Suspense>
         </div>
-        <div className="order-1 md:order-2">
+        <div className="reveal order-1 md:order-2">
           <Kicker>Visit</Kicker>
           <Title id="visit-title">
             Find the <em>salon</em>
@@ -585,7 +595,7 @@ function Mastery() {
   return (
     <section aria-labelledby="mastery-title" className="bg-surface pb-14 sm:pb-24">
       <div className={wrap}>
-        <div className="on-night relative grid items-center gap-6 overflow-hidden rounded-[28px] bg-accent p-7 text-on-night sm:p-12 md:grid-cols-[1.3fr_1fr] md:px-14">
+        <div className="reveal on-night relative grid items-center gap-6 overflow-hidden rounded-[28px] bg-accent p-7 text-on-night sm:p-12 md:grid-cols-[1.3fr_1fr] md:px-14">
           <div aria-hidden className="absolute -bottom-36 -right-20 size-[380px] rounded-full bg-lilac/20" />
           <div className="relative">
             <p className="flex items-center gap-2.5 font-groove text-base text-orange sm:text-lg">

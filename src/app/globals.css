@@ -301,3 +301,41 @@ select:not([multiple]):not([size]) {
   animation: pop-in 520ms cubic-bezier(0.3, 1.4, 0.5, 1) both;
   animation-delay: var(--rise-delay, 0ms);
 }
+
+/* ── Ambient motion on the public site ──────────────────────── */
+/* Only when the visitor hasn't asked for less motion; otherwise everything simply sits still. */
+@media (prefers-reduced-motion: no-preference) {
+  /* The orange strip drifts left; the run is drawn twice, so -50% lands on an identical frame. */
+  @keyframes marquee {
+    to { transform: translateX(-50%); }
+  }
+  .marquee-track {
+    animation: marquee 38s linear infinite;
+  }
+  .marquee:hover .marquee-track {
+    animation-play-state: paused;
+  }
+
+  /* Stickers: the ring of words turns slowly around the still centre. */
+  @keyframes sticker-turn {
+    to { transform: rotate(360deg); }
+  }
+  .sticker-ring {
+    transform-box: view-box;
+    transform-origin: 50% 50%;
+    animation: sticker-turn 24s linear infinite;
+  }
+
+  /* Gentle reveal as a block scrolls into view, driven by the scroll itself (no script).
+     Browsers without scroll-driven animations simply show the block. */
+  @supports (animation-timeline: view()) {
+    @keyframes reveal {
+      from { opacity: 0; transform: translateY(18px); }
+    }
+    .reveal {
+      animation: reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 55%;
+    }
+  }
+}
