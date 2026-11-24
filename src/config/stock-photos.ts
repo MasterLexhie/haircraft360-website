@@ -142,6 +142,16 @@ export const OWN_PAIRS: GalleryPair[] = [
   },
 ];
 
+/** The salon's own single photos, shown in Our work without a before and after. */
+export const CROCHET_MAINTENANCE_PHOTO: StockPhoto = {
+  src: "/work/locs-crochet-maintenance-after.webp",
+  alt: "A client's head from above after crochet maintenance, with firm, tidy locs and clean square parts",
+  width: 960,
+  height: 1200,
+  brief: "A client's locs straight after crochet maintenance",
+  own: true,
+};
+
 export const GALLERY_PAIRS: GalleryPair[] = [
   {
     label: "Starter locs",

@@ -14,7 +14,7 @@ import { ServicePhoto } from "@/components/site/service-photo";
 import { VisitCard } from "@/components/site/visit-card";
 import { BeforeAfter } from "@/components/site/before-after";
 import { MobileBarReveal } from "@/components/site/mobile-bar-reveal";
-import { HERO_PHOTO, GALLERY_PAIRS, OWN_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
+import { HERO_PHOTO, CROCHET_MAINTENANCE_PHOTO, GALLERY_PAIRS, OWN_PAIRS, type StockPhoto } from "@/config/stock-photos";
 import { Skeleton, cx } from "@/components/ui/primitives";
 import { formatNaira } from "@/lib/money";
 import { dayOfWeek, formatDuration, formatHHMM, lagosDateKey, lagosMinutes, WEEKDAYS } from "@/lib/time";
@@ -198,7 +198,7 @@ const WORK: { photo: StockPhoto; caption: string }[] = [
   { photo: OWN_PAIRS[0]!.after, caption: "Instant starter locs" },
   { photo: OWN_PAIRS[1]!.after, caption: "Locs retwist" },
   { photo: OWN_PAIRS[2]!.after, caption: "Locs repair" },
-  { photo: SERVICE_PHOTOS.seed_svc_retwist!, caption: "Neat roots" },
+  { photo: CROCHET_MAINTENANCE_PHOTO, caption: "Crochet maintenance" },
 ];
 
 function Caption({ children, big }: { children: React.ReactNode; big?: boolean }) {
