@@ -82,10 +82,10 @@ function Hero() {
       <div className={cx(wrap, "relative grid items-center gap-8 pb-10 pt-2 md:grid-cols-[1.05fr_1fr] md:gap-14 md:pb-20 md:pt-12")}>
         <div className="order-2 md:order-1">
           <h1 id="hero-title" className="font-serif text-[2.6rem] font-semibold leading-[1.02] tracking-[-0.03em] sm:text-[3.6rem] lg:text-[4.75rem]">
-            Healthy locs and neat nails, done with <em className="font-normal text-orange">care.</em>
+            Healthy locs and more, done with <em className="font-normal text-orange">care.</em>
           </h1>
           <p className="rise mt-5 max-w-[500px] text-base text-on-night-2 [--rise-delay:120ms] sm:text-lg">
-            From your first starter locs to a fresh pedicure, every client gets our full, unhurried attention and work you will be proud to show off.
+            From your first starter locs to every retwist after, every client gets our full, unhurried attention and work you will be proud to show off.
           </p>
           <div id="hero-actions" className="rise mt-8 flex flex-wrap items-center gap-x-6 gap-y-3 [--rise-delay:220ms]">
             <Link href="#services" className={pill("pink")}>
@@ -111,7 +111,7 @@ function Hero() {
             labelClassName="bottom-3 left-3 md:bottom-4 md:left-auto md:right-4"
           />
           </div>
-          <Sticker id="hero-sticker" ring="LOCS · NAILS · LOCS · NAILS · " center="360" className="pop-in absolute left-0 top-3 size-[88px] -rotate-[14deg] [--rise-delay:450ms] md:top-8 md:size-[132px]" />
+          <Sticker id="hero-sticker" ring="LOCS & MORE · LOCS & MORE · " center="360" className="pop-in absolute left-0 top-3 size-[88px] -rotate-[14deg] [--rise-delay:450ms] md:top-8 md:size-[132px]" />
           <div className="rise absolute bottom-3 right-3 flex items-center gap-3 rounded-2xl bg-cream [--rise-delay:380ms] py-2 pl-2 pr-4 text-ink shadow-[0_24px_48px_-24px_rgb(0_0_0/0.6)] md:bottom-10 md:left-0 md:right-auto md:py-3 md:pl-3">
             <span className="grid size-10 place-items-center rounded-xl bg-orange md:size-12">
               <Scissors aria-hidden className="size-5" />
@@ -148,7 +148,7 @@ async function HeroFacts() {
 
 /* ───────────── the orange strip of crafts ───────────── */
 
-const CRAFTS = ["Starter locs", "Retwists", "Crochet maintenance", "Repairs", "Reinstallation", "Manicure", "Pedicure", "Nail fixing"];
+const CRAFTS = ["Starter locs", "Retwists", "Crochet maintenance", "Repairs", "Reinstallation"];
 
 function CraftStrip() {
   return <Strip items={CRAFTS} label="What we do" />;
@@ -157,7 +157,7 @@ function CraftStrip() {
 /* ───────────── why us ───────────── */
 
 const PROMISES = [
-  { icon: Scissors, title: "Locs and nails", body: "Loc care and nail care, both done by hand, under one roof.", tone: "bg-orange" },
+  { icon: Scissors, title: "Locs and more", body: "Loc care at the heart of it, and more to come, all done by hand.", tone: "bg-orange" },
   { icon: Clock, title: "Patience over speed", body: "We take the time your hair needs, so your locs stay strong.", tone: "bg-lilac" },
   { icon: Check, title: "Honest advice", body: "If your locs need a repair, not a retwist, we will tell you.", tone: "bg-orange" },
   { icon: MessageCircle, title: "Ask us anything", body: "Send a photo and we will tell you what your locs need.", tone: "bg-lilac" },
@@ -238,8 +238,8 @@ function OurWork() {
           ))}
           <li className="grid w-[78%] shrink-0 snap-start place-items-center rounded-[20px] bg-lilac p-6 text-center md:w-auto">
             <span className="text-sm font-semibold">
-              Nail photos coming soon
-              <span className="mt-1 block font-normal text-ink-2">Manicures, pedicures and nail fixing</span>
+              More photos coming soon
+              <span className="mt-1 block font-normal text-ink-2">New work from the chair, added as we go</span>
             </span>
           </li>
           {rest.slice(2).map((w) => (
@@ -317,11 +317,11 @@ async function Services() {
         <div>
           <Kicker tone="orange">What we do</Kicker>
           <Title id="services-title">
-            Locs and <em className="text-lilac">nails</em>
+            Locs and <em className="text-lilac">more</em>
           </Title>
         </div>
         <p className="max-w-[420px] text-[0.95rem] text-on-night-2">
-          Everything is done by hand, at a pace that keeps your hair and nails healthy. We confirm the price with you before we start.
+          Everything is done by hand, at a pace that keeps your locs healthy. We confirm the price with you before we start.
         </p>
       </div>
 
@@ -349,7 +349,7 @@ async function Services() {
         <div className="flex flex-wrap gap-3">
           {salon.whatsapp ? (
             <a
-              href={whatsappHref(salon.whatsapp.e164, "Hi Haircraft360, I'd like to ask about my locs or nails.")}
+              href={whatsappHref(salon.whatsapp.e164, "Hi Haircraft360, I'd like to ask about your services.")}
               target="_blank"
               rel="noopener noreferrer"
               className={pill("pink", "md")}
@@ -424,7 +424,7 @@ function pickPairing(services: Service[]) {
 
 async function MakeADayOfIt() {
   const pairing = pickPairing(await getActiveServices());
-  const steps = ["Choose your loc service", "Add a manicure or a pedicure", "Sit back, we take our time"];
+  const steps = ["Choose your loc service", "Add an extra if you like", "Sit back, we take our time"];
   return (
     <section aria-labelledby="day-title" className="relative overflow-hidden py-14 sm:py-24">
       <div aria-hidden className="absolute -right-36 top-16 size-[460px] rounded-[48%_52%_60%_40%/50%_40%_60%_50%] bg-lilac/30" />
@@ -432,10 +432,10 @@ async function MakeADayOfIt() {
         <div className="reveal">
           <Kicker>Make a day of it</Kicker>
           <Title id="day-title">
-            Come for your locs, leave with <em>fresh nails</em> too.
+            Come for your locs, add <em>a little extra</em>.
           </Title>
           <p className="mt-5 max-w-[480px] text-ink-2 sm:text-lg">
-            Pair your loc service with a manicure or pedicure, done with the same patience we give your hair, and leave cared for from head to toe.
+            Pair your loc service with an extra, done with the same patience we give your hair, and leave feeling looked after.
           </p>
           <ol className="mt-7 grid gap-3.5">
             {steps.map((t, i) => (
@@ -468,7 +468,7 @@ function GoodToKnow() {
             Your visit, without <em>surprises</em>
           </Title>
           <p className="mt-5 max-w-[480px] text-ink-2 sm:text-lg">
-            We agree the service and the price before we start, and we tell you how to look after your locs or nails when we finish.
+            We agree the service and the price before we start, and we tell you how to look after your locs when we finish.
           </p>
         </div>
         <div className="reveal rounded-3xl border border-cream-line bg-surface p-6 sm:p-8">

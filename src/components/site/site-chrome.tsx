@@ -23,7 +23,7 @@ export function SiteFooter() {
         <div>
           <h2 className={headCls}>Salon</h2>
           <ul className="mt-2">
-            <li><Link className={linkCls} href="/#services">Locs and nails</Link></li>
+            <li><Link className={linkCls} href="/#services">Locs and more</Link></li>
             <li><Link className={linkCls} href="/#work">Our work</Link></li>
             <li><Link className={linkCls} href="/locs-mastery">Locs Mastery</Link></li>
           </ul>

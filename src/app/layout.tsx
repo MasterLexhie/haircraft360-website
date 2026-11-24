@@ -18,11 +18,11 @@ const shrikhand = Shrikhand({ subsets: ["latin"], weight: "400", variable: "--fo
 
 export const metadata: Metadata = {
   title: {
-    default: "Haircraft360 · Loc care in Ibadan",
+    default: "Haircraft360 · Locs and more",
     template: "%s · Haircraft360",
   },
   description:
-    "Book loc care in Ibadan online: starter locs, retwists and more. Choose your services and time, and reserve with a deposit.",
+    "Book your visit online: starter locs, retwists, repairs and more. Choose your services and time, and reserve with a deposit.",
   robots: { index: false, follow: false },
   icons: { icon: "/brand/logo-pink-icon.png" },
 };
