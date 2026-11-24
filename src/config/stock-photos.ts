@@ -100,6 +100,26 @@ export const OWN_PAIRS: GalleryPair[] = [
     },
     sameClient: true,
   },
+  {
+    label: "Locs retwist",
+    before: {
+      src: "/work/locs-retwist-before.webp",
+      alt: "A client's long, grown-out locs seen from behind before a retwist",
+      width: 712,
+      height: 890,
+      brief: "Client's grown-out locs before a retwist",
+      own: true,
+    },
+    after: {
+      src: "/work/locs-retwist-after.webp",
+      alt: "The same client smiling in profile, her freshly retwisted locs styled up into a pinned updo",
+      width: 712,
+      height: 890,
+      brief: "The same client after a retwist and style",
+      own: true,
+    },
+    sameClient: true,
+  },
 ];
 
 export const GALLERY_PAIRS: GalleryPair[] = [

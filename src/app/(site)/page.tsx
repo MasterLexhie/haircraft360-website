@@ -196,7 +196,7 @@ function WhyUs() {
 
 const WORK: { photo: StockPhoto; caption: string }[] = [
   { photo: OWN_PAIRS[0]!.after, caption: "Instant starter locs" },
-  { photo: GALLERY_PAIRS[1]!.after, caption: "Retwist" },
+  { photo: OWN_PAIRS[1]!.after, caption: "Locs retwist" },
   { photo: GALLERY_PAIRS[2]!.after, caption: "Long locs" },
   { photo: SERVICE_PHOTOS.seed_svc_retwist!, caption: "Neat roots" },
 ];
