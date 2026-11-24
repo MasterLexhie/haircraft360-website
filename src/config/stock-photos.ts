@@ -120,6 +120,26 @@ export const OWN_PAIRS: GalleryPair[] = [
     },
     sameClient: true,
   },
+  {
+    label: "Locs repair",
+    before: {
+      src: "/work/locs-repair-before.webp",
+      alt: "Close-up of a client's frizzy, matted roots with locs merging together before a repair",
+      width: 712,
+      height: 890,
+      brief: "Client's roots before a loc repair",
+      own: true,
+    },
+    after: {
+      src: "/work/locs-repair-after.webp",
+      alt: "The same client's head from above after the repair, each loc separate with clean, neat parts",
+      width: 712,
+      height: 890,
+      brief: "The same client's locs after a repair",
+      own: true,
+    },
+    sameClient: true,
+  },
 ];
 
 export const GALLERY_PAIRS: GalleryPair[] = [
