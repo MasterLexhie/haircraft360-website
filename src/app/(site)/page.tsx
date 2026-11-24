@@ -14,7 +14,7 @@ import { ServicePhoto } from "@/components/site/service-photo";
 import { VisitCard } from "@/components/site/visit-card";
 import { BeforeAfter } from "@/components/site/before-after";
 import { MobileBarReveal } from "@/components/site/mobile-bar-reveal";
-import { HERO_PHOTO, GALLERY_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
+import { HERO_PHOTO, GALLERY_PAIRS, OWN_PAIRS, SERVICE_PHOTOS, type StockPhoto } from "@/config/stock-photos";
 import { Skeleton, cx } from "@/components/ui/primitives";
 import { formatNaira } from "@/lib/money";
 import { dayOfWeek, formatDuration, formatHHMM, lagosDateKey, lagosMinutes, WEEKDAYS } from "@/lib/time";
@@ -63,12 +63,12 @@ function whatsappHref(e164: string, text?: string) {
   return `https://wa.me/${e164.replace(/\D/g, "")}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
 }
 
-/** Stock photo with a small honest label, so it is never taken for the salon's own work. */
+/** A photo. Stock ones carry a small honest label, so they are never taken for the salon's own work. */
 function Photo({ photo, sizes, priority, className, imgClassName, labelClassName = "right-2 top-2" }: { photo: StockPhoto; sizes: string; priority?: boolean; className?: string; imgClassName?: string; labelClassName?: string }) {
   return (
     <div className={cx("relative overflow-hidden", className)}>
       <Image src={photo.src} alt={photo.alt} fill sizes={sizes} priority={priority} className={cx("object-cover", imgClassName)} />
-      <span className={cx("absolute rounded-md bg-surface/85 px-1.5 py-0.5 text-[0.62rem] font-semibold text-ink-2", labelClassName)}>Stock photo</span>
+      {!photo.own && <span className={cx("absolute rounded-md bg-surface/85 px-1.5 py-0.5 text-[0.62rem] font-semibold text-ink-2", labelClassName)}>Stock photo</span>}
     </div>
   );
 }
@@ -195,7 +195,7 @@ function WhyUs() {
 /* ───────────── our work ───────────── */
 
 const WORK: { photo: StockPhoto; caption: string }[] = [
-  { photo: GALLERY_PAIRS[0]!.after, caption: "Starter locs, a few months in" },
+  { photo: OWN_PAIRS[0]!.after, caption: "Instant starter locs" },
   { photo: GALLERY_PAIRS[1]!.after, caption: "Retwist" },
   { photo: GALLERY_PAIRS[2]!.after, caption: "Long locs" },
   { photo: SERVICE_PHOTOS.seed_svc_retwist!, caption: "Neat roots" },
@@ -270,11 +270,11 @@ async function InstagramLink() {
 
 /**
  * Before and after of real clients, one slider per pair. Shows only once the owner has added a
- * pair of the same client (`sameClient: true` in config/stock-photos.ts); until then the page
+ * pair of the same client (`OWN_PAIRS` with `sameClient: true` in config/stock-photos.ts); until then the page
  * goes straight from Our work to the services.
  */
 function BeforeAndAfter() {
-  const pairs = GALLERY_PAIRS.filter((p) => p.sameClient);
+  const pairs = [...OWN_PAIRS, ...GALLERY_PAIRS].filter((p) => p.sameClient);
   if (pairs.length === 0) return null;
   return (
     <section aria-labelledby="results-title" className="pb-14 sm:pb-24">

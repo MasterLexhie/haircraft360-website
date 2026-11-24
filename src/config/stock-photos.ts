@@ -13,7 +13,10 @@ export type StockPhoto = {
   height: number;
   /** What the owner's real photo for this slot should show. */
   brief: string;
-  credit: { name: string; url: string };
+  /** Who took a stock photo. The salon's own photos have none. */
+  credit?: { name: string; url: string };
+  /** The salon's own photo of its own work, so it is shown without the "Stock photo" label. */
+  own?: boolean;
 };
 
 const unsplash = (slug: string) => `https://unsplash.com/photos/${slug}`;
@@ -74,6 +77,30 @@ export type GalleryPair = {
    */
   sameClient?: boolean;
 };
+
+/** The salon's own photos of real clients, kept in /public/work. */
+export const OWN_PAIRS: GalleryPair[] = [
+  {
+    label: "Instant starter locs",
+    before: {
+      src: "/work/instant-starter-locs-before.webp",
+      alt: "A client's loose, red-dyed natural hair, sectioned and clipped before instant starter locs",
+      width: 810,
+      height: 1080,
+      brief: "Client's loose natural hair before instant starter locs",
+      own: true,
+    },
+    after: {
+      src: "/work/instant-starter-locs-after.webp",
+      alt: "The same client from behind with short instant starter locs, black at the roots and red at the tips",
+      width: 810,
+      height: 1080,
+      brief: "The same client after instant starter locs",
+      own: true,
+    },
+    sameClient: true,
+  },
+];
 
 export const GALLERY_PAIRS: GalleryPair[] = [
   {
