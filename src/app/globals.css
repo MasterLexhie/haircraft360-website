@@ -312,7 +312,7 @@ select:not([multiple]):not([size]) {
     to { transform: translateX(-50%); }
   }
   .marquee-track {
-    animation: marquee 38s linear infinite;
+    animation: marquee 114s linear infinite;
   }
   .marquee:hover .marquee-track {
     animation-play-state: paused;

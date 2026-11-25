@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { MapPin, MessageCircle, Phone } from "lucide-react";
+import { MapPin, Phone } from "lucide-react";
 import { getSalon } from "@/server/queries";
 import { LogoLockup } from "./brand";
 import { SocialIcon } from "./social-icons";
@@ -70,15 +70,6 @@ async function FooterContact() {
           <Phone aria-hidden className="mt-0.5 size-4 shrink-0 text-lilac" />
           <a href={`tel:${salon.phone.e164}`} className="text-on-night underline decoration-on-night/40 underline-offset-4 hover:decoration-lilac">
             {salon.phone.display}
-          </a>
-        </li>
-      )}
-      {salon.whatsapp && (
-        <li className="flex gap-2.5">
-          <MessageCircle aria-hidden className="mt-0.5 size-4 shrink-0 text-lilac" />
-          <a href={`https://wa.me/${salon.whatsapp.e164.replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" className="text-on-night underline decoration-on-night/40 underline-offset-4 hover:decoration-lilac">
-            WhatsApp {salon.whatsapp.display}
-            <span className="sr-only"> (opens in a new tab)</span>
           </a>
         </li>
       )}

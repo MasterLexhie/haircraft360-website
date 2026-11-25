@@ -230,7 +230,7 @@ function OurWork() {
             <Photo photo={first!.photo} sizes="(min-width: 768px) 50vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
             <Caption big>{first!.caption}</Caption>
           </li>
-          {rest.slice(0, 2).map((w) => (
+          {rest.map((w) => (
             <li key={w.caption} className="relative w-[78%] shrink-0 snap-start md:w-auto">
               <Photo photo={w.photo} sizes="(min-width: 768px) 25vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
               <Caption>{w.caption}</Caption>
@@ -242,12 +242,6 @@ function OurWork() {
               <span className="mt-1 block font-normal text-ink-2">New work from the chair, added as we go</span>
             </span>
           </li>
-          {rest.slice(2).map((w) => (
-            <li key={w.caption} className="relative w-[78%] shrink-0 snap-start md:w-auto">
-              <Photo photo={w.photo} sizes="(min-width: 768px) 25vw, 80vw" className="aspect-[4/5] rounded-[20px] md:aspect-auto md:h-full" />
-              <Caption>{w.caption}</Caption>
-            </li>
-          ))}
         </ul>
       </div>
     </section>
@@ -393,7 +387,7 @@ function ServiceRow({ s, withPhoto }: { s: Service; withPhoto: boolean }) {
           </span>
         )}
         <span className="text-base font-semibold group-hover:text-lilac sm:text-[1.06rem]">{s.name}</span>
-        <span className="tabular font-serif text-xl font-semibold text-orange">{formatNaira(s.priceKobo)}</span>
+        <span className="tabular justify-self-end text-right font-serif text-xl font-semibold text-orange">{formatNaira(s.priceKobo)}</span>
         <span className="text-sm text-on-night-2">{s.description}</span>
         <span className="relative whitespace-nowrap text-right text-[0.8rem] text-on-night-2">
           <span className="block transition-[opacity,transform] duration-200 group-hover:-translate-y-1 group-hover:opacity-0 group-focus-visible:-translate-y-1 group-focus-visible:opacity-0">

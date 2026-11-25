@@ -69,10 +69,13 @@ export function PageIntro({
  * seamless; screen readers get the first copy only.
  */
 export function Strip({ items, label }: { items: string[]; label: string }) {
+  // A short list is repeated inside each run so one run is wider than any screen, which keeps
+  // the strip full with no gap on wide displays. Only the first copy is read out.
+  const repeats = 3;
   const run = (hidden: boolean) => (
     <ul aria-label={hidden ? undefined : label} aria-hidden={hidden || undefined} className="flex shrink-0 gap-6 pr-6 sm:gap-7 sm:pr-7">
-      {items.map((c, i) => (
-        <li key={`${i}-${c}`} className="flex items-center gap-6 sm:gap-7">
+      {Array.from({ length: repeats }, () => items).flat().map((c, i) => (
+        <li key={`${i}-${c}`} aria-hidden={(!hidden && i >= items.length) || undefined} className="flex items-center gap-6 sm:gap-7">
           {c}
           <Sparkles aria-hidden className="size-3.5 text-accent sm:size-5" />
         </li>

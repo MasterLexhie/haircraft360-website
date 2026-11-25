@@ -13,10 +13,13 @@ import { logoutAction } from "../auth-actions";
  * - Desktop: plum top bar and the full sidebar on the grey workspace.
  * A full-screen task (<FocusScreen />) hides the phone bottom bar.
  * `data-admin` switches the shared components to the admin look (see globals.css).
+ * Both the frame and #admin-scroll are positioned so screen-reader-only text and hidden
+ * inputs (absolutely placed) stay inside them, rather than stretching the page below the
+ * frame and scrolling the whole window when a hidden toggle is focused.
  */
 export default function AdminPanelLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div data-admin className="flex h-dvh flex-col overflow-hidden bg-sand">
+    <div data-admin className="relative flex h-dvh flex-col overflow-hidden bg-sand">
       <Suspense fallback={<AdminTopBar name={null} />}>
         <TopBar />
       </Suspense>
@@ -27,7 +30,7 @@ export default function AdminPanelLayout({ children }: { children: React.ReactNo
         </Suspense>
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <div id="admin-scroll" className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <div id="admin-scroll" className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain">
             <main className="mx-auto max-w-6xl px-4 pb-8 md:px-6 md:py-8">{children}</main>
           </div>
 
