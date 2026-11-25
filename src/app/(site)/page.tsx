@@ -171,10 +171,10 @@ function WhyUs() {
           <div>
             <Kicker>Why Haircraft360</Kicker>
             <Title id="why-title">
-              Two crafts, <em>one</em> salon.
+              Your locs, in <em>good</em> hands.
             </Title>
           </div>
-          <p className="max-w-[400px] text-ink-2">Careful hands for your hair, your hands and your feet.</p>
+          <p className="max-w-[400px] text-ink-2">We take our time, tell you the truth about your hair, and send you home with locs that last.</p>
         </div>
         <ul className="mt-8 grid grid-cols-2 gap-3 sm:mt-10 sm:gap-5 lg:grid-cols-4">
           {PROMISES.map((p) => (
